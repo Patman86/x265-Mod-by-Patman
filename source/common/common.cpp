@@ -113,22 +113,22 @@ void general_log(const x265_param* param, const char* caller, int level, const c
     switch (level)
     {
     case X265_LOG_ERROR:
-        log_level = "error";
+        log_level = "FLAW";
         break;
     case X265_LOG_WARNING:
-        log_level = "warning";
+        log_level = "WARN";
         break;
     case X265_LOG_INFO:
-        log_level = "info";
+        log_level = "INFO";
         break;
     case X265_LOG_DEBUG:
-        log_level = "debug";
+        log_level = "DEBU";
         break;
     case X265_LOG_FULL:
-        log_level = "full";
+        log_level = "FULL";
         break;
     default:
-        log_level = "unknown";
+        log_level = "ANON";
         break;
     }
 
@@ -155,22 +155,22 @@ void general_log_file(const x265_param* param, const char* caller, int level, co
     switch (level)
     {
     case X265_LOG_ERROR:
-        log_level = "error";
+        log_level = "FLAW";
         break;
     case X265_LOG_WARNING:
-        log_level = "warning";
+        log_level = "WARN";
         break;
     case X265_LOG_INFO:
-        log_level = "info";
+        log_level = "INFO";
         break;
     case X265_LOG_DEBUG:
-        log_level = "debug";
+        log_level = "DEBU";
         break;
     case X265_LOG_FULL:
-        log_level = "full";
+        log_level = "FULL";
         break;
     default:
-        log_level = "unknown";
+        log_level = "ANON";
         break;
     }
 
