@@ -1,0 +1,14 @@
+doc/uncrustify/uncrustify.exe
+build*/
+*.rej
+*.orig
+*.hevc
+*.yuv
+*.y4m
+*.out
+*.swp
+.DS_Store
+source/vapoursynth/
+source/avisynth/
+*.hgignore
+*.vs*
