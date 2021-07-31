@@ -25,7 +25,7 @@
 #include "output.h"
 #include "yuv.h"
 #include "y4m.h"
-
+#include "gop.h"
 #include "raw.h"
 
 using namespace X265_NS;
@@ -42,5 +42,10 @@ ReconFile* ReconFile::open(const char *fname, int width, int height, uint32_t bi
 
 OutputFile* OutputFile::open(const char *fname, InputFileInfo& inputInfo)
 {
+	const char * s = strrchr(fname, '.');
+
+	if (s && !strcmp(s, ".gop"))
+        return new GOPOutput(fname, inputInfo);
+
     return new RAWOutput(fname, inputInfo);
 }
