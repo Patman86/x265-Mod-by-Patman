@@ -151,9 +151,17 @@ else()
         )
     execute_process(
         COMMAND
-        ${GIT_EXECUTABLE} rev-list ${X265_LATEST_TAG}.. --count --first-parent
+        ${GIT_EXECUTABLE} rev-list ${X265_LATEST_TAG}.. --count --committer=multicorewareinc
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE X265_TAG_DISTANCE
+        ERROR_QUIET
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+    execute_process(
+        COMMAND
+        ${GIT_EXECUTABLE} rev-list ${X265_LATEST_TAG}.. --count --committer=Patman86
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE X265_TAG_DISTANCE_COM
         ERROR_QUIET
         OUTPUT_STRIP_TRAILING_WHITESPACE
         )
@@ -172,7 +180,7 @@ endif()
 if(X265_TAG_DISTANCE STREQUAL "0")
     set(X265_VERSION "${X265_LATEST_TAG}")
 elseif(X265_TAG_DISTANCE STRGREATER "0")
-    set(X265_VERSION "${X265_LATEST_TAG}+${X265_TAG_DISTANCE}-${X265_REVISION_ID}")
+    set(X265_VERSION "${X265_LATEST_TAG}+${X265_TAG_DISTANCE}+${X265_TAG_DISTANCE_COM}-${X265_REVISION_ID}")
 endif()
 
 #will always be printed in its entirety based on version file configuration to avail revision monitoring by repo owners
