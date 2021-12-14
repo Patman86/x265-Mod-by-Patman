@@ -27,6 +27,7 @@
 
 #include "x265cli.h"
 #include "svt.h"
+#include <string>
 
 #define START_CODE 0x00000001
 #define START_CODE_BYTES 4
@@ -37,7 +38,7 @@ namespace X265_NS {
 
     static void printVersion(x265_param *param, const x265_api* api)
     {
-        x265_log(param, X265_LOG_INFO, "HEVC encoder version %s\n", api->version_str);
+        x265_log(param, X265_LOG_INFO, "HEVC encoder version %s [Mod by Patman]\n", api->version_str);
         x265_log(param, X265_LOG_INFO, "build info %s\n", api->build_info_str);
     }
 
@@ -49,22 +50,30 @@ namespace X265_NS {
 #define H0 printf
 #define H1 if (level >= X265_LOG_DEBUG) printf
 
+        std::string x265_extra_readers;
+#ifdef ENABLE_AVISYNTH
+        x265_extra_readers += "AVS, ";
+#endif
+#ifdef ENABLE_VAPOURSYNTH
+        x265_extra_readers += "VPY, ";
+#endif
+
         H0("\nSyntax: x265 [options] infile [-o] outfile\n");
-        H0("    infile can be YUV or Y4M\n");
+        H0("    infile can be %sYUV or Y4M\n", x265_extra_readers.c_str());
         H0("    outfile is raw HEVC bitstream\n");
         H0("\nExecutable Options:\n");
         H0("-h/--help                        Show this help text and exit\n");
         H0("   --fullhelp                    Show all options and exit\n");
         H0("-V/--version                     Show version info and exit\n");
         H0("\nOutput Options:\n");
-        H0("-o/--output <filename>           Bitstream output file name\n");
+        H0("-o/--output <filename>           Output file name can be *.gop or *.hevc\n");
         H0("-D/--output-depth 8|10|12        Output bit depth (also internal bit depth). Default %d\n", param->internalBitDepth);
         H0("   --log-level <string>          Logging level: none error warning info debug full. Default %s\n", X265_NS::logLevelNames[param->logLevel + 1]);
         H0("   --no-progress                 Disable CLI progress reports\n");
         H0("   --csv <filename>              Comma separated log file, if csv-log-level > 0 frame level statistics, else one line per run\n");
         H0("   --csv-log-level <integer>     Level of csv logging, if csv-log-level > 0 frame level statistics, else one line per run: 0-2\n");
         H0("\nInput Options:\n");
-        H0("   --input <filename>            Raw YUV or Y4M input file name. `-` for stdin\n");
+        H0("   --input <filename>            %sRaw YUV or Y4M input file name. `-` for stdin\n", x265_extra_readers.c_str());
         H1("   --y4m                         Force parsing of input stream as YUV4MPEG2 regardless of file extension\n");
         H0("   --fps <float|rational>        Source frame rate (float or num/denom), auto-detected if Y4M\n");
         H0("   --input-res WxH               Source picture size [w x h], auto-detected if Y4M\n");
@@ -88,6 +97,18 @@ namespace X265_NS {
         H0("   --[no-]field                  Enable or disable field coding. Default %s\n", OPT(param->bField));
         H1("   --dither                      Enable dither if downscaling to 8 bit pixels. Default disabled\n");
         H0("   --[no-]copy-pic               Copy buffers of input picture in frame. Default %s\n", OPT(param->bCopyPicToFrame));
+        H0("   --reader-options              Pass reader-specific options to input file reader\n");
+#ifdef ENABLE_AVISYNTH
+        H0("\nAvisynth reader options:\n");
+        H0("     library                     Use custom Avisynth library (full path to Avisynth library is required)\n");
+#endif
+#ifdef ENABLE_VAPOURSYNTH
+        H0("\nVapoursynth reader options:\n");
+        H0("     library                     Use custom Vapoursynth library (full path to VSScript library is required)\n");
+        H0("     output                      Select arbitrary video node. Node 0 is selected by default\n");
+        H0("     requests                    Override async requests (derived from Vapoursynth threads by default)\n");
+        H0("     use-script-sar              Use script's reported SAR. Default 0:0\n");
+#endif
         H0("\nQuality reporting metrics:\n");
         H0("   --[no-]ssim                   Enable reporting SSIM metric scores. Default %s\n", OPT(param->bEnableSsim));
         H0("   --[no-]psnr                   Enable reporting PSNR metric scores. Default %s\n", OPT(param->bEnablePsnr));
@@ -440,15 +461,41 @@ namespace X265_NS {
         int64_t elapsed = time - startTime;
         double fps = elapsed > 0 ? frameNum * 1000000. / elapsed : 0;
         float bitrate = 0.008f * totalbytes * (param->fpsNum / param->fpsDenom) / ((float)frameNum);
+        int ete, ete_hh = 0, ete_mm = 0, ete_ss = 0, eta, eta_hh = 0, eta_mm = 0, eta_ss = 0, fps_prec, bitrate_prec, file_prec, estsz_prec = 0;
+        double percentage = 0., estsz = 0., file_num, estsz_num = 0.;
+        const char *file_unit, *estsz_unit = "";
+        fps_prec     = fps > 999.5 ? 0 : fps > 99.5 ? 1 : fps > 9.95 ? 2 : 3;
+        bitrate_prec = bitrate > 9999.5 ? 0 : bitrate > 999.5 ? 1 : 2;
+        file_prec    = totalbytes < 1000000000 ? 2 : totalbytes < 10000000000 ? 1 : 0;
+        file_num     = totalbytes < 1000000 ? (double) totalbytes / 1000. : (double) totalbytes / 1000000.;
+        file_unit    = totalbytes < 1000000 ? "K": "M";
         if (framesToBeEncoded)
-        {
-            int eta = (int)(elapsed * (framesToBeEncoded - frameNum) / ((int64_t)frameNum * 1000000));
-            sprintf(buf, "x265 [%.1f%%] %d/%d frames, %.2f fps, %.2f kb/s, eta %d:%02d:%02d",
-                100. * frameNum / (param->chunkEnd ? param->chunkEnd : param->totalFrames), frameNum, (param->chunkEnd ? param->chunkEnd : param->totalFrames), fps, bitrate,
-                eta / 3600, (eta / 60) % 60, eta % 60);
+		{
+			ete        = (int)(elapsed / 1000000);
+			eta        = (int)(elapsed * (framesToBeEncoded - frameNum) / ((int64_t)frameNum * 1000000));
+			percentage = 100. * frameNum / (param->chunkEnd ? param->chunkEnd : param->totalFrames);
+			ete_hh     = ete / 3600;
+			ete_mm     = (ete / 60) % 60;
+			ete_ss     = ete % 60;
+			eta_hh     = eta / 3600;
+			eta_mm     = (eta / 60) % 60;
+			eta_ss     = eta % 60;
+			estsz      = (double) totalbytes * framesToBeEncoded / (frameNum * 1000.);
+			estsz_prec = estsz < 1000000 ? 2 : estsz < 10000000 ? 1 : 0;
+			estsz_num = estsz < 1000 ? estsz : estsz / 1000;
+			estsz_unit = estsz < 1000 ? "K" : "M";
+			sprintf(buf, "x265 [%.1f%%] %d/%d Frames @ %.*f FPS | %.*f kb/s | %d:%02d:%02d [-%d:%02d:%02d] | %.*f %sB [%.*f %sB]",
+					percentage, frameNum, (param->chunkEnd ? param->chunkEnd : param->totalFrames), fps_prec, fps, bitrate_prec, bitrate,
+					ete_hh, ete_mm, ete_ss,
+					eta_hh, eta_mm, eta_ss,
+					file_prec, file_num, file_unit,
+					estsz_prec, estsz_num, estsz_unit);
         }
         else
-            sprintf(buf, "x265 %d frames: %.2f fps, %.2f kb/s", frameNum, fps, bitrate);
+            sprintf(buf, "x265 %d Frames @ %.*f FPS | %.*f kb/s | %d:%02d:%02d | %.*f %sB",
+					frameNum, fps_prec, fps, bitrate_prec, bitrate,
+					ete_hh, ete_mm, ete_ss,
+					file_prec, file_num, file_unit);
 
         fprintf(stderr, "%s  \r", buf + 5);
         SetConsoleTitle(buf);
@@ -718,6 +765,7 @@ namespace X265_NS {
                 OPT("tune")    /* handled above */;
                 OPT("output-depth")   /* handled above */;
                 OPT("recon-y4m-exec") reconPlayCmd = optarg;
+                OPT("reader-options") this->readerOpts = optarg;
                 OPT("svt")    /* handled above */;
                 OPT("qpfile")
                 {
@@ -811,9 +859,12 @@ namespace X265_NS {
         info.sarWidth = param->vui.sarWidth;
         info.sarHeight = param->vui.sarHeight;
         info.skipFrames = seek;
+        info.encodeToFrame = this->framesToBeEncoded;
         info.frameCount = 0;
         getParamAspectRatio(param, info.sarWidth, info.sarHeight);
 
+        /* pass readerOpts to InputFileInfo in case certain reader wants it */
+        info.readerOpts = this->readerOpts;
 
         this->input = InputFile::open(info, this->bForceY4m);
         if (!this->input || this->input->isFail())
@@ -944,7 +995,7 @@ namespace X265_NS {
             x265_log_file(param, X265_LOG_ERROR, "failed to open output file <%s> for writing\n", outputfn);
             return true;
         }
-        general_log_file(param, this->output->getName(), X265_LOG_INFO, "output file: %s\n", outputfn);
+        general_log_file(param, this->output->getName(), X265_LOG_INFO, "output file: \"%s\" \n", outputfn);
         return false;
     }
 
