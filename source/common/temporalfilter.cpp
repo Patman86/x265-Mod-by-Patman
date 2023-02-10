@@ -575,6 +575,9 @@ void TemporalFilter::bilateralFilter(Frame* frame,
                         else
                             correctedPicsStride = refPicInfo->compensatedPic->m_strideC;
 
+                        const intptr_t pelOffset = y * correctedPicsStride + x;
+                        primitives.pu[1].copy_pp(m_metld->me.fencPUYuv.m_buf[0], FENC_STRIDE, refPicInfo->compensatedPic->m_picOrg[c] + pelOffset, correctedPicsStride);
+
                         double variance = 0, diffsum = 0;
                         for (int y1 = 0; y1 < blkSize - 1; y1++)
                         {
@@ -584,9 +587,9 @@ void TemporalFilter::bilateralFilter(Frame* frame,
                                 int pixR = *(srcPel + x1 + 1);
                                 int pixD = *(srcPel + x1 + srcStride);
 
-                                int ref = *(refPicInfo->compensatedPic->m_picOrg[c] + ((y + y1) * correctedPicsStride + x + x1));
-                                int refR = *(refPicInfo->compensatedPic->m_picOrg[c] + ((y + y1) * correctedPicsStride + x + x1 + 1));
-                                int refD = *(refPicInfo->compensatedPic->m_picOrg[c] + ((y + y1 + 1) * correctedPicsStride + x + x1));
+                                int ref = *(m_metld->me.fencPUYuv.m_buf[0] + ((y1)*FENC_STRIDE + x1));
+                                int refR = *(m_metld->me.fencPUYuv.m_buf[0] + ((y1)*FENC_STRIDE + x1 + 1));
+                                int refD = *(m_metld->me.fencPUYuv.m_buf[0] + ((y1 + 1) * FENC_STRIDE + x1));
 
                                 int diff = pix - ref;
                                 int diffR = pixR - refR;
