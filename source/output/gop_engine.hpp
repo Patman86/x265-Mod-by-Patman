@@ -32,8 +32,11 @@
 #include <iomanip>
 
 #ifdef _MSC_VER
-    #include <windows.h>
-    #define sleep(x) Sleep((x) * 1000)
+#include <windows.h>
+#define sleep(x) Sleep((x) * 1000)
+#else
+#include <unistd.h>
+#define sleep(x) usleep(x)
 #endif
 #define TIME_WAIT 30
 
