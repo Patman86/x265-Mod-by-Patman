@@ -44,7 +44,7 @@ OutputFile* OutputFile::open(const char *fname, InputFileInfo& inputInfo)
 {
 	const char * s = strrchr(fname, '.');
 
-	if (s && !strcmp(s, ".gop"))
+	if (s && !strncmp(s, ".gop", 4))
         return new GOPOutput(fname, inputInfo);
 
     return new RAWOutput(fname, inputInfo);

@@ -788,8 +788,7 @@ if(ENABLE_CLI)
     file(GLOB InputFiles input/input.cpp input/yuv.cpp input/y4m.cpp input/*.h)
     file(GLOB OutputFiles output/output.cpp output/reconplay.cpp output/*.h
                           output/yuv.cpp output/y4m.cpp # recon
-                          output/raw.cpp                # muxers
-                          output/gop.cpp)
+                          output/raw.cpp)               # muxers
     source_group(input FILES ${InputFiles})
     source_group(output FILES ${OutputFiles})
     if(ENABLE_AVISYNTH)
@@ -838,7 +837,7 @@ if(ENABLE_CLI)
             target_link_libraries(cli x265-shared ${PLATFORM_LIBS})
         endif()
     endif()
-    set_target_properties(cli PROPERTIES OUTPUT_NAME x265)
+    set_target_properties(cli PROPERTIES OUTPUT_NAME x265 CXX_STANDARD 14)
     if(LINKER_OPTIONS)
         # set_target_properties can't do list expansion
         string(REPLACE ";" " " LINKER_OPTION_STR "${LINKER_OPTIONS}")
