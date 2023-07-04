@@ -288,7 +288,7 @@ void Encoder::create()
         p->bEnableWavefront = p->bDistributeModeAnalysis = p->bDistributeMotionEstimation = p->lookaheadSlices = 0;
     }
 
-    x265_log(p, X265_LOG_INFO, "Slices                              : %d\n", p->maxSlices);
+    x265_log(p, X265_LOG_INFO, "Slices                                  : %d\n", p->maxSlices);
 
     char buf[128];
     int len = 0;
@@ -301,7 +301,7 @@ void Encoder::create()
     if (!len)
         strcpy(buf, "none");
 
-    x265_log(p, X265_LOG_INFO, "frame threads / pool features       : %d / %s\n", p->frameNumThreads, buf);
+    x265_log(p, X265_LOG_INFO, "frame threads / pool features           : %d / %s\n", p->frameNumThreads, buf);
 
     for (int i = 0; i < m_param->frameNumThreads; i++)
     {
@@ -4329,7 +4329,7 @@ void Encoder::configure(x265_param *p)
 
     if (m_param->toneMapFile || p->bHDR10Opt || p->bEmitHDR10SEI)
     {
-        if (!p->bRepeatHeaders)
+        if (!p->bRepeatHeaders && p->bAnnexB)
         {
             p->bRepeatHeaders = 1;
             x265_log(p, X265_LOG_WARNING, "Turning on repeat-headers for HDR compatibility\n");
