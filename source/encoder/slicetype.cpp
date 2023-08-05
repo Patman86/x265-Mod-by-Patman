@@ -611,7 +611,7 @@ void LookaheadTLD::calcAdaptiveQuantFrame(Frame *curFrame, x265_param* param)
                                 qp_adj = ((strength + AQ_EDGE_BIAS) * (qp_adj - avg_adj));
                             else
                                 qp_adj = strength * (qp_adj - avg_adj);
-                                qp_adj += dark_bias;
+                            qp_adj += dark_bias;
                         }
                         else
                         {
