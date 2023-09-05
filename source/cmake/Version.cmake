@@ -151,7 +151,7 @@ else()
         )
     execute_process(
         COMMAND
-        ${GIT_EXECUTABLE} rev-list ${X265_LATEST_TAG}.. --count --committer=multicorewareinc
+        ${GIT_EXECUTABLE} rev-list --right-only --count ${X265_LATEST_TAG}..origin/master
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         OUTPUT_VARIABLE X265_TAG_DISTANCE
         ERROR_QUIET
