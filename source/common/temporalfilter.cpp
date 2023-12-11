@@ -893,26 +893,7 @@ void TemporalFilter::motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, P
             }
 
             prevBest = best;
-            int doubleRange = 1 * 4;
-            for (int y2 = prevBest.y - doubleRange; y2 <= prevBest.y + doubleRange; y2 += 4)
-            {
-                for (int x2 = prevBest.x - doubleRange; x2 <= prevBest.x + doubleRange; x2 += 4)
-                {
-                    if (m_useSADinME)
-                        error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, x2, y2, blockSize, leastError);
-                    else
-                        error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, x2, y2, blockSize, leastError);
-
-                    if (error < leastError)
-                    {
-                        best.set(x2, y2);
-                        leastError = error;
-                    }
-                }
-            }
-
-            prevBest = best;
-            doubleRange = 3;
+            int doubleRange = 3;
             for (int y2 = prevBest.y - doubleRange; y2 <= prevBest.y + doubleRange; y2++)
             {
                 for (int x2 = prevBest.x - doubleRange; x2 <= prevBest.x + doubleRange; x2++)
