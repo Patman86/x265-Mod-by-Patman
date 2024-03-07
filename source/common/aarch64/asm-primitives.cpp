@@ -70,33 +70,6 @@ extern "C" {
     p.pu[LUMA_48x64].prim = fncdef PFX(fname ## _48x64_ ## cpu); \
     p.pu[LUMA_64x16].prim = fncdef PFX(fname ## _64x16_ ## cpu); \
     p.pu[LUMA_16x64].prim = fncdef PFX(fname ## _16x64_ ## cpu)
-#define LUMA_PU_TYPED_MULTIPLE_ARCHS_1(prim, fncdef, fname, cpu) \
-    p.pu[LUMA_4x4].prim   = fncdef PFX(fname ## _4x4_ ## cpu); \
-    p.pu[LUMA_4x8].prim   = fncdef PFX(fname ## _4x8_ ## cpu); \
-    p.pu[LUMA_4x16].prim  = fncdef PFX(fname ## _4x16_ ## cpu)
-#define LUMA_PU_TYPED_MULTIPLE_ARCHS_2(prim, fncdef, fname, cpu) \
-    p.pu[LUMA_8x8].prim   = fncdef PFX(fname ## _8x8_ ## cpu); \
-    p.pu[LUMA_16x16].prim = fncdef PFX(fname ## _16x16_ ## cpu); \
-    p.pu[LUMA_32x32].prim = fncdef PFX(fname ## _32x32_ ## cpu); \
-    p.pu[LUMA_64x64].prim = fncdef PFX(fname ## _64x64_ ## cpu); \
-    p.pu[LUMA_8x4].prim   = fncdef PFX(fname ## _8x4_ ## cpu); \
-    p.pu[LUMA_16x8].prim  = fncdef PFX(fname ## _16x8_ ## cpu); \
-    p.pu[LUMA_8x16].prim  = fncdef PFX(fname ## _8x16_ ## cpu); \
-    p.pu[LUMA_16x32].prim = fncdef PFX(fname ## _16x32_ ## cpu); \
-    p.pu[LUMA_32x16].prim = fncdef PFX(fname ## _32x16_ ## cpu); \
-    p.pu[LUMA_64x32].prim = fncdef PFX(fname ## _64x32_ ## cpu); \
-    p.pu[LUMA_32x64].prim = fncdef PFX(fname ## _32x64_ ## cpu); \
-    p.pu[LUMA_16x12].prim = fncdef PFX(fname ## _16x12_ ## cpu); \
-    p.pu[LUMA_12x16].prim = fncdef PFX(fname ## _12x16_ ## cpu); \
-    p.pu[LUMA_16x4].prim  = fncdef PFX(fname ## _16x4_ ## cpu); \
-    p.pu[LUMA_32x24].prim = fncdef PFX(fname ## _32x24_ ## cpu); \
-    p.pu[LUMA_24x32].prim = fncdef PFX(fname ## _24x32_ ## cpu); \
-    p.pu[LUMA_32x8].prim  = fncdef PFX(fname ## _32x8_ ## cpu); \
-    p.pu[LUMA_8x32].prim  = fncdef PFX(fname ## _8x32_ ## cpu); \
-    p.pu[LUMA_64x48].prim = fncdef PFX(fname ## _64x48_ ## cpu); \
-    p.pu[LUMA_48x64].prim = fncdef PFX(fname ## _48x64_ ## cpu); \
-    p.pu[LUMA_64x16].prim = fncdef PFX(fname ## _64x16_ ## cpu); \
-    p.pu[LUMA_16x64].prim = fncdef PFX(fname ## _16x64_ ## cpu)
 #define LUMA_PU_TYPED_CAN_USE_SVE_EXCEPT_FILTER_PIXEL_TO_SHORT(prim, fncdef, fname) \
     p.pu[LUMA_32x32].prim = fncdef PFX(fname ## _32x32_ ## sve); \
     p.pu[LUMA_64x64].prim = fncdef PFX(fname ## _64x64_ ## sve); \
@@ -172,8 +145,6 @@ extern "C" {
     p.pu[LUMA_64x16].prim = fncdef PFX(fname ## _64x16_ ## cpu); \
     p.pu[LUMA_16x64].prim = fncdef PFX(fname ## _16x64_ ## cpu)
 #define ALL_LUMA_PU(prim, fname, cpu) ALL_LUMA_PU_TYPED(prim, , fname, cpu)
-#define LUMA_PU_MULTIPLE_ARCHS_1(prim, fname, cpu) LUMA_PU_TYPED_MULTIPLE_ARCHS_1(prim, , fname, cpu)
-#define LUMA_PU_MULTIPLE_ARCHS_2(prim, fname, cpu) LUMA_PU_TYPED_MULTIPLE_ARCHS_2(prim, , fname, cpu)
 #define LUMA_PU_CAN_USE_SVE_EXCEPT_FILTER_PIXEL_TO_SHORT(prim, fname) LUMA_PU_TYPED_CAN_USE_SVE_EXCEPT_FILTER_PIXEL_TO_SHORT(prim, , fname)
 #define LUMA_PU_MULTIPLE_ARCHS_3(prim, fname, cpu) LUMA_PU_TYPED_MULTIPLE_ARCHS_3(prim, , fname, cpu)
 #define LUMA_PU_CAN_USE_SVE2(prim, fname) LUMA_PU_TYPED_CAN_USE_SVE2(prim, , fname)
@@ -400,126 +371,6 @@ extern "C" {
 #define ALL_CHROMA_444_PU(prim, fname, cpu) ALL_CHROMA_444_PU_TYPED(prim, , fname, cpu)
 #define CHROMA_444_PU_SVE_FILTER_PIXEL_TO_SHORT(prim) CHROMA_444_PU_TYPED_SVE_FILTER_PIXEL_TO_SHORT(prim, )
 
-#define ALL_CHROMA_420_VERT_FILTERS(cpu)                             \
-    ALL_CHROMA_420_4x4_PU(filter_vpp, interp_4tap_vert_pp, cpu); \
-    ALL_CHROMA_420_4x4_PU(filter_vps, interp_4tap_vert_ps, cpu); \
-    ALL_CHROMA_420_4x4_PU(filter_vsp, interp_4tap_vert_sp, cpu); \
-    ALL_CHROMA_420_4x4_PU(filter_vss, interp_4tap_vert_ss, cpu)
-
-#define CHROMA_420_VERT_FILTERS_CAN_USE_SVE2()                             \
-    ALL_CHROMA_420_4x4_PU(filter_vpp, interp_4tap_vert_pp, sve2); \
-    ALL_CHROMA_420_4x4_PU(filter_vps, interp_4tap_vert_ps, sve2); \
-    ALL_CHROMA_420_4x4_PU(filter_vss, interp_4tap_vert_ss, sve2)
-
-#define SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(W, H) \
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_vsp = PFX(interp_4tap_vert_sp_ ## W ## x ## H ## _ ## neon)
-
-#define SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(W, H, cpu) \
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_vpp = PFX(interp_4tap_vert_pp_ ## W ## x ## H ## _ ## cpu); \
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_vps = PFX(interp_4tap_vert_ps_ ## W ## x ## H ## _ ## cpu); \
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_vss = PFX(interp_4tap_vert_ss_ ## W ## x ## H ## _ ## cpu)
-
-#define CHROMA_422_VERT_FILTERS_NEON() \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(4, 8); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(8, 16); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(8, 8); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(4, 16); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(8, 12); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(8, 4); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(16, 32); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(16, 16); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(8, 32); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(16, 24); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(12, 32); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(16, 8); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(4, 32); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(32, 64); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(32, 32); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(16, 64); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(32, 48); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(24, 64); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(32, 16); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_NEON(8, 64)
-
-#define CHROMA_422_VERT_FILTERS_CAN_USE_SVE2(cpu) \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(4, 8, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(8, 16, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(8, 8, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(4, 16, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(8, 12, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(8, 4, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(16, 32, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(16, 16, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(8, 32, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(16, 24, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(12, 32, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(16, 8, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(4, 32, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(32, 64, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(32, 32, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(16, 64, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(32, 48, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(24, 64, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(32, 16, cpu); \
-    SETUP_CHROMA_422_VERT_FUNC_DEF_CAN_USE_SVE2(8, 64, cpu)
-
-#define ALL_CHROMA_444_VERT_FILTERS(cpu) \
-    ALL_CHROMA_444_PU(filter_vpp, interp_4tap_vert_pp, cpu); \
-    ALL_CHROMA_444_PU(filter_vps, interp_4tap_vert_ps, cpu); \
-    ALL_CHROMA_444_PU(filter_vsp, interp_4tap_vert_sp, cpu); \
-    ALL_CHROMA_444_PU(filter_vss, interp_4tap_vert_ss, cpu)
-
-#define CHROMA_444_VERT_FILTERS_NEON() \
-    ALL_CHROMA_444_PU(filter_vsp, interp_4tap_vert_sp, neon)
-
-#define CHROMA_444_VERT_FILTERS_CAN_USE_SVE2() \
-    ALL_CHROMA_444_PU(filter_vpp, interp_4tap_vert_pp, sve2); \
-    ALL_CHROMA_444_PU(filter_vps, interp_4tap_vert_ps, sve2); \
-    ALL_CHROMA_444_PU(filter_vss, interp_4tap_vert_ss, sve2)
-
-#define ALL_CHROMA_420_FILTERS(cpu)                               \
-    ALL_CHROMA_420_PU(filter_hpp, interp_4tap_horiz_pp, cpu); \
-    ALL_CHROMA_420_PU(filter_hps, interp_4tap_horiz_ps, cpu); \
-    ALL_CHROMA_420_PU(filter_vpp, interp_4tap_vert_pp, cpu);  \
-    ALL_CHROMA_420_PU(filter_vps, interp_4tap_vert_ps, cpu)
-
-#define CHROMA_420_FILTERS_NEON()                               \
-    ALL_CHROMA_420_PU(filter_hpp, interp_4tap_horiz_pp, neon); \
-    ALL_CHROMA_420_PU(filter_hps, interp_4tap_horiz_ps, neon)
-
-#define CHROMA_420_FILTERS_CAN_USE_SVE2()                               \
-    ALL_CHROMA_420_PU(filter_vpp, interp_4tap_vert_pp, sve2);  \
-    ALL_CHROMA_420_PU(filter_vps, interp_4tap_vert_ps, sve2)
-
-#define ALL_CHROMA_422_FILTERS(cpu) \
-    ALL_CHROMA_422_PU(filter_hpp, interp_4tap_horiz_pp, cpu); \
-    ALL_CHROMA_422_PU(filter_hps, interp_4tap_horiz_ps, cpu); \
-    ALL_CHROMA_422_PU(filter_vpp, interp_4tap_vert_pp, cpu);  \
-    ALL_CHROMA_422_PU(filter_vps, interp_4tap_vert_ps, cpu)
-
-#define CHROMA_422_FILTERS_NEON() \
-    ALL_CHROMA_422_PU(filter_hpp, interp_4tap_horiz_pp, neon); \
-    ALL_CHROMA_422_PU(filter_hps, interp_4tap_horiz_ps, neon)
-
-#define CHROMA_422_FILTERS_CAN_USE_SVE2() \
-    ALL_CHROMA_422_PU(filter_vpp, interp_4tap_vert_pp, sve2);  \
-    ALL_CHROMA_422_PU(filter_vps, interp_4tap_vert_ps, sve2)
-
-#define ALL_CHROMA_444_FILTERS(cpu) \
-    ALL_CHROMA_444_PU(filter_hpp, interp_4tap_horiz_pp, cpu); \
-    ALL_CHROMA_444_PU(filter_hps, interp_4tap_horiz_ps, cpu); \
-    ALL_CHROMA_444_PU(filter_vpp, interp_4tap_vert_pp, cpu);  \
-    ALL_CHROMA_444_PU(filter_vps, interp_4tap_vert_ps, cpu)
-
-#define CHROMA_444_FILTERS_NEON() \
-    ALL_CHROMA_444_PU(filter_hpp, interp_4tap_horiz_pp, neon); \
-    ALL_CHROMA_444_PU(filter_hps, interp_4tap_horiz_ps, neon)
-
-#define CHROMA_444_FILTERS_CAN_USE_SVE2() \
-    ALL_CHROMA_444_PU(filter_vpp, interp_4tap_vert_pp, sve2);  \
-    ALL_CHROMA_444_PU(filter_vps, interp_4tap_vert_ps, sve2)
-
-
 #if defined(__GNUC__)
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #endif
@@ -539,17 +390,6 @@ namespace X265_NS
 // private x265 namespace
 
 
-template<int size>
-void interp_8tap_hv_pp_cpu(const pixel *src, intptr_t srcStride, pixel *dst, intptr_t dstStride, int idxX, int idxY)
-{
-    ALIGN_VAR_32(int16_t, immed[MAX_CU_SIZE * (MAX_CU_SIZE + NTAPS_LUMA - 1)]);
-    const int halfFilterSize = NTAPS_LUMA >> 1;
-    const int immedStride = MAX_CU_SIZE;
-
-    primitives.pu[size].luma_hps(src, srcStride, immed, immedStride, idxX, 1);
-    primitives.pu[size].luma_vsp(immed + (halfFilterSize - 1) * immedStride, immedStride, dst, dstStride, idxY);
-}
-
 void setupNeonPrimitives(EncoderPrimitives &p)
 {
     ALL_CHROMA_420_PU(p2s[NONALIGNED], filterPixelToShort, neon);
@@ -562,21 +402,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     ALL_LUMA_PU(convert_p2s[NONALIGNED], filterPixelToShort, neon);
 
 #if !HIGH_BIT_DEPTH
-    ALL_LUMA_PU(luma_vpp, interp_8tap_vert_pp, neon);
-    ALL_LUMA_PU(luma_vsp, interp_8tap_vert_sp, neon);
-    ALL_LUMA_PU(luma_vps, interp_8tap_vert_ps, neon);
-    ALL_LUMA_PU(luma_hpp, interp_horiz_pp, neon);
-    ALL_LUMA_PU(luma_hps, interp_horiz_ps, neon);
-    ALL_LUMA_PU(luma_vss, interp_8tap_vert_ss, neon);
-    ALL_LUMA_PU_T(luma_hvpp, interp_8tap_hv_pp_cpu);
-    ALL_CHROMA_420_VERT_FILTERS(neon);
-    CHROMA_422_VERT_FILTERS_NEON();
-    CHROMA_422_VERT_FILTERS_CAN_USE_SVE2(neon);
-    ALL_CHROMA_444_VERT_FILTERS(neon);
-    ALL_CHROMA_420_FILTERS(neon);
-    ALL_CHROMA_422_FILTERS(neon);
-    ALL_CHROMA_444_FILTERS(neon);
-
     // Blockcopy_pp
     ALL_LUMA_PU(copy_pp, blockcopy_pp, neon);
     ALL_CHROMA_420_PU(copy_pp, blockcopy_pp, neon);
@@ -1037,17 +862,6 @@ void setupSvePrimitives(EncoderPrimitives &p)
 #if !HIGH_BIT_DEPTH
 void setupSve2Primitives(EncoderPrimitives &p)
 {
-    LUMA_PU_MULTIPLE_ARCHS_2(luma_vpp, interp_8tap_vert_pp, sve2);
-    LUMA_PU_MULTIPLE_ARCHS_1(luma_vsp, interp_8tap_vert_sp, sve2);
-    ALL_LUMA_PU(luma_vps, interp_8tap_vert_ps, sve2);
-    ALL_LUMA_PU(luma_vss, interp_8tap_vert_ss, sve2);
-    CHROMA_420_VERT_FILTERS_CAN_USE_SVE2();
-    CHROMA_422_VERT_FILTERS_CAN_USE_SVE2(sve2);
-    CHROMA_444_VERT_FILTERS_CAN_USE_SVE2();
-    CHROMA_420_FILTERS_CAN_USE_SVE2();
-    CHROMA_422_FILTERS_CAN_USE_SVE2();
-    CHROMA_444_FILTERS_CAN_USE_SVE2();
-
     // pixel_avg_pp
     LUMA_PU_MULTIPLE_ARCHS_3(pixelavg_pp[NONALIGNED], pixel_avg_pp, sve2);
     LUMA_PU_MULTIPLE_ARCHS_3(pixelavg_pp[ALIGNED], pixel_avg_pp, sve2);
