@@ -2682,63 +2682,29 @@ void interp_hv_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst, intptr_
 
 
 
-#if defined(__APPLE__)
 #define CHROMA_420(W, H) \
     p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_hpp = interp_horiz_pp_neon<4, W, H>; \
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_hps = interp_horiz_ps_neon<4, W, H>; \
     p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_vpp = interp_vert_pp_neon<4, W, H>;  \
     p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_vps = interp_vert_ps_neon<4, W, H>;  \
     p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_vsp = interp_vert_sp_neon<4, W, H>;  \
     p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_vss = interp_vert_ss_neon<4, W, H>;  \
     p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].p2s[NONALIGNED] = filterPixelToShort_neon<W, H>;\
     p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].p2s[ALIGNED] = filterPixelToShort_neon<W, H>;
-    
-#define CHROMA_FILTER_420(W, H) \
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_hps = interp_horiz_ps_neon<4, W, H>;
-    
-#else // defined(__APPLE__)
-#define CHROMA_420(W, H) \
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_vss = interp_vert_ss_neon<4, W, H>; \
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].p2s[NONALIGNED] = filterPixelToShort_neon<W, H>;\
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].p2s[ALIGNED] = filterPixelToShort_neon<W, H>;
-    
-#define CHROMA_FILTER_420(W, H) \
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_hpp = interp_horiz_pp_neon<4, W, H>; \
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_hps = interp_horiz_ps_neon<4, W, H>; \
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_vpp = interp_vert_pp_neon<4, W, H>;  \
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_vps = interp_vert_ps_neon<4, W, H>;  \
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_vsp = interp_vert_sp_neon<4, W, H>;
-#endif // defined(__APPLE__)
 
-#if defined(__APPLE__)
 #define CHROMA_422(W, H) \
     p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_hpp = interp_horiz_pp_neon<4, W, H>; \
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_hps = interp_horiz_ps_neon<4, W, H>; \
     p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_vpp = interp_vert_pp_neon<4, W, H>;  \
     p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_vps = interp_vert_ps_neon<4, W, H>;  \
     p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_vsp = interp_vert_sp_neon<4, W, H>;  \
     p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_vss = interp_vert_ss_neon<4, W, H>;  \
     p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].p2s[NONALIGNED] = filterPixelToShort_neon<W, H>;\
     p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].p2s[ALIGNED] = filterPixelToShort_neon<W, H>;
-    
-#define CHROMA_FILTER_422(W, H) \
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_hps = interp_horiz_ps_neon<4, W, H>;
-    
-#else // defined(__APPLE__)
-#define CHROMA_422(W, H) \
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_vss = interp_vert_ss_neon<4, W, H>; \
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].p2s[NONALIGNED] = filterPixelToShort_neon<W, H>;\
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].p2s[ALIGNED] = filterPixelToShort_neon<W, H>;
-    
-#define CHROMA_FILTER_422(W, H) \
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_hpp = interp_horiz_pp_neon<4, W, H>; \
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_hps = interp_horiz_ps_neon<4, W, H>; \
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_vpp = interp_vert_pp_neon<4, W, H>;  \
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_vps = interp_vert_ps_neon<4, W, H>;  \
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_vsp = interp_vert_sp_neon<4, W, H>;
-#endif // defined(__APPLE__)
 
-#if defined(__APPLE__)
 #define CHROMA_444(W, H) \
     p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_hpp = interp_horiz_pp_neon<4, W, H>; \
+    p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_hps = interp_horiz_ps_neon<4, W, H>; \
     p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_vpp = interp_vert_pp_neon<4, W, H>;  \
     p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_vps = interp_vert_ps_neon<4, W, H>;  \
     p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_vsp = interp_vert_sp_neon<4, W, H>;  \
@@ -2746,26 +2712,9 @@ void interp_hv_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst, intptr_
     p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].p2s[NONALIGNED] = filterPixelToShort_neon<W, H>;\
     p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].p2s[ALIGNED] = filterPixelToShort_neon<W, H>;
 
-#define CHROMA_FILTER_444(W, H) \
-    p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_hps = interp_horiz_ps_neon<4, W, H>;
-    
-#else // defined(__APPLE__)
-#define CHROMA_444(W, H) \
-    p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].p2s[NONALIGNED] = filterPixelToShort_neon<W, H>;\
-    p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].p2s[ALIGNED] = filterPixelToShort_neon<W, H>;
-    
-#define CHROMA_FILTER_444(W, H) \
-    p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_hpp = interp_horiz_pp_neon<4, W, H>; \
-    p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_hps = interp_horiz_ps_neon<4, W, H>; \
-    p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_vpp = interp_vert_pp_neon<4, W, H>;  \
-    p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_vps = interp_vert_ps_neon<4, W, H>;  \
-    p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_vsp = interp_vert_sp_neon<4, W, H>;  \
-    p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_vss = interp_vert_ss_neon<4, W, H>;
-#endif // defined(__APPLE__)
-
-#if defined(__APPLE__)
 #define LUMA(W, H) \
     p.pu[LUMA_ ## W ## x ## H].luma_hpp     = interp_horiz_pp_neon<8, W, H>; \
+    p.pu[LUMA_ ## W ## x ## H].luma_hps     = interp_horiz_ps_neon<8, W, H>; \
     p.pu[LUMA_ ## W ## x ## H].luma_vpp     = interp_vert_pp_neon<8, W, H>;  \
     p.pu[LUMA_ ## W ## x ## H].luma_vps     = interp_vert_ps_neon<8, W, H>;  \
     p.pu[LUMA_ ## W ## x ## H].luma_vsp     = interp_vert_sp_neon<8, W, H>;  \
@@ -2773,219 +2722,118 @@ void interp_hv_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst, intptr_
     p.pu[LUMA_ ## W ## x ## H].luma_hvpp    = interp_hv_pp_neon<8, W, H>; \
     p.pu[LUMA_ ## W ## x ## H].convert_p2s[NONALIGNED] = filterPixelToShort_neon<W, H>;\
     p.pu[LUMA_ ## W ## x ## H].convert_p2s[ALIGNED] = filterPixelToShort_neon<W, H>;
-    
-#else // defined(__APPLE__)
-#define LUMA(W, H) \
-    p.pu[LUMA_ ## W ## x ## H].luma_vss     = interp_vert_ss_neon<8, W, H>;  \
-    p.pu[LUMA_ ## W ## x ## H].convert_p2s[NONALIGNED] = filterPixelToShort_neon<W, H>;\
-    p.pu[LUMA_ ## W ## x ## H].convert_p2s[ALIGNED] = filterPixelToShort_neon<W, H>;
-    
-#define LUMA_FILTER(W, H) \
-    p.pu[LUMA_ ## W ## x ## H].luma_hpp     = interp_horiz_pp_neon<8, W, H>; \
-    p.pu[LUMA_ ## W ## x ## H].luma_vpp     = interp_vert_pp_neon<8, W, H>;  \
-    p.pu[LUMA_ ## W ## x ## H].luma_vps     = interp_vert_ps_neon<8, W, H>;  \
-    p.pu[LUMA_ ## W ## x ## H].luma_vsp     = interp_vert_sp_neon<8, W, H>;  \
-    p.pu[LUMA_ ## W ## x ## H].luma_hvpp    = interp_hv_pp_neon<8, W, H>;
-#endif // defined(__APPLE__)
 
 void setupFilterPrimitives_neon(EncoderPrimitives &p)
 {
-
-    // All neon functions assume width of multiple of 8, (2,4,12 variants are not optimized)
-
-    LUMA(8, 8);
+#if !HIGH_BIT_DEPTH
+    LUMA(4, 4);
+    LUMA(4, 8);
+    LUMA(4, 16);
+    LUMA(12, 16);
+#endif
     LUMA(8, 4);
-    LUMA(16, 16);
-    CHROMA_420(8,  8);
-    LUMA(16,  8);
-    CHROMA_420(8,  4);
+    LUMA(8, 8);
     LUMA(8, 16);
-    LUMA(16, 12);
-    CHROMA_420(8,  6);
-    LUMA(16,  4);
-    CHROMA_420(8,  2);
-    LUMA(32, 32);
-    CHROMA_420(16, 16);
-    LUMA(32, 16);
-    CHROMA_420(16, 8);
-    LUMA(16, 32);
-    CHROMA_420(8,  16);
-    LUMA(32, 24);
-    CHROMA_420(16, 12);
-    LUMA(24, 32);
-    LUMA(32,  8);
-    CHROMA_420(16, 4);
     LUMA(8, 32);
-    LUMA(64, 64);
-    CHROMA_420(32, 32);
-    LUMA(64, 32);
-    CHROMA_420(32, 16);
-    LUMA(32, 64);
-    CHROMA_420(16, 32);
-    LUMA(64, 48);
-    CHROMA_420(32, 24);
-    LUMA(48, 64);
-    CHROMA_420(24, 32);
-    LUMA(64, 16);
-    CHROMA_420(32, 8);
+    LUMA(16, 4);
+    LUMA(16, 8);
+    LUMA(16, 12);
+    LUMA(16, 16);
+    LUMA(16, 32);
     LUMA(16, 64);
-    CHROMA_420(8,  32);
-    CHROMA_422(8,  16);
-    CHROMA_422(8,  8);
-    CHROMA_422(8,  12);
-    CHROMA_422(8,  4);
-    CHROMA_422(16, 32);
-    CHROMA_422(16, 16);
-    CHROMA_422(8,  32);
-    CHROMA_422(16, 24);
+    LUMA(24, 32);
+    LUMA(32, 8);
+    LUMA(32, 16);
+    LUMA(32, 24);
+    LUMA(32, 32);
+    LUMA(32, 64);
+    LUMA(48, 64);
+    LUMA(64, 16);
+    LUMA(64, 32);
+    LUMA(64, 48);
+    LUMA(64, 64);
+
+#if !HIGH_BIT_DEPTH
+    CHROMA_420(2, 4);
+    CHROMA_420(2, 8);
+    CHROMA_420(4, 2);
+    CHROMA_420(4, 4);
+    CHROMA_420(4, 8);
+    CHROMA_420(4, 16);
+    CHROMA_420(6, 8);
+    CHROMA_420(12, 16);
+#endif
+    CHROMA_420(8, 2);
+    CHROMA_420(8, 4);
+    CHROMA_420(8, 6);
+    CHROMA_420(8, 8);
+    CHROMA_420(8, 16);
+    CHROMA_420(8, 32);
+    CHROMA_420(16, 4);
+    CHROMA_420(16, 8);
+    CHROMA_420(16, 12);
+    CHROMA_420(16, 16);
+    CHROMA_420(16, 32);
+    CHROMA_420(24, 32);
+    CHROMA_420(32, 8);
+    CHROMA_420(32, 16);
+    CHROMA_420(32, 24);
+    CHROMA_420(32, 32);
+
+#if !HIGH_BIT_DEPTH
+    CHROMA_422(2, 8);
+    CHROMA_422(2, 16);
+    CHROMA_422(4, 4);
+    CHROMA_422(4, 8);
+    CHROMA_422(4, 16);
+    CHROMA_422(4, 32);
+    CHROMA_422(6, 16);
+    CHROMA_422(12, 32);
+#endif
+    CHROMA_422(8, 4);
+    CHROMA_422(8, 8);
+    CHROMA_422(8, 12);
+    CHROMA_422(8, 16);
+    CHROMA_422(8, 32);
+    CHROMA_422(8, 64);
     CHROMA_422(16, 8);
-    CHROMA_422(32, 64);
-    CHROMA_422(32, 32);
+    CHROMA_422(16, 16);
+    CHROMA_422(16, 24);
+    CHROMA_422(16, 32);
     CHROMA_422(16, 64);
-    CHROMA_422(32, 48);
     CHROMA_422(24, 64);
     CHROMA_422(32, 16);
-    CHROMA_422(8,  64);
-    CHROMA_444(8,  8);
-    CHROMA_444(8,  4);
-    CHROMA_444(16, 16);
-    CHROMA_444(16, 8);
-    CHROMA_444(8,  16);
-    CHROMA_444(16, 12);
+    CHROMA_422(32, 32);
+    CHROMA_422(32, 48);
+    CHROMA_422(32, 64);
+
+#if !HIGH_BIT_DEPTH
+    CHROMA_444(4, 4);
+    CHROMA_444(4, 8);
+    CHROMA_444(4, 16);
+    CHROMA_444(12, 16);
+#endif
+    CHROMA_444(8, 4);
+    CHROMA_444(8, 8);
+    CHROMA_444(8, 16);
+    CHROMA_444(8, 32);
     CHROMA_444(16, 4);
-    CHROMA_444(32, 32);
-    CHROMA_444(32, 16);
+    CHROMA_444(16, 8);
+    CHROMA_444(16, 12);
+    CHROMA_444(16, 16);
     CHROMA_444(16, 32);
-    CHROMA_444(32, 24);
+    CHROMA_444(16, 64);
     CHROMA_444(24, 32);
     CHROMA_444(32, 8);
-    CHROMA_444(8,  32);
-    CHROMA_444(64, 64);
-    CHROMA_444(64, 32);
+    CHROMA_444(32, 16);
+    CHROMA_444(32, 24);
+    CHROMA_444(32, 32);
     CHROMA_444(32, 64);
-    CHROMA_444(64, 48);
     CHROMA_444(48, 64);
     CHROMA_444(64, 16);
-    CHROMA_444(16, 64);
-
-#if defined(__APPLE__) || HIGH_BIT_DEPTH
-    p.pu[LUMA_8x4].luma_hps     = interp_horiz_ps_neon<8, 8, 4>;
-    p.pu[LUMA_8x8].luma_hps     = interp_horiz_ps_neon<8, 8, 8>;
-    p.pu[LUMA_8x16].luma_hps     = interp_horiz_ps_neon<8, 8, 16>;
-    p.pu[LUMA_8x32].luma_hps     = interp_horiz_ps_neon<8, 8, 32>;
-#endif // HIGH_BIT_DEPTH
-
-#if !defined(__APPLE__) && HIGH_BIT_DEPTH
-    p.pu[LUMA_24x32].luma_hps     = interp_horiz_ps_neon<8, 24, 32>;
-#endif // !defined(__APPLE__)
-
-#if !defined(__APPLE__)
-    p.pu[LUMA_32x8].luma_hpp      = interp_horiz_pp_neon<8, 32, 8>;
-    p.pu[LUMA_32x16].luma_hpp     = interp_horiz_pp_neon<8, 32, 16>;
-    p.pu[LUMA_32x24].luma_hpp     = interp_horiz_pp_neon<8, 32, 24>;
-    p.pu[LUMA_32x32].luma_hpp     = interp_horiz_pp_neon<8, 32, 32>;
-    p.pu[LUMA_32x64].luma_hpp     = interp_horiz_pp_neon<8, 32, 64>;
-    p.pu[LUMA_48x64].luma_hpp     = interp_horiz_pp_neon<8, 48, 64>;
-    p.pu[LUMA_64x16].luma_hpp     = interp_horiz_pp_neon<8, 64, 16>;
-    p.pu[LUMA_64x32].luma_hpp     = interp_horiz_pp_neon<8, 64, 32>;
-    p.pu[LUMA_64x48].luma_hpp     = interp_horiz_pp_neon<8, 64, 48>;
-    p.pu[LUMA_64x64].luma_hpp     = interp_horiz_pp_neon<8, 64, 64>;
-
-    LUMA_FILTER(8, 4);
-    LUMA_FILTER(8, 8);
-    LUMA_FILTER(8, 16);
-    LUMA_FILTER(8, 32);
-    LUMA_FILTER(24, 32);
-
-    LUMA_FILTER(16, 32);
-    LUMA_FILTER(32, 16);
-    LUMA_FILTER(32, 24);
-    LUMA_FILTER(32, 32);
-    LUMA_FILTER(32, 64);
-    LUMA_FILTER(48, 64);
-    LUMA_FILTER(64, 32);
-    LUMA_FILTER(64, 48);
-    LUMA_FILTER(64, 64);
-    
-    CHROMA_FILTER_420(24, 32);
-    
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x8].filter_hpp = interp_horiz_pp_neon<4, 32, 8>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x16].filter_hpp = interp_horiz_pp_neon<4, 32, 16>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x24].filter_hpp = interp_horiz_pp_neon<4, 32, 24>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x32].filter_hpp = interp_horiz_pp_neon<4, 32, 32>;
-    
-    CHROMA_FILTER_422(24, 64);
-    
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x16].filter_hpp = interp_horiz_pp_neon<4, 32, 16>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x32].filter_hpp = interp_horiz_pp_neon<4, 32, 32>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x48].filter_hpp = interp_horiz_pp_neon<4, 32, 48>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x64].filter_hpp = interp_horiz_pp_neon<4, 32, 64>;
-    
-    CHROMA_FILTER_444(24, 32);
-    
-    p.chroma[X265_CSP_I444].pu[LUMA_32x8].filter_hpp  = interp_horiz_pp_neon<4, 32, 8>;
-    p.chroma[X265_CSP_I444].pu[LUMA_32x16].filter_hpp = interp_horiz_pp_neon<4, 32, 16>;
-    p.chroma[X265_CSP_I444].pu[LUMA_32x24].filter_hpp = interp_horiz_pp_neon<4, 32, 24>;
-    p.chroma[X265_CSP_I444].pu[LUMA_32x32].filter_hpp = interp_horiz_pp_neon<4, 32, 32>;
-    p.chroma[X265_CSP_I444].pu[LUMA_32x64].filter_hpp = interp_horiz_pp_neon<4, 32, 64>;
-    p.chroma[X265_CSP_I444].pu[LUMA_48x64].filter_hpp = interp_horiz_pp_neon<4, 48, 64>;
-    p.chroma[X265_CSP_I444].pu[LUMA_64x16].filter_hpp = interp_horiz_pp_neon<4, 64, 16>;
-    p.chroma[X265_CSP_I444].pu[LUMA_64x32].filter_hpp = interp_horiz_pp_neon<4, 64, 32>;
-    p.chroma[X265_CSP_I444].pu[LUMA_64x48].filter_hpp = interp_horiz_pp_neon<4, 64, 48>;
-    p.chroma[X265_CSP_I444].pu[LUMA_64x64].filter_hpp = interp_horiz_pp_neon<4, 64, 64>;
-    
-    p.chroma[X265_CSP_I444].pu[LUMA_16x4].filter_vss  = interp_vert_ss_neon<4, 16, 4>;
-    p.chroma[X265_CSP_I444].pu[LUMA_16x8].filter_vss  = interp_vert_ss_neon<4, 16, 8>;
-    p.chroma[X265_CSP_I444].pu[LUMA_16x12].filter_vss = interp_vert_ss_neon<4, 16, 12>;
-    p.chroma[X265_CSP_I444].pu[LUMA_16x16].filter_vss = interp_vert_ss_neon<4, 16, 16>;
-    p.chroma[X265_CSP_I444].pu[LUMA_16x32].filter_vss = interp_vert_ss_neon<4, 16, 32>;
-    p.chroma[X265_CSP_I444].pu[LUMA_16x64].filter_vss = interp_vert_ss_neon<4, 16, 64>;
-    p.chroma[X265_CSP_I444].pu[LUMA_32x8].filter_vss  = interp_vert_ss_neon<4, 32, 8>;
-    p.chroma[X265_CSP_I444].pu[LUMA_32x16].filter_vss = interp_vert_ss_neon<4, 32, 16>;
-    p.chroma[X265_CSP_I444].pu[LUMA_32x24].filter_vss = interp_vert_ss_neon<4, 32, 24>;
-    p.chroma[X265_CSP_I444].pu[LUMA_32x32].filter_vss = interp_vert_ss_neon<4, 32, 32>;
-    p.chroma[X265_CSP_I444].pu[LUMA_32x64].filter_vss = interp_vert_ss_neon<4, 32, 64>;
-#endif // !defined(__APPLE__)
-
-    CHROMA_FILTER_420(8, 2);
-    CHROMA_FILTER_420(8, 4);
-    CHROMA_FILTER_420(8, 6);
-    CHROMA_FILTER_420(8, 8);
-    CHROMA_FILTER_420(8, 16);
-    CHROMA_FILTER_420(8, 32);
-    
-    CHROMA_FILTER_422(8, 4);
-    CHROMA_FILTER_422(8, 8);
-    CHROMA_FILTER_422(8, 12);
-    CHROMA_FILTER_422(8, 16);
-    CHROMA_FILTER_422(8, 32);
-    CHROMA_FILTER_422(8, 64);
-    
-    CHROMA_FILTER_444(8, 4);
-    CHROMA_FILTER_444(8, 8);
-    CHROMA_FILTER_444(8, 16);
-    CHROMA_FILTER_444(8, 32);
-    
-#if defined(__APPLE__)
-    CHROMA_FILTER_420(16, 4);
-    CHROMA_FILTER_420(16, 8);
-    CHROMA_FILTER_420(16, 12);
-    CHROMA_FILTER_420(16, 16);
-    CHROMA_FILTER_420(16, 32);
-
-    CHROMA_FILTER_422(16, 8);
-    CHROMA_FILTER_422(16, 16);
-    CHROMA_FILTER_422(16, 24);
-    CHROMA_FILTER_422(16, 32);
-    CHROMA_FILTER_422(16, 64);
-    
-    CHROMA_FILTER_444(16, 4);
-    CHROMA_FILTER_444(16, 8);
-    CHROMA_FILTER_444(16, 12);
-    CHROMA_FILTER_444(16, 16);
-    CHROMA_FILTER_444(16, 32);
-    CHROMA_FILTER_444(16, 64);
-#endif // defined(__APPLE__)
+    CHROMA_444(64, 32);
+    CHROMA_444(64, 48);
+    CHROMA_444(64, 64);
 }
 
 };
