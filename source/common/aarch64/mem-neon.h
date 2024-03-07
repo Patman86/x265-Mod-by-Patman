@@ -56,4 +56,15 @@ static void inline store_u8x4x1(uint8_t *d, const uint8x8_t s)
     vst1_lane_u32((uint32_t *)d, vreinterpret_u32_u8(s), 0);
 }
 
+template<int N>
+static void inline store_s16x2xn(int16_t *dst, intptr_t dst_stride,
+                                 const int16x4_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_lane_s32((int32_t*)dst, vreinterpret_s32_s16(src[i]), 0);
+        dst += dst_stride;
+    }
+}
+
 #endif // X265_COMMON_AARCH64_MEM_NEON_H

@@ -1,6 +1,8 @@
 #if HAVE_NEON
 
 #include "filter-prim.h"
+#include "mem-neon.h"
+
 #include <arm_neon.h>
 
 namespace X265_NS
@@ -14,12 +16,12 @@ template<int width, int height>
 void filterPixelToShort_neon(const pixel *src, intptr_t srcStride, int16_t *dst, intptr_t dstStride)
 {
     const int shift = IF_INTERNAL_PREC - X265_DEPTH;
-    int row, col;
     const int16x8_t off = vdupq_n_s16(IF_INTERNAL_OFFS);
-    for (row = 0; row < height; row++)
+    for (int row = 0; row < height; row++)
     {
 
-        for (col = 0; col < width; col += 8)
+        int col = 0;
+        for (; col + 8 <= width; col += 8)
         {
             uint16x8_t in;
 
@@ -32,6 +34,34 @@ void filterPixelToShort_neon(const pixel *src, intptr_t srcStride, int16_t *dst,
             int16x8_t tmp = vreinterpretq_s16_u16(vshlq_n_u16(in, shift));
             tmp = vsubq_s16(tmp, off);
             vst1q_s16(dst + col, tmp);
+        }
+        for (; col + 4 <= width; col += 4)
+        {
+            uint16x4_t in;
+
+#if HIGH_BIT_DEPTH
+            in = vld1_u16(src + col);
+#else
+            in = vget_low_u16(vmovl_u8(vld1_u8(src + col)));
+#endif
+
+            int16x4_t tmp = vreinterpret_s16_u16(vshl_n_u16(in, shift));
+            tmp = vsub_s16(tmp, vget_low_s16(off));
+            vst1_s16(dst + col, tmp);
+        }
+        for (; col < width; col += 2)
+        {
+            uint16x4_t in;
+
+#if HIGH_BIT_DEPTH
+            in = vld1_u16(src + col);
+#else
+            in = vget_low_u16(vmovl_u8(vld1_u8(src + col)));
+#endif
+
+            int16x4_t tmp = vreinterpret_s16_u16(vshl_n_u16(in, shift));
+            tmp = vsub_s16(tmp, vget_low_s16(off));
+            store_s16x2xn<1>(dst + col, dstStride, &tmp);
         }
 
         src += srcStride;
