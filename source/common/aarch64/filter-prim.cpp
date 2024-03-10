@@ -3,10 +3,8 @@
 #include "filter-prim.h"
 #include <arm_neon.h>
 
-namespace
+namespace X265_NS
 {
-
-using namespace X265_NS;
 
 #if HIGH_BIT_DEPTH
 #define SHIFT_INTERP_PS (IF_FILTER_PREC - (IF_INTERNAL_PREC - X265_DEPTH))
@@ -658,13 +656,10 @@ void interp_hv_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst, intptr_
 
 
 
-}
 
 
 
 
-namespace X265_NS
-{
 #if defined(__APPLE__)
 #define CHROMA_420(W, H) \
     p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_hpp = interp_horiz_pp_neon<4, W, H>; \
