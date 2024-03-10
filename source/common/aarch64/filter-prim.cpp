@@ -5,6 +5,444 @@
 
 #include <arm_neon.h>
 
+namespace {
+#if !HIGH_BIT_DEPTH
+// Element-wise ABS of g_chromaFilter
+const uint8_t g_chromaFilterAbs8[8][NTAPS_CHROMA] =
+{
+    { 0, 64,  0, 0 },
+    { 2, 58, 10, 2 },
+    { 4, 54, 16, 2 },
+    { 6, 46, 28, 4 },
+    { 4, 36, 36, 4 },
+    { 4, 28, 46, 6 },
+    { 2, 16, 54, 4 },
+    { 2, 10, 58, 2 }
+};
+
+template<int coeffIdx>
+void inline filter8_u8x8(const uint8x8_t *s, const uint16x8_t c, int16x8_t &d)
+{
+    if (coeffIdx == 1)
+    {
+        // { -1, 4, -10, 58, 17, -5, 1, 0 },
+        uint16x8_t t = vaddq_u16(c, vsubl_u8(s[6], s[0]));
+        t = vmlal_u8(t, s[1], vdup_n_u8(4));
+        t = vmlsl_u8(t, s[2], vdup_n_u8(10));
+        t = vmlal_u8(t, s[3], vdup_n_u8(58));
+        t = vmlal_u8(t, s[4], vdup_n_u8(17));
+        t = vmlsl_u8(t, s[5], vdup_n_u8(5));
+        d = vreinterpretq_s16_u16(t);
+    }
+    else if (coeffIdx == 2)
+    {
+        // { -1, 4, -11, 40, 40, -11, 4, -1 }
+        int16x8_t t0 = vreinterpretq_s16_u16(vaddl_u8(s[3], s[4]));
+        int16x8_t t1 = vreinterpretq_s16_u16(vaddl_u8(s[2], s[5]));
+        int16x8_t t2 = vreinterpretq_s16_u16(vaddl_u8(s[1], s[6]));
+        int16x8_t t3 = vreinterpretq_s16_u16(vaddl_u8(s[0], s[7]));
+
+        d = vreinterpretq_s16_u16(c);
+        d = vmlaq_n_s16(d, t0, 40);
+        d = vmlaq_n_s16(d, t1, -11);
+        d = vmlaq_n_s16(d, t2, 4);
+        d = vmlaq_n_s16(d, t3, -1);
+    }
+    else
+    {
+        // { 0, 1, -5, 17, 58, -10, 4, -1 }
+        uint16x8_t t = vaddq_u16(c, vsubl_u8(s[1], s[7]));
+        t = vmlal_u8(t, s[6], vdup_n_u8(4));
+        t = vmlsl_u8(t, s[5], vdup_n_u8(10));
+        t = vmlal_u8(t, s[4], vdup_n_u8(58));
+        t = vmlal_u8(t, s[3], vdup_n_u8(17));
+        t = vmlsl_u8(t, s[2], vdup_n_u8(5));
+        d = vreinterpretq_s16_u16(t);
+    }
+}
+
+template<int coeffIdx>
+void inline filter8_u8x16(const uint8x16_t *s, const uint16x8_t c,
+                          int16x8_t &d0, int16x8_t &d1)
+{
+    if (coeffIdx == 1)
+    {
+        // { -1, 4, -10, 58, 17, -5, 1, 0 }
+        const uint8x16_t f0 = vdupq_n_u8(4);
+        const uint8x16_t f1 = vdupq_n_u8(10);
+        const uint8x16_t f2 = vdupq_n_u8(58);
+        const uint8x16_t f3 = vdupq_n_u8(17);
+        const uint8x16_t f4 = vdupq_n_u8(5);
+
+        uint16x8_t t0 = vsubl_u8(vget_low_u8(s[6]), vget_low_u8(s[0]));
+        t0 = vaddq_u16(c, t0);
+        t0 = vmlal_u8(t0, vget_low_u8(s[1]), vget_low_u8(f0));
+        t0 = vmlsl_u8(t0, vget_low_u8(s[2]), vget_low_u8(f1));
+        t0 = vmlal_u8(t0, vget_low_u8(s[3]), vget_low_u8(f2));
+        t0 = vmlal_u8(t0, vget_low_u8(s[4]), vget_low_u8(f3));
+        t0 = vmlsl_u8(t0, vget_low_u8(s[5]), vget_low_u8(f4));
+        d0 = vreinterpretq_s16_u16(t0);
+
+        uint16x8_t t1 = vsubl_u8(vget_high_u8(s[6]), vget_high_u8(s[0]));
+        t1 = vaddq_u16(c, t1);
+        t1 = vmlal_u8(t1, vget_high_u8(s[1]), vget_high_u8(f0));
+        t1 = vmlsl_u8(t1, vget_high_u8(s[2]), vget_high_u8(f1));
+        t1 = vmlal_u8(t1, vget_high_u8(s[3]), vget_high_u8(f2));
+        t1 = vmlal_u8(t1, vget_high_u8(s[4]), vget_high_u8(f3));
+        t1 = vmlsl_u8(t1, vget_high_u8(s[5]), vget_high_u8(f4));
+        d1 = vreinterpretq_s16_u16(t1);
+    }
+    else if (coeffIdx == 2)
+    {
+        // { -1, 4, -11, 40, 40, -11, 4, -1 }
+        int16x8_t t0 = vreinterpretq_s16_u16(vaddl_u8(vget_low_u8(s[3]),
+                                                      vget_low_u8(s[4])));
+        int16x8_t t1 = vreinterpretq_s16_u16(vaddl_u8(vget_low_u8(s[2]),
+                                                      vget_low_u8(s[5])));
+        int16x8_t t2 = vreinterpretq_s16_u16(vaddl_u8(vget_low_u8(s[1]),
+                                                      vget_low_u8(s[6])));
+        int16x8_t t3 = vreinterpretq_s16_u16(vaddl_u8(vget_low_u8(s[0]),
+                                                      vget_low_u8(s[7])));
+        d0 = vreinterpretq_s16_u16(c);
+        d0 = vmlaq_n_s16(d0, t0, 40);
+        d0 = vmlaq_n_s16(d0, t1, -11);
+        d0 = vmlaq_n_s16(d0, t2, 4);
+        d0 = vmlaq_n_s16(d0, t3, -1);
+
+        int16x8_t t4 = vreinterpretq_s16_u16(vaddl_u8(vget_high_u8(s[3]),
+                                                      vget_high_u8(s[4])));
+        int16x8_t t5 = vreinterpretq_s16_u16(vaddl_u8(vget_high_u8(s[2]),
+                                                      vget_high_u8(s[5])));
+        int16x8_t t6 = vreinterpretq_s16_u16(vaddl_u8(vget_high_u8(s[1]),
+                                                      vget_high_u8(s[6])));
+        int16x8_t t7 = vreinterpretq_s16_u16(vaddl_u8(vget_high_u8(s[0]),
+                                                      vget_high_u8(s[7])));
+        d1 = vreinterpretq_s16_u16(c);
+        d1 = vmlaq_n_s16(d1, t4, 40);
+        d1 = vmlaq_n_s16(d1, t5, -11);
+        d1 = vmlaq_n_s16(d1, t6, 4);
+        d1 = vmlaq_n_s16(d1, t7, -1);
+    }
+    else
+    {
+        // { 0, 1, -5, 17, 58, -10, 4, -1 }
+        const uint8x16_t f0 = vdupq_n_u8(4);
+        const uint8x16_t f1 = vdupq_n_u8(10);
+        const uint8x16_t f2 = vdupq_n_u8(58);
+        const uint8x16_t f3 = vdupq_n_u8(17);
+        const uint8x16_t f4 = vdupq_n_u8(5);
+
+        uint16x8_t t0 = vsubl_u8(vget_low_u8(s[1]), vget_low_u8(s[7]));
+        t0 = vaddq_u16(c, t0);
+        t0 = vmlal_u8(t0, vget_low_u8(s[6]), vget_low_u8(f0));
+        t0 = vmlsl_u8(t0, vget_low_u8(s[5]), vget_low_u8(f1));
+        t0 = vmlal_u8(t0, vget_low_u8(s[4]), vget_low_u8(f2));
+        t0 = vmlal_u8(t0, vget_low_u8(s[3]), vget_low_u8(f3));
+        t0 = vmlsl_u8(t0, vget_low_u8(s[2]), vget_low_u8(f4));
+        d0 = vreinterpretq_s16_u16(t0);
+
+        uint16x8_t t1 = vsubl_u8(vget_high_u8(s[1]), vget_high_u8(s[7]));
+        t1 = vaddq_u16(c, t1);
+        t1 = vmlal_u8(t1, vget_high_u8(s[6]), vget_high_u8(f0));
+        t1 = vmlsl_u8(t1, vget_high_u8(s[5]), vget_high_u8(f1));
+        t1 = vmlal_u8(t1, vget_high_u8(s[4]), vget_high_u8(f2));
+        t1 = vmlal_u8(t1, vget_high_u8(s[3]), vget_high_u8(f3));
+        t1 = vmlsl_u8(t1, vget_high_u8(s[2]), vget_high_u8(f4));
+        d1 = vreinterpretq_s16_u16(t1);
+    }
+}
+
+template<bool coeff4>
+void inline filter4_u8x8(const uint8x8_t *s, const uint8x16x4_t f,
+                         const uint16x8_t c, int16x8_t &d)
+{
+    if (coeff4)
+    {
+        // { -4, 36, 36, -4 }
+        uint16x8_t t0 = vaddl_u8(s[1], s[2]);
+        uint16x8_t t1 = vaddl_u8(s[0], s[3]);
+        d = vreinterpretq_s16_u16(vmlaq_n_u16(c, t0, 36));
+        d = vmlsq_n_s16(d, vreinterpretq_s16_u16(t1), 4);
+    }
+    else
+    {
+        // All chroma filter taps have signs {-, +, +, -}, so we can use a
+        // sequence of MLAL/MLSL with absolute filter values to avoid needing to
+        // widen the input.
+        uint16x8_t t = vmlal_u8(c, s[1], vget_low_u8(f.val[1]));
+        t = vmlsl_u8(t, s[0], vget_low_u8(f.val[0]));
+        t = vmlal_u8(t, s[2], vget_low_u8(f.val[2]));
+        t = vmlsl_u8(t, s[3], vget_low_u8(f.val[3]));
+        d = vreinterpretq_s16_u16(t);
+    }
+}
+
+template<bool coeff4>
+void inline filter4_u8x16(const uint8x16_t *s, const uint8x16x4_t f,
+                          const uint16x8_t c, int16x8_t &d0, int16x8_t &d1)
+{
+    if (coeff4)
+    {
+        // { -4, 36, 36, -4 }
+        uint16x8_t t0 = vaddl_u8(vget_low_u8(s[1]), vget_low_u8(s[2]));
+        uint16x8_t t1 = vaddl_u8(vget_low_u8(s[0]), vget_low_u8(s[3]));
+        d0 = vreinterpretq_s16_u16(vmlaq_n_u16(c, t0, 36));
+        d0 = vmlsq_n_s16(d0, vreinterpretq_s16_u16(t1), 4);
+
+        uint16x8_t t2 = vaddl_u8(vget_high_u8(s[1]), vget_high_u8(s[2]));
+        uint16x8_t t3 = vaddl_u8(vget_high_u8(s[0]), vget_high_u8(s[3]));
+        d1 = vreinterpretq_s16_u16(vmlaq_n_u16(c, t2, 36));
+        d1 = vmlsq_n_s16(d1, vreinterpretq_s16_u16(t3), 4);
+    }
+    else
+    {
+        // All chroma filter taps have signs {-, +, +, -}, so we can use a
+        // sequence of MLAL/MLSL with absolute filter values to avoid needing to
+        // widen the input.
+        uint16x8_t t0 = vmlal_u8(c, vget_low_u8(s[1]), vget_low_u8(f.val[1]));
+        t0 = vmlsl_u8(t0, vget_low_u8(s[0]), vget_low_u8(f.val[0]));
+        t0 = vmlal_u8(t0, vget_low_u8(s[2]), vget_low_u8(f.val[2]));
+        t0 = vmlsl_u8(t0, vget_low_u8(s[3]), vget_low_u8(f.val[3]));
+        d0 = vreinterpretq_s16_u16(t0);
+
+        uint16x8_t t1 = vmlal_u8(c, vget_high_u8(s[1]), vget_low_u8(f.val[1]));
+        t1 = vmlsl_u8(t1, vget_high_u8(s[0]), vget_low_u8(f.val[0]));
+        t1 = vmlal_u8(t1, vget_high_u8(s[2]), vget_low_u8(f.val[2]));
+        t1 = vmlsl_u8(t1, vget_high_u8(s[3]), vget_low_u8(f.val[3]));
+        d1 = vreinterpretq_s16_u16(t1);
+    }
+}
+
+template<bool coeff4, int width, int height>
+void interp4_horiz_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst,
+                           intptr_t dstStride, int coeffIdx)
+{
+    const int N_TAPS = 4;
+    src -= N_TAPS / 2 - 1;
+
+    // Abs 8-bit filter taps to allow use of 8-bit MLAL/MLSL
+    const uint8x16x4_t filter = vld4q_dup_u8(g_chromaFilterAbs8[coeffIdx]);
+
+    // Zero constant in order to use filter helper functions (optimised away).
+    const uint16x8_t c = vdupq_n_u16(0);
+
+    if (width % 16 == 0)
+    {
+        for (int row = 0; row < height; row++)
+        {
+            int col = 0;
+            for (; col + 32 <= width; col += 32)
+            {
+                uint8x16_t s0[N_TAPS], s1[N_TAPS];
+                load_u8x16xn<4>(src + col + 0, 1, s0);
+                load_u8x16xn<4>(src + col + 16, 1, s1);
+
+                int16x8_t d0, d1, d2, d3;
+                filter4_u8x16<coeff4>(s0, filter, c, d0, d1);
+                filter4_u8x16<coeff4>(s1, filter, c, d2, d3);
+
+                uint8x8_t d0_u8 = vqrshrun_n_s16(d0, IF_FILTER_PREC);
+                uint8x8_t d1_u8 = vqrshrun_n_s16(d1, IF_FILTER_PREC);
+                uint8x8_t d2_u8 = vqrshrun_n_s16(d2, IF_FILTER_PREC);
+                uint8x8_t d3_u8 = vqrshrun_n_s16(d3, IF_FILTER_PREC);
+
+                vst1q_u8(dst + col + 0, vcombine_u8(d0_u8, d1_u8));
+                vst1q_u8(dst + col + 16, vcombine_u8(d2_u8, d3_u8));
+            }
+
+            for (; col + 16 <= width; col += 16)
+            {
+                uint8x16_t s[N_TAPS];
+                load_u8x16xn<4>(src + col, 1, s);
+
+                int16x8_t d0, d1;
+                filter4_u8x16<coeff4>(s, filter, c, d0, d1);
+
+                uint8x8_t d0_u8 = vqrshrun_n_s16(d0, IF_FILTER_PREC);
+                uint8x8_t d1_u8 = vqrshrun_n_s16(d1, IF_FILTER_PREC);
+
+                vst1q_u8(dst + col, vcombine_u8(d0_u8, d1_u8));
+            }
+
+            src += srcStride;
+            dst += dstStride;
+        }
+    }
+    else
+    {
+        for (int row = 0; row < height; row += 2)
+        {
+            int col = 0;
+            for (; col + 8 <= width; col += 8)
+            {
+                uint8x8_t s0[N_TAPS], s1[N_TAPS];
+                load_u8x8xn<4>(src + col + 0 * srcStride, 1, s0);
+                load_u8x8xn<4>(src + col + 1 * srcStride, 1, s1);
+
+                int16x8_t d0, d1;
+                filter4_u8x8<coeff4>(s0, filter, c, d0);
+                filter4_u8x8<coeff4>(s1, filter, c, d1);
+
+                uint8x8_t d0_u8 = vqrshrun_n_s16(d0, IF_FILTER_PREC);
+                uint8x8_t d1_u8 = vqrshrun_n_s16(d1, IF_FILTER_PREC);
+
+                vst1_u8(dst + col + 0 * dstStride, d0_u8);
+                vst1_u8(dst + col + 1 * dstStride, d1_u8);
+            }
+
+            if (width % 8 != 0)
+            {
+                uint8x8_t s0[N_TAPS], s1[N_TAPS];
+                load_u8x8xn<4>(src + col + 0 * srcStride, 1, s0);
+                load_u8x8xn<4>(src + col + 1 * srcStride, 1, s1);
+
+                int16x8_t d0, d1;
+                filter4_u8x8<coeff4>(s0, filter, c, d0);
+                filter4_u8x8<coeff4>(s1, filter, c, d1);
+
+                uint8x8_t d[2];
+                d[0] = vqrshrun_n_s16(d0, IF_FILTER_PREC);
+                d[1] = vqrshrun_n_s16(d1, IF_FILTER_PREC);
+
+                if (width == 12 || width == 4)
+                {
+                    store_u8x4xn<2>(dst + col, dstStride, d);
+                }
+                if (width == 6)
+                {
+                    store_u8x6xn<2>(dst + col, dstStride, d);
+                }
+                if (width == 2)
+                {
+                    store_u8x2xn<2>(dst + col, dstStride, d);
+                }
+            }
+
+            src += 2 * srcStride;
+            dst += 2 * dstStride;
+        }
+    }
+}
+
+template<int coeffIdx, int width, int height>
+void interp8_horiz_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst,
+                           intptr_t dstStride)
+{
+    const int N_TAPS = 8;
+    src -= N_TAPS / 2 - 1;
+
+    // Zero constant in order to use filter helper functions (optimised away).
+    const uint16x8_t c = vdupq_n_u16(0);
+
+    if (width % 16 == 0)
+    {
+        for (int row = 0; row < height; row++)
+        {
+            int col = 0;
+            for (; col + 32 <= width; col += 32)
+            {
+                uint8x16_t s0[N_TAPS], s1[N_TAPS];
+                load_u8x16xn<8>(src + col + 0, 1, s0);
+                load_u8x16xn<8>(src + col + 16, 1, s1);
+
+                int16x8_t d0, d1, d2, d3;
+                filter8_u8x16<coeffIdx>(s0, c, d0, d1);
+                filter8_u8x16<coeffIdx>(s1, c, d2, d3);
+
+                vst1_u8(dst + col + 0, vqrshrun_n_s16(d0, IF_FILTER_PREC));
+                vst1_u8(dst + col + 8, vqrshrun_n_s16(d1, IF_FILTER_PREC));
+                vst1_u8(dst + col + 16, vqrshrun_n_s16(d2, IF_FILTER_PREC));
+                vst1_u8(dst + col + 24, vqrshrun_n_s16(d3, IF_FILTER_PREC));
+            }
+
+            for (; col + 16 <= width; col += 16)
+            {
+                uint8x16_t s[N_TAPS];
+                load_u8x16xn<8>(src + col, 1, s);
+
+                int16x8_t d0, d1;
+                filter8_u8x16<coeffIdx>(s, c, d0, d1);
+
+                uint8x8_t d0_u8 = vqrshrun_n_s16(d0, IF_FILTER_PREC);
+                uint8x8_t d1_u8 = vqrshrun_n_s16(d1, IF_FILTER_PREC);
+
+                vst1q_u8(dst + col, vcombine_u8(d0_u8, d1_u8));
+            }
+
+            for (; col + 8 <= width; col += 8)
+            {
+                uint8x8_t s[N_TAPS];
+                load_u8x8xn<8>(src + col, 1, s);
+
+                int16x8_t d;
+                filter8_u8x8<coeffIdx>(s, c, d);
+
+                vst1_u8(dst + col, vqrshrun_n_s16(d, IF_FILTER_PREC));
+            }
+
+            if (width % 8 != 0)
+            {
+                uint8x8_t s[N_TAPS];
+                load_u8x8xn<8>(src + col, 1, s);
+
+                int16x8_t d;
+                filter8_u8x8<coeffIdx>(s, c, d);
+
+                store_u8x4x1(dst + col, vqrshrun_n_s16(d, IF_FILTER_PREC));
+            }
+
+            src += srcStride;
+            dst += dstStride;
+        }
+    }
+    else
+    {
+        for (int row = 0; row < height; row += 2)
+        {
+            int col = 0;
+            for (; col + 8 <= width; col += 8)
+            {
+                uint8x8_t s0[N_TAPS], s1[N_TAPS];
+                load_u8x8xn<8>(src + col + 0 * srcStride, 1, s0);
+                load_u8x8xn<8>(src + col + 1 * srcStride, 1, s1);
+
+                int16x8_t d0, d1;
+                filter8_u8x8<coeffIdx>(s0, c, d0);
+                filter8_u8x8<coeffIdx>(s1, c, d1);
+
+                uint8x8_t d0_u8 = vqrshrun_n_s16(d0, IF_FILTER_PREC);
+                uint8x8_t d1_u8 = vqrshrun_n_s16(d1, IF_FILTER_PREC);
+
+                vst1_u8(dst + col + 0 * dstStride, d0_u8);
+                vst1_u8(dst + col + 1 * dstStride, d1_u8);
+            }
+
+            if (width % 8 != 0)
+            {
+                uint8x8_t s0[N_TAPS], s1[N_TAPS];
+                load_u8x8xn<8>(src + col + 0 * srcStride, 1, s0);
+                load_u8x8xn<8>(src + col + 1 * srcStride, 1, s1);
+
+                int16x8_t d0, d1;
+                filter8_u8x8<coeffIdx>(s0, c, d0);
+                filter8_u8x8<coeffIdx>(s1, c, d1);
+
+                uint8x8_t d[2];
+                d[0] = vqrshrun_n_s16(d0, IF_FILTER_PREC);
+                d[1] = vqrshrun_n_s16(d1, IF_FILTER_PREC);
+
+                store_u8x4xn<2>(dst + col, dstStride, d);
+            }
+
+            src += 2 * srcStride;
+            dst += 2 * dstStride;
+        }
+    }
+}
+
+#endif // !HIGH_BIT_DEPTH
+}
+
 namespace X265_NS
 {
 
@@ -69,7 +507,7 @@ void filterPixelToShort_neon(const pixel *src, intptr_t srcStride, int16_t *dst,
     }
 }
 
-
+#if HIGH_BIT_DEPTH
 template<int N, int width, int height>
 void interp_horiz_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst, intptr_t dstStride, int coeffIdx)
 {
@@ -98,12 +536,7 @@ void interp_horiz_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst, intp
 
             for (int i = 0; i < N; i++)
             {
-#if HIGH_BIT_DEPTH
                 input[i] = vreinterpretq_s16_u16(vld1q_u16(src + col + i));
-#else
-                uint8x8_t in_tmp = vld1_u8(src + col + i);
-                input[i] = vreinterpretq_s16_u16(vmovl_u8(in_tmp));
-#endif
             }
             vsum1 = voffset;
             vsum2 = voffset;
@@ -140,18 +573,51 @@ void interp_horiz_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst, intp
                                         vreinterpretq_s16_s32(vsum2));
             vsum = vminq_s16(vsum, vdupq_n_s16(maxVal));
             vsum = vmaxq_s16(vsum, vdupq_n_s16(0));
-#if HIGH_BIT_DEPTH
             vst1q_u16(dst + col, vreinterpretq_u16_s16(vsum));
-#else
-            vst1_u8(dst + col, vmovn_u16(vreinterpretq_u16_s16(vsum)));
-#endif
-
         }
 
         src += srcStride;
         dst += dstStride;
     }
 }
+
+#else // HIGH_BIT_DEPTH
+template<int N, int width, int height>
+void interp_horiz_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst,
+                          intptr_t dstStride, int coeffIdx)
+{
+    if (N == 8)
+    {
+        switch (coeffIdx)
+        {
+        case 1:
+            return interp8_horiz_pp_neon<1, width, height>(src, srcStride, dst,
+                                                           dstStride);
+        case 2:
+            return interp8_horiz_pp_neon<2, width, height>(src, srcStride, dst,
+                                                           dstStride);
+        case 3:
+            return interp8_horiz_pp_neon<3, width, height>(src, srcStride, dst,
+                                                           dstStride);
+        }
+    }
+    else
+    {
+        switch (coeffIdx)
+        {
+        case 4:
+            return interp4_horiz_pp_neon<true, width, height>(src, srcStride,
+                                                              dst, dstStride,
+                                                              coeffIdx);
+        default:
+            return interp4_horiz_pp_neon<false, width, height>(src, srcStride,
+                                                               dst, dstStride,
+                                                               coeffIdx);
+        }
+    }
+}
+
+#endif // HIGH_BIT_DEPTH
 
 #if HIGH_BIT_DEPTH
 

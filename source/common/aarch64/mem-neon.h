@@ -57,6 +57,62 @@ static void inline store_u8x4x1(uint8_t *d, const uint8x8_t s)
 }
 
 template<int N>
+static void inline load_u8x8xn(const uint8_t *src, const intptr_t stride,
+                               uint8x8_t *dst)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        dst[i] = vld1_u8(src);
+        src += stride;
+    }
+}
+
+template<int N>
+static void inline load_u8x16xn(const uint8_t *src, const intptr_t stride,
+                                uint8x16_t *dst)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        dst[i] = vld1q_u8(src);
+        src += stride;
+    }
+}
+
+template<int N>
+static void inline store_u8x2xn(uint8_t *dst, intptr_t dst_stride,
+                                const uint8x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_lane_u16((uint16_t *)dst, vreinterpret_u16_u8(src[i]), 0);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_u8x4xn(uint8_t *dst, intptr_t dst_stride,
+                                const uint8x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_lane_u32((uint32_t *)dst, vreinterpret_u32_u8(src[i]), 0);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_u8x6xn(uint8_t *dst, intptr_t dst_stride,
+                                const uint8x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_lane_u32((uint32_t *)dst, vreinterpret_u32_u8(src[i]), 0);
+        vst1_lane_u16((uint16_t *)(dst + 4), vreinterpret_u16_u8(src[i]), 2);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
 static void inline store_s16x2xn(int16_t *dst, intptr_t dst_stride,
                                  const int16x4_t *src)
 {
