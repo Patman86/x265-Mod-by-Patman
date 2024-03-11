@@ -123,4 +123,38 @@ static void inline store_s16x2xn(int16_t *dst, intptr_t dst_stride,
     }
 }
 
+template<int N>
+static void inline store_s16x2xn(int16_t *dst, intptr_t dst_stride,
+                                 const int16x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1q_lane_s32((int32_t *)dst, vreinterpretq_s32_s16(src[i]), 0);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_s16x4xn(int16_t *dst, intptr_t dst_stride,
+                                 const int16x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_s16(dst, vget_low_s16(src[i]));
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_s16x6xn(int16_t *dst, intptr_t dst_stride,
+                                 const int16x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_s16(dst, vget_low_s16(src[i]));
+        vst1q_lane_s32((int32_t*)(dst + 4), vreinterpretq_s32_s16(src[i]), 2);
+        dst += dst_stride;
+    }
+}
+
 #endif // X265_COMMON_AARCH64_MEM_NEON_H

@@ -440,6 +440,207 @@ void interp8_horiz_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst,
     }
 }
 
+template<bool coeff4, int width, int height>
+void interp4_horiz_ps_neon(const uint8_t *src, intptr_t srcStride, int16_t *dst,
+                           intptr_t dstStride, int coeffIdx,
+                           int isRowExt)
+{
+    const int offset = (unsigned)-IF_INTERNAL_OFFS;
+
+    int blkheight = height;
+    const int N_TAPS = 4;
+    src -= N_TAPS / 2 - 1;
+
+    if (isRowExt)
+    {
+        src -= (N_TAPS / 2 - 1) * srcStride;
+        blkheight += N_TAPS - 1;
+    }
+
+    const uint16x8_t c = vdupq_n_u16(offset);
+
+    // Abs 8-bit filter taps to allow use of 8-bit MLAL/MLSL
+    const uint8x16x4_t filter = vld4q_dup_u8(g_chromaFilterAbs8[coeffIdx]);
+
+    for (int row = 0; row + 2 <= blkheight; row += 2)
+    {
+        int col = 0;
+        for (; col + 8 <= width; col += 8)
+        {
+            uint8x8_t s0[N_TAPS], s1[N_TAPS];
+            load_u8x8xn<4>(src + col + 0 * srcStride, 1, s0);
+            load_u8x8xn<4>(src + col + 1 * srcStride, 1, s1);
+
+            int16x8_t d0, d1;
+            filter4_u8x8<coeff4>(s0, filter, c, d0);
+            filter4_u8x8<coeff4>(s1, filter, c, d1);
+
+            vst1q_s16(dst + col + 0 * dstStride, d0);
+            vst1q_s16(dst + col + 1 * dstStride, d1);
+        }
+
+        if (width % 8 != 0)
+        {
+            uint8x8_t s0[N_TAPS], s1[N_TAPS];
+            load_u8x8xn<4>(src + col + 0 * srcStride, 1, s0);
+            load_u8x8xn<4>(src + col + 1 * srcStride, 1, s1);
+
+            int16x8_t d[2];
+            filter4_u8x8<coeff4>(s0, filter, c, d[0]);
+            filter4_u8x8<coeff4>(s1, filter, c, d[1]);
+
+            if (width == 12 || width == 4)
+            {
+                store_s16x4xn<2>(dst + col, dstStride, d);
+            }
+            if (width == 6)
+            {
+                store_s16x6xn<2>(dst + col, dstStride, d);
+            }
+            if (width == 2)
+            {
+                store_s16x2xn<2>(dst + col, dstStride, d);
+            }
+        }
+
+        src += 2 * srcStride;
+        dst += 2 * dstStride;
+    }
+
+    if (isRowExt)
+    {
+        int col = 0;
+        for (; col + 8 <= width; col += 8)
+        {
+            uint8x8_t s[N_TAPS];
+            load_u8x8xn<4>(src + col, 1, s);
+
+            int16x8_t d;
+            filter4_u8x8<coeff4>(s, filter, c, d);
+
+            vst1q_s16(dst + col, d);
+        }
+
+        if (width % 8 != 0)
+        {
+            uint8x8_t s[N_TAPS];
+            load_u8x8xn<4>(src + col, 1, s);
+
+            int16x8_t d;
+            filter4_u8x8<coeff4>(s, filter, c, d);
+
+            if (width == 12 || width == 4)
+            {
+                store_s16x4xn<1>(dst + col, dstStride, &d);
+            }
+            if (width == 6)
+            {
+                store_s16x6xn<1>(dst + col, dstStride, &d);
+            }
+            if (width == 2)
+            {
+                store_s16x2xn<1>(dst + col, dstStride, &d);
+            }
+        }
+    }
+}
+
+template<int coeffIdx, int width, int height>
+void interp8_horiz_ps_neon(const uint8_t *src, intptr_t srcStride, int16_t *dst,
+                           intptr_t dstStride, int isRowExt)
+{
+    const int offset = (unsigned)-IF_INTERNAL_OFFS;
+
+    int blkheight = height;
+    const int N_TAPS = 8;
+    src -= N_TAPS / 2 - 1;
+
+    if (isRowExt)
+    {
+        src -= (N_TAPS / 2 - 1) * srcStride;
+        blkheight += N_TAPS - 1;
+    }
+
+    const uint16x8_t c = vdupq_n_u16(offset);
+
+    for (int row = 0; row + 2 <= blkheight; row += 2)
+    {
+        int col = 0;
+        for (; col + 16 <= width; col += 16)
+        {
+            uint8x16_t s0[N_TAPS], s1[N_TAPS];
+            load_u8x16xn<8>(src + col + 0 * srcStride, 1, s0);
+            load_u8x16xn<8>(src + col + 1 * srcStride, 1, s1);
+
+            int16x8_t d0, d1, d2, d3;
+            filter8_u8x16<coeffIdx>(s0, c, d0, d1);
+            filter8_u8x16<coeffIdx>(s1, c, d2, d3);
+
+            vst1q_s16(dst + col + 0 * dstStride + 0, d0);
+            vst1q_s16(dst + col + 0 * dstStride + 8, d1);
+            vst1q_s16(dst + col + 1 * dstStride + 0, d2);
+            vst1q_s16(dst + col + 1 * dstStride + 8, d3);
+        }
+
+        for (; col + 8 <= width; col += 8)
+        {
+            uint8x8_t s0[N_TAPS], s1[N_TAPS];
+            load_u8x8xn<8>(src + col + 0 * srcStride, 1, s0);
+            load_u8x8xn<8>(src + col + 1 * srcStride, 1, s1);
+
+            int16x8_t d0, d1;
+            filter8_u8x8<coeffIdx>(s0, c, d0);
+            filter8_u8x8<coeffIdx>(s1, c, d1);
+
+            vst1q_s16(dst + col + 0 * dstStride, d0);
+            vst1q_s16(dst + col + 1 * dstStride, d1);
+        }
+
+        if (width % 8 != 0)
+        {
+            uint8x8_t s0[N_TAPS], s1[N_TAPS];
+            load_u8x8xn<8>(src + col + 0 * srcStride, 1, s0);
+            load_u8x8xn<8>(src + col + 1 * srcStride, 1, s1);
+
+            int16x8_t d0, d1;
+            filter8_u8x8<coeffIdx>(s0, c, d0);
+            filter8_u8x8<coeffIdx>(s1, c, d1);
+
+            vst1_s16(dst + col + 0 * dstStride, vget_low_s16(d0));
+            vst1_s16(dst + col + 1 * dstStride, vget_low_s16(d1));
+        }
+
+        src += 2 * srcStride;
+        dst += 2 * dstStride;
+    }
+
+    if (isRowExt)
+    {
+        int col = 0;
+        for (; col + 8 <= width; col += 8)
+        {
+            uint8x8_t s[N_TAPS];
+            load_u8x8xn<8>(src + col, 1, s);
+
+            int16x8_t d;
+            filter8_u8x8<coeffIdx>(s, c, d);
+
+            vst1q_s16(dst + col, d);
+        }
+
+        if (width % 8 != 0)
+        {
+            uint8x8_t s[N_TAPS];
+            load_u8x8xn<8>(src + col, 1, s);
+
+            int16x8_t d;
+            filter8_u8x8<coeffIdx>(s, c, d);
+
+            vst1_s16(dst + col, vget_low_s16(d));
+        }
+    }
+}
+
 #endif // !HIGH_BIT_DEPTH
 }
 
@@ -696,72 +897,45 @@ void interp_horiz_ps_neon(const uint16_t *src, intptr_t srcStride, int16_t *dst,
     }
 }
 
-
-#else
-
+#else // HIGH_BIT_DEPTH
 template<int N, int width, int height>
 void interp_horiz_ps_neon(const uint8_t *src, intptr_t srcStride, int16_t *dst, intptr_t dstStride, int coeffIdx,
                           int isRowExt)
 {
-    const int16_t *coeff = (N == 4) ? g_chromaFilter[coeffIdx] : g_lumaFilter[coeffIdx];
-    const int headRoom = IF_INTERNAL_PREC - X265_DEPTH;
-    const int shift = IF_FILTER_PREC - headRoom;
-    const int offset = (unsigned) - IF_INTERNAL_OFFS << shift;
-
-    int blkheight = height;
-    src -= N / 2 - 1;
-
-    if (isRowExt)
+    if (N == 8)
     {
-        src -= (N / 2 - 1) * srcStride;
-        blkheight += N - 1;
-    }
-    int16x8_t vc = vld1q_s16(coeff);
-
-    const int16x8_t voffset = vdupq_n_s16(offset);
-    const int16x8_t vhr = vdupq_n_s16(-shift);
-
-    int row, col;
-    for (row = 0; row < blkheight; row++)
-    {
-        for (col = 0; col < width; col += 8)
+        switch (coeffIdx)
         {
-            int16x8_t vsum;
-
-            int16x8_t input[N];
-
-            for (int i = 0; i < N; i++)
-            {
-                uint8x8_t in_tmp = vld1_u8(src + col + i);
-                input[i] = vreinterpretq_s16_u16(vmovl_u8(in_tmp));
-            }
-            vsum = voffset;
-            vsum = vmlaq_laneq_s16(vsum, (input[0]), vc, 0);
-            vsum = vmlaq_laneq_s16(vsum, (input[1]), vc, 1);
-            vsum = vmlaq_laneq_s16(vsum, (input[2]), vc, 2);
-            vsum = vmlaq_laneq_s16(vsum, (input[3]), vc, 3);
-
-
-            if (N == 8)
-            {
-                vsum = vmlaq_laneq_s16(vsum, (input[4]), vc, 4);
-                vsum = vmlaq_laneq_s16(vsum, (input[5]), vc, 5);
-                vsum = vmlaq_laneq_s16(vsum, (input[6]), vc, 6);
-                vsum = vmlaq_laneq_s16(vsum, (input[7]), vc, 7);
-
-            }
-
-            vsum = vshlq_s16(vsum, vhr);
-            vst1q_s16(dst + col, vsum);
+        case 1:
+            return interp8_horiz_ps_neon<1, width, height>(src, srcStride, dst,
+                                                           dstStride, isRowExt);
+        case 2:
+            return interp8_horiz_ps_neon<2, width, height>(src, srcStride, dst,
+                                                           dstStride, isRowExt);
+        case 3:
+            return interp8_horiz_ps_neon<3, width, height>(src, srcStride, dst,
+                                                           dstStride, isRowExt);
         }
-
-        src += srcStride;
-        dst += dstStride;
+    }
+    else
+    {
+        switch (coeffIdx)
+        {
+        case 4:
+            return interp4_horiz_ps_neon<true, width, height>(src, srcStride,
+                                                              dst, dstStride,
+                                                              coeffIdx,
+                                                              isRowExt);
+        default:
+            return interp4_horiz_ps_neon<false, width, height>(src, srcStride,
+                                                               dst, dstStride,
+                                                               coeffIdx,
+                                                               isRowExt);
+        }
     }
 }
 
-#endif
-
+#endif // HIGH_BIT_DEPTH
 
 template<int N, int width, int height>
 void interp_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst, intptr_t dstStride, int coeffIdx)
