@@ -113,6 +113,28 @@ static void inline store_u8x6xn(uint8_t *dst, intptr_t dst_stride,
 }
 
 template<int N>
+static void inline load_s16x4xn(const int16_t *src, const intptr_t stride,
+                                int16x4_t *dst)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        dst[i] = vld1_s16(src);
+        src += stride;
+    }
+}
+
+template<int N>
+static void inline load_s16x8xn(const int16_t *src, const intptr_t stride,
+                                int16x8_t *dst)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        dst[i] = vld1q_s16(src);
+        src += stride;
+    }
+}
+
+template<int N>
 static void inline store_s16x2xn(int16_t *dst, intptr_t dst_stride,
                                  const int16x4_t *src)
 {
@@ -130,6 +152,17 @@ static void inline store_s16x2xn(int16_t *dst, intptr_t dst_stride,
     for (int i = 0; i < N; ++i)
     {
         vst1q_lane_s32((int32_t *)dst, vreinterpretq_s32_s16(src[i]), 0);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_s16x4xn(int16_t *dst, intptr_t dst_stride,
+                                 const int16x4_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_s16(dst, src[i]);
         dst += dst_stride;
     }
 }
@@ -154,6 +187,30 @@ static void inline store_s16x6xn(int16_t *dst, intptr_t dst_stride,
         vst1_s16(dst, vget_low_s16(src[i]));
         vst1q_lane_s32((int32_t*)(dst + 4), vreinterpretq_s32_s16(src[i]), 2);
         dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_s16x8xn(int16_t *dst, intptr_t dst_stride,
+                                 const int16x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1q_s16(dst, src[i]);
+        dst += dst_stride;
+    }
+}
+
+template<int N, int M>
+static void inline store_s16xnxm(const int16x8_t *src, int16_t *dst,
+                                 intptr_t dst_stride)
+{
+    switch (N)
+    {
+    case 2: return store_s16x2xn<M>(dst, dst_stride, src);
+    case 4: return store_s16x4xn<M>(dst, dst_stride, src);
+    case 6: return store_s16x6xn<M>(dst, dst_stride, src);
+    case 8: return store_s16x8xn<M>(dst, dst_stride, src);
     }
 }
 
