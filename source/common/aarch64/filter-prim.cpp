@@ -1085,6 +1085,332 @@ void interp8_horiz_ps_neon(const uint8_t *src, intptr_t srcStride, int16_t *dst,
     }
 }
 
+template<bool coeff4, int width, int height>
+void interp4_vert_pp_neon(const uint8_t *src, intptr_t srcStride, uint8_t *dst,
+                          intptr_t dstStride, int coeffIdx)
+{
+    const int N_TAPS = 4;
+    src -= (N_TAPS / 2 - 1) * srcStride;
+
+    // Abs 8-bit filter taps to allow use of 8-bit MLAL/MLSL
+    const uint8x16x4_t filter = vld4q_dup_u8(g_chromaFilterAbs8[coeffIdx]);
+
+    // Zero constant in order to use filter helper functions (optimised away).
+    const uint16x8_t c = vdupq_n_u16(0);
+
+    if (width == 12)
+    {
+        const uint8_t *s = src;
+        uint8_t *d = dst;
+
+        uint8x8_t in[7];
+        load_u8x8xn<3>(s, srcStride, in);
+        s += 3 * srcStride;
+
+        for (int row = 0; row + 4 <= height; row += 4)
+        {
+            load_u8x8xn<4>(s, srcStride, in + 3);
+
+            int16x8_t sum[4];
+            filter4_u8x8<coeff4>(in + 0, filter, c, sum[0]);
+            filter4_u8x8<coeff4>(in + 1, filter, c, sum[1]);
+            filter4_u8x8<coeff4>(in + 2, filter, c, sum[2]);
+            filter4_u8x8<coeff4>(in + 3, filter, c, sum[3]);
+
+            uint8x8_t sum_u8[4];
+            sum_u8[0] = vqrshrun_n_s16(sum[0], IF_FILTER_PREC);
+            sum_u8[1] = vqrshrun_n_s16(sum[1], IF_FILTER_PREC);
+            sum_u8[2] = vqrshrun_n_s16(sum[2], IF_FILTER_PREC);
+            sum_u8[3] = vqrshrun_n_s16(sum[3], IF_FILTER_PREC);
+
+            store_u8x8xn<4>(d, dstStride, sum_u8);
+
+            in[0] = in[4];
+            in[1] = in[5];
+            in[2] = in[6];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+
+        src += 8;
+        dst += 8;
+        s = src;
+        d = dst;
+
+        load_u8x8xn<3>(s, srcStride, in);
+        s += 3 * srcStride;
+
+        for (int row = 0; row + 4 <= height; row += 4)
+        {
+            load_u8x8xn<4>(s, srcStride, in + 3);
+
+            int16x8_t sum[4];
+            filter4_u8x8<coeff4>(in + 0, filter, c, sum[0]);
+            filter4_u8x8<coeff4>(in + 1, filter, c, sum[1]);
+            filter4_u8x8<coeff4>(in + 2, filter, c, sum[2]);
+            filter4_u8x8<coeff4>(in + 3, filter, c, sum[3]);
+
+            uint8x8_t sum_u8[4];
+            sum_u8[0] = vqrshrun_n_s16(sum[0], IF_FILTER_PREC);
+            sum_u8[1] = vqrshrun_n_s16(sum[1], IF_FILTER_PREC);
+            sum_u8[2] = vqrshrun_n_s16(sum[2], IF_FILTER_PREC);
+            sum_u8[3] = vqrshrun_n_s16(sum[3], IF_FILTER_PREC);
+
+            store_u8x4xn<4>(d, dstStride, sum_u8);
+
+            in[0] = in[4];
+            in[1] = in[5];
+            in[2] = in[6];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+    }
+    else
+    {
+        const int n_store = (width < 8) ? width : 8;
+        for (int col = 0; col < width; col += 8)
+        {
+            const uint8_t *s = src;
+            uint8_t *d = dst;
+
+            uint8x8_t in[7];
+            load_u8x8xn<3>(s, srcStride, in);
+            s += 3 * srcStride;
+
+            for (int row = 0; row + 4 <= height; row += 4)
+            {
+                load_u8x8xn<4>(s, srcStride, in + 3);
+
+                int16x8_t sum[4];
+                filter4_u8x8<coeff4>(in + 0, filter, c, sum[0]);
+                filter4_u8x8<coeff4>(in + 1, filter, c, sum[1]);
+                filter4_u8x8<coeff4>(in + 2, filter, c, sum[2]);
+                filter4_u8x8<coeff4>(in + 3, filter, c, sum[3]);
+
+                uint8x8_t sum_u8[4];
+                sum_u8[0] = vqrshrun_n_s16(sum[0], IF_FILTER_PREC);
+                sum_u8[1] = vqrshrun_n_s16(sum[1], IF_FILTER_PREC);
+                sum_u8[2] = vqrshrun_n_s16(sum[2], IF_FILTER_PREC);
+                sum_u8[3] = vqrshrun_n_s16(sum[3], IF_FILTER_PREC);
+
+                store_u8xnxm<n_store, 4>(d, dstStride, sum_u8);
+
+                in[0] = in[4];
+                in[1] = in[5];
+                in[2] = in[6];
+
+                s += 4 * srcStride;
+                d += 4 * dstStride;
+            }
+
+            if (height & 2)
+            {
+                load_u8x8xn<2>(s, srcStride, in + 3);
+
+                int16x8_t sum[2];
+                filter4_u8x8<coeff4>(in + 0, filter, c, sum[0]);
+                filter4_u8x8<coeff4>(in + 1, filter, c, sum[1]);
+
+                uint8x8_t sum_u8[2];
+                sum_u8[0] = vqrshrun_n_s16(sum[0], IF_FILTER_PREC);
+                sum_u8[1] = vqrshrun_n_s16(sum[1], IF_FILTER_PREC);
+
+                store_u8xnxm<n_store, 2>(d, dstStride, sum_u8);
+            }
+
+            src += 8;
+            dst += 8;
+        }
+    }
+}
+
+template<int coeffIdx, int width, int height>
+void interp8_vert_pp_neon(const uint8_t *src, intptr_t srcStride, uint8_t *dst,
+                          intptr_t dstStride)
+{
+    const int N_TAPS = 8;
+    src -= (N_TAPS / 2 - 1) * srcStride;
+
+    // Zero constant in order to use filter helper functions (optimised away).
+    const uint16x8_t c = vdupq_n_u16(0);
+
+    if (width % 8 != 0)
+    {
+        uint8x8_t in[11];
+        const uint8_t *s = src;
+        uint8_t *d = dst;
+
+        if (width == 12)
+        {
+            load_u8x8xn<7>(s, srcStride, in);
+            s += 7 * srcStride;
+
+            for (int row = 0; row < height; row += 4)
+            {
+                load_u8x8xn<4>(s, srcStride, in + 7);
+
+                int16x8_t sum[4];
+                filter8_u8x8<coeffIdx>(in + 0, c, sum[0]);
+                filter8_u8x8<coeffIdx>(in + 1, c, sum[1]);
+                filter8_u8x8<coeffIdx>(in + 2, c, sum[2]);
+                filter8_u8x8<coeffIdx>(in + 3, c, sum[3]);
+
+                uint8x8_t sum_u8[4];
+                sum_u8[0] = vqrshrun_n_s16(sum[0], IF_FILTER_PREC);
+                sum_u8[1] = vqrshrun_n_s16(sum[1], IF_FILTER_PREC);
+                sum_u8[2] = vqrshrun_n_s16(sum[2], IF_FILTER_PREC);
+                sum_u8[3] = vqrshrun_n_s16(sum[3], IF_FILTER_PREC);
+
+                store_u8x8xn<4>(d, dstStride, sum_u8);
+
+                in[0] = in[4];
+                in[1] = in[5];
+                in[2] = in[6];
+                in[3] = in[7];
+                in[4] = in[8];
+                in[5] = in[9];
+                in[6] = in[10];
+
+                s += 4 * srcStride;
+                d += 4 * dstStride;
+            }
+
+            s = src + 8;
+            d = dst + 8;
+        }
+
+        load_u8x8xn<7>(s, srcStride, in);
+        s += 7 * srcStride;
+
+        for (int row = 0; row < height; row += 4)
+        {
+            load_u8x8xn<4>(s, srcStride, in + 7);
+
+            int16x8_t sum[4];
+            filter8_u8x8<coeffIdx>(in + 0, c, sum[0]);
+            filter8_u8x8<coeffIdx>(in + 1, c, sum[1]);
+            filter8_u8x8<coeffIdx>(in + 2, c, sum[2]);
+            filter8_u8x8<coeffIdx>(in + 3, c, sum[3]);
+
+            uint8x8_t sum_u8[4];
+            sum_u8[0] = vqrshrun_n_s16(sum[0], IF_FILTER_PREC);
+            sum_u8[1] = vqrshrun_n_s16(sum[1], IF_FILTER_PREC);
+            sum_u8[2] = vqrshrun_n_s16(sum[2], IF_FILTER_PREC);
+            sum_u8[3] = vqrshrun_n_s16(sum[3], IF_FILTER_PREC);
+
+            store_u8x4xn<4>(d, dstStride, sum_u8);
+
+            in[0] = in[4];
+            in[1] = in[5];
+            in[2] = in[6];
+            in[3] = in[7];
+            in[4] = in[8];
+            in[5] = in[9];
+            in[6] = in[10];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+    }
+    else if (width % 16 != 0)
+    {
+        for (int col = 0; col < width; col += 8)
+        {
+            const uint8_t *s = src;
+            uint8_t *d = dst;
+
+            uint8x8_t in[11];
+            load_u8x8xn<7>(s, srcStride, in);
+            s += 7 * srcStride;
+
+            for (int row = 0; row < height; row += 4)
+            {
+                load_u8x8xn<4>(s, srcStride, in + 7);
+
+                int16x8_t sum[4];
+                filter8_u8x8<coeffIdx>(in + 0, c, sum[0]);
+                filter8_u8x8<coeffIdx>(in + 1, c, sum[1]);
+                filter8_u8x8<coeffIdx>(in + 2, c, sum[2]);
+                filter8_u8x8<coeffIdx>(in + 3, c, sum[3]);
+
+                uint8x8_t sum_u8[4];
+                sum_u8[0] = vqrshrun_n_s16(sum[0], IF_FILTER_PREC);
+                sum_u8[1] = vqrshrun_n_s16(sum[1], IF_FILTER_PREC);
+                sum_u8[2] = vqrshrun_n_s16(sum[2], IF_FILTER_PREC);
+                sum_u8[3] = vqrshrun_n_s16(sum[3], IF_FILTER_PREC);
+
+                store_u8x8xn<4>(d, dstStride, sum_u8);
+
+                in[0] = in[4];
+                in[1] = in[5];
+                in[2] = in[6];
+                in[3] = in[7];
+                in[4] = in[8];
+                in[5] = in[9];
+                in[6] = in[10];
+
+                s += 4 * srcStride;
+                d += 4 * dstStride;
+            }
+
+            src += 8;
+            dst += 8;
+        }
+    }
+    else
+    {
+        for (int col = 0; col < width; col += 16)
+        {
+            const uint8_t *s = src;
+            uint8_t *d = dst;
+
+            uint8x16_t in[11];
+            load_u8x16xn<7>(s, srcStride, in);
+            s += 7 * srcStride;
+
+            for (int row = 0; row < height; row += 4)
+            {
+                load_u8x16xn<4>(s, srcStride, in + 7);
+
+                int16x8_t sum_lo[4];
+                int16x8_t sum_hi[4];
+                filter8_u8x16<coeffIdx>(in + 0, c, sum_lo[0], sum_hi[0]);
+                filter8_u8x16<coeffIdx>(in + 1, c, sum_lo[1], sum_hi[1]);
+                filter8_u8x16<coeffIdx>(in + 2, c, sum_lo[2], sum_hi[2]);
+                filter8_u8x16<coeffIdx>(in + 3, c, sum_lo[3], sum_hi[3]);
+
+                uint8x16_t sum[4];
+                sum[0] = vcombine_u8(vqrshrun_n_s16(sum_lo[0], IF_FILTER_PREC),
+                                     vqrshrun_n_s16(sum_hi[0], IF_FILTER_PREC));
+                sum[1] = vcombine_u8(vqrshrun_n_s16(sum_lo[1], IF_FILTER_PREC),
+                                     vqrshrun_n_s16(sum_hi[1], IF_FILTER_PREC));
+                sum[2] = vcombine_u8(vqrshrun_n_s16(sum_lo[2], IF_FILTER_PREC),
+                                     vqrshrun_n_s16(sum_hi[2], IF_FILTER_PREC));
+                sum[3] = vcombine_u8(vqrshrun_n_s16(sum_lo[3], IF_FILTER_PREC),
+                                     vqrshrun_n_s16(sum_hi[3], IF_FILTER_PREC));
+
+                store_u8x16xn<4>(d, dstStride, sum);
+
+                in[0] = in[4];
+                in[1] = in[5];
+                in[2] = in[6];
+                in[3] = in[7];
+                in[4] = in[8];
+                in[5] = in[9];
+                in[6] = in[10];
+
+                s += 4 * srcStride;
+                d += 4 * dstStride;
+            }
+
+            src += 16;
+            dst += 16;
+        }
+    }
+}
+
 #endif // !HIGH_BIT_DEPTH
 }
 
@@ -1469,53 +1795,36 @@ void interp_vert_pp_neon(const uint16_t *src, intptr_t srcStride, uint16_t *dst,
 template<int N, int width, int height>
 void interp_vert_pp_neon(const uint8_t *src, intptr_t srcStride, uint8_t *dst, intptr_t dstStride, int coeffIdx)
 {
-
-    const int16_t *c = (N == 4) ? g_chromaFilter[coeffIdx] : g_lumaFilter[coeffIdx];
-    int offset = 1 << (IF_FILTER_PREC - 1);
-
-    src -= (N / 2 - 1) * srcStride;
-    int16x8_t vc = vld1q_s16(c);
-
-    const int16x8_t voffset = vdupq_n_s16(offset);
-
-    int row, col;
-    for (row = 0; row < height; row++)
+    if (N == 8)
     {
-        for (col = 0; col < width; col += 8)
+        switch (coeffIdx)
         {
-            int16x8_t vsum;
-
-            int16x8_t input[N];
-
-            for (int i = 0; i < N; i++)
-            {
-                uint8x8_t in_tmp = vld1_u8(src + col + i * srcStride);
-                input[i] = vreinterpretq_s16_u16(vmovl_u8(in_tmp));
-            }
-            vsum = voffset;
-
-            vsum = vmlaq_laneq_s16(vsum, (input[0]), vc, 0);
-            vsum = vmlaq_laneq_s16(vsum, (input[1]), vc, 1);
-            vsum = vmlaq_laneq_s16(vsum, (input[2]), vc, 2);
-            vsum = vmlaq_laneq_s16(vsum, (input[3]), vc, 3);
-
-            if (N == 8)
-            {
-                vsum = vmlaq_laneq_s16(vsum, (input[4]), vc, 4);
-                vsum = vmlaq_laneq_s16(vsum, (input[5]), vc, 5);
-                vsum = vmlaq_laneq_s16(vsum, (input[6]), vc, 6);
-                vsum = vmlaq_laneq_s16(vsum, (input[7]), vc, 7);
-
-            }
-
-            vst1_u8(dst + col, vqshrun_n_s16(vsum, IF_FILTER_PREC));
+        case 1:
+            return interp8_vert_pp_neon<1, width, height>(src, srcStride, dst,
+                                                          dstStride);
+        case 2:
+            return interp8_vert_pp_neon<2, width, height>(src, srcStride, dst,
+                                                          dstStride);
+        case 3:
+            return interp8_vert_pp_neon<3, width, height>(src, srcStride, dst,
+                                                          dstStride);
         }
-
-        src += srcStride;
-        dst += dstStride;
+    }
+    else
+    {
+        switch (coeffIdx)
+        {
+        case 4:
+            return interp4_vert_pp_neon<true, width, height>(src, srcStride,
+                                                             dst, dstStride,
+                                                             coeffIdx);
+        default:
+            return interp4_vert_pp_neon<false, width, height>(src, srcStride,
+                                                              dst, dstStride,
+                                                              coeffIdx);
+        }
     }
 }
-
 
 #endif
 

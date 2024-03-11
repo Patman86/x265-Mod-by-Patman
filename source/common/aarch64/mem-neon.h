@@ -113,6 +113,41 @@ static void inline store_u8x6xn(uint8_t *dst, intptr_t dst_stride,
 }
 
 template<int N>
+static void inline store_u8x8xn(uint8_t *dst, intptr_t dst_stride,
+                                const uint8x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_u8(dst, src[i]);
+        dst += dst_stride;
+    }
+}
+
+template<int N, int M>
+static void inline store_u8xnxm(uint8_t *dst, intptr_t dst_stride,
+                                const uint8x8_t *src)
+{
+    switch (N)
+    {
+    case 2: return store_u8x2xn<M>(dst, dst_stride, src);
+    case 4: return store_u8x4xn<M>(dst, dst_stride, src);
+    case 6: return store_u8x6xn<M>(dst, dst_stride, src);
+    case 8: return store_u8x8xn<M>(dst, dst_stride, src);
+    }
+}
+
+template<int N>
+static void inline store_u8x16xn(uint8_t *dst, intptr_t dst_stride,
+                                 const uint8x16_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1q_u8(dst, src[i]);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
 static void inline load_s16x4xn(const int16_t *src, const intptr_t stride,
                                 int16x4_t *dst)
 {
