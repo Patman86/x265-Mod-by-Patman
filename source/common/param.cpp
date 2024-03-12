@@ -1113,7 +1113,6 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
     OPT("qblur") p->rc.qblur = atof(value);
     OPT("aq-mode") p->rc.aqMode = atoi(value);
     OPT("aq-strength") p->rc.aqStrength = atof(value);
-    OPT("aq-bias-strength") p->rc.aqBiasStrength = atof(value);
     OPT("vbv-maxrate") p->rc.vbvMaxBitrate = atoi(value);
     OPT("vbv-bufsize") p->rc.vbvBufferSize = atoi(value);
     OPT("vbv-init")    p->rc.vbvBufferInit = atof(value);
@@ -1284,6 +1283,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("opt-cu-delta-qp") p->bOptCUDeltaQP = atobool(value);
         OPT("multi-pass-opt-analysis") p->analysisMultiPassRefine = atobool(value);
         OPT("multi-pass-opt-distortion") p->analysisMultiPassDistortion = atobool(value);
+        OPT("aq-bias-strength") p->rc.aqBiasStrength = atof(value);
         OPT("aq-motion") p->bAQMotion = atobool(value);
         OPT("auto-aq") p->rc.bAutoAq = atobool(value);
         OPT("dynamic-rd") p->dynamicRd = atof(value);
