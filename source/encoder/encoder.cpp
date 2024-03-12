@@ -288,7 +288,7 @@ void Encoder::create()
         p->bEnableWavefront = p->bDistributeModeAnalysis = p->bDistributeMotionEstimation = p->lookaheadSlices = 0;
     }
 
-    x265_log(p, X265_LOG_INFO, "Slices                              : %d\n", p->maxSlices);
+    x265_log(p, X265_LOG_INFO, "Slices                                  : %d\n", p->maxSlices);
 
     char buf[128];
     int len = 0;
@@ -301,7 +301,7 @@ void Encoder::create()
     if (!len)
         strcpy(buf, "none");
 
-    x265_log(p, X265_LOG_INFO, "frame threads / pool features       : %d / %s\n", p->frameNumThreads, buf);
+    x265_log(p, X265_LOG_INFO, "frame threads / pool features           : %d / %s\n", p->frameNumThreads, buf);
 
     for (int i = 0; i < m_param->frameNumThreads; i++)
     {
@@ -2129,17 +2129,27 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             frameEnc = m_lookahead->getDecidedPicture();
         if (frameEnc && !pass && (!m_param->chunkEnd || (m_encodedFrameNum < m_param->chunkEnd)))
         {
-            if ((m_param->bEnableSceneCutAwareQp & FORWARD) && m_param->rc.bStatRead)
+            if (m_param->bEnableSceneCutAwareQp & FORWARD)
             {
-                RateControlEntry * rcEntry;
-                rcEntry = &(m_rateControl->m_rce2Pass[frameEnc->m_poc]);
+                bool isSceneCut = frameEnc->m_lowres.bScenecut;
 
-                if (rcEntry->scenecut)
+                // If multi pass, overwrite with stats file scenecut info
+                if (m_param->rc.bStatRead)
                 {
+                    RateControlEntry* rcEntry;
+                    rcEntry = &(m_rateControl->m_rce2Pass[frameEnc->m_poc]);
+
+                    isSceneCut = rcEntry->scenecut;
+                }
+
+                if (isSceneCut)
+                {
+                    // No previous scenecut
                     if (m_rateControl->m_lastScenecut == -1)
                         m_rateControl->m_lastScenecut = frameEnc->m_poc;
                     else
                     {
+                        // Only set as scenecut if it's not within an existing scenecut forward window
                         int maxWindowSize = int((m_param->fwdMaxScenecutWindow / 1000.0) * (m_param->fpsNum / m_param->fpsDenom) + 0.5);
                         if (frameEnc->m_poc > (m_rateControl->m_lastScenecut + maxWindowSize))
                             m_rateControl->m_lastScenecut = frameEnc->m_poc;
@@ -4264,7 +4274,7 @@ void Encoder::configure(x265_param *p)
             x265_log(p, X265_LOG_ERROR, "uhd-bd: matrix coeffs supported are either BT.709 or BT.2020\n");
             disableUhdBd = 1;
         }
-        if ((p->sourceWidth != 1920 && p->sourceWidth != 3840) || (p->sourceHeight != 1080 && p->sourceHeight != 2160))
+        if (!((p->sourceWidth == 1920 && p->sourceHeight == 1080) || (p->sourceWidth == 3840 && p->sourceHeight == 2160)))
         {
             x265_log(p, X265_LOG_ERROR, "uhd-bd: Supported resolutions are 1920x1080 and 3840x2160\n");
             disableUhdBd = 1;
@@ -4340,7 +4350,7 @@ void Encoder::configure(x265_param *p)
 
     if (m_param->toneMapFile || p->bHDR10Opt || p->bEmitHDR10SEI)
     {
-        if (!p->bRepeatHeaders)
+        if (!p->bRepeatHeaders && p->bAnnexB)
         {
             p->bRepeatHeaders = 1;
             x265_log(p, X265_LOG_WARNING, "Turning on repeat-headers for HDR compatibility\n");
