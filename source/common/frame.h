@@ -154,6 +154,9 @@ public:
     pixel*                 m_edgeBitPlane;
     pixel*                 m_edgeBitPic;
 
+    /* AQ mode for each frame */
+    int                    m_frameAq;
+
     int                    m_isInsideWindow;
 
     /*Frame's temporal layer info*/
