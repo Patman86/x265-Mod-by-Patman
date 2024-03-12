@@ -208,6 +208,28 @@ uint8x8_t inline filter4_8_pp(uint8x16_t samples, const int8x8_t filter,
                                      vmovn_s32(dotprod_hi));
     return vqrshrun_n_s16(dotprod, IF_FILTER_PREC);
 }
+
+int16x8_t inline filter4_8_ps(uint8x16_t samples, const int8x8_t filter,
+                              const uint8x16x2_t tbl)
+{
+    // Transform sample range from uint8_t to int8_t for signed dot product.
+    int8x16_t samples_s8 =
+        vreinterpretq_s8_u8(vsubq_u8(samples, vdupq_n_u8(128)));
+
+    // Permute input samples for dot product.
+    // { 0,  1,  2,  3,  1,  2,  3,  4,  2,  3,  4,  5,  3,  4,  5,  6 }
+    int8x16_t perm_samples_0 = vqtbl1q_s8(samples_s8, tbl.val[0]);
+    // { 4,  5,  6,  7,  5,  6,  7,  8,  6,  7,  8,  9,  7,  8,  9, 10 }
+    int8x16_t perm_samples_1 = vqtbl1q_s8(samples_s8, tbl.val[1]);
+
+    // Correction accounting for sample range transform cancels to 0.
+    int32x4_t constant = vdupq_n_s32(0);
+    int32x4_t dotprod_lo = vdotq_lane_s32(constant, perm_samples_0, filter, 0);
+    int32x4_t dotprod_hi = vdotq_lane_s32(constant, perm_samples_1, filter, 0);
+
+    // Narrow and combine.
+    return vcombine_s16(vmovn_s32(dotprod_lo), vmovn_s32(dotprod_hi));
+}
 } // Unnamed namespace.
 
 namespace X265_NS {
@@ -512,21 +534,135 @@ void interp4_horiz_pp_dotprod(const uint8_t *src, intptr_t srcStride,
     }
 }
 
+template<int width, int height>
+void interp4_horiz_ps_dotprod(const uint8_t *src, intptr_t srcStride,
+                              int16_t *dst, intptr_t dstStride, int coeffIdx,
+                              int isRowExt)
+{
+    const int N_TAPS = 4;
+    int blkheight = height;
+
+    src -= N_TAPS / 2 - 1;
+    if (isRowExt)
+    {
+        src -= (N_TAPS / 2 - 1) * srcStride;
+        blkheight += N_TAPS - 1;
+    }
+
+    const uint8x16x2_t tbl = vld1q_u8_x2(dotprod_permute_tbl);
+    const int16x4_t filter_16 = vld1_s16(g_chromaFilter[coeffIdx]);
+    const int8x8_t filter = vmovn_s16(vcombine_s16(filter_16, vdup_n_s16(0)));
+
+    int row = 0;
+    for (; row + 4 <= blkheight; row += 4)
+    {
+        int col = 0;
+        for (; col + 16 <= width; col += 16)
+        {
+            uint8x16_t s_lo[4], s_hi[4];
+            load_u8x16xn<4>(src + col + 0, srcStride, s_lo);
+            load_u8x16xn<4>(src + col + 8, srcStride, s_hi);
+
+            int16x8_t d_lo[4];
+            d_lo[0] = filter4_8_ps(s_lo[0], filter, tbl);
+            d_lo[1] = filter4_8_ps(s_lo[1], filter, tbl);
+            d_lo[2] = filter4_8_ps(s_lo[2], filter, tbl);
+            d_lo[3] = filter4_8_ps(s_lo[3], filter, tbl);
+
+            int16x8_t d_hi[4];
+            d_hi[0] = filter4_8_ps(s_hi[0], filter, tbl);
+            d_hi[1] = filter4_8_ps(s_hi[1], filter, tbl);
+            d_hi[2] = filter4_8_ps(s_hi[2], filter, tbl);
+            d_hi[3] = filter4_8_ps(s_hi[3], filter, tbl);
+
+            store_s16x8xn<4>(dst + col + 0, dstStride, d_lo);
+            store_s16x8xn<4>(dst + col + 8, dstStride, d_hi);
+        }
+
+        for (; col + 8 <= width; col += 8)
+        {
+            uint8x16_t s[4];
+            load_u8x16xn<4>(src + col, srcStride, s);
+
+            int16x8_t d[4];
+            d[0] = filter4_8_ps(s[0], filter, tbl);
+            d[1] = filter4_8_ps(s[1], filter, tbl);
+            d[2] = filter4_8_ps(s[2], filter, tbl);
+            d[3] = filter4_8_ps(s[3], filter, tbl);
+
+            store_s16x8xn<4>(dst + col, dstStride, d);
+        }
+
+        // Block sizes 12xH, 6xH, 4xH, 2xH.
+        if (width % 8 != 0)
+        {
+            uint8x16_t s[4];
+            load_u8x16xn<4>(src + col, srcStride, s);
+
+            int16x8_t d[4];
+            d[0] = filter4_8_ps(s[0], filter, tbl);
+            d[1] = filter4_8_ps(s[1], filter, tbl);
+            d[2] = filter4_8_ps(s[2], filter, tbl);
+            d[3] = filter4_8_ps(s[3], filter, tbl);
+
+            const int n_store = width < 8 ? width : 4;
+            store_s16xnxm<n_store, 4>(d, dst + col, dstStride);
+        }
+
+        src += 4 * srcStride;
+        dst += 4 * dstStride;
+    }
+
+    // Process remaining rows.
+    for (; row < blkheight; ++row)
+    {
+        int col = 0;
+        for (; (col + 8) <= width; col += 8)
+        {
+            uint8x16_t s = vld1q_u8(src + col);
+
+            int16x8_t d = filter4_8_ps(s, filter, tbl);
+
+            vst1q_s16(dst + col, d);
+        }
+
+        // Block sizes 12xH, 6xH, 4xH, 2xH.
+        if (width % 8 != 0)
+        {
+            uint8x16_t s = vld1q_u8(src + col);
+
+            int16x8_t d = filter4_8_ps(s, filter, tbl);
+
+            const int n_store = width < 8 ? width : 4;
+            store_s16xnxm<n_store, 1>(&d, dst + col, dstStride);
+        }
+
+        src += srcStride;
+        dst += dstStride;
+    }
+}
+
 #define LUMA_DOTPROD(W, H) \
         p.pu[LUMA_ ## W ## x ## H].luma_hpp = interp8_horiz_pp_dotprod<W, H>; \
         p.pu[LUMA_ ## W ## x ## H].luma_hps = interp8_horiz_ps_dotprod<W, H>;
 
 #define CHROMA_420_DOTPROD(W, H) \
         p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_hpp = \
-            interp4_horiz_pp_dotprod<W, H>;
+            interp4_horiz_pp_dotprod<W, H>; \
+        p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_hps = \
+            interp4_horiz_ps_dotprod<W, H>;
 
 #define CHROMA_422_DOTPROD(W, H) \
         p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_hpp = \
-            interp4_horiz_pp_dotprod<W, H>;
+            interp4_horiz_pp_dotprod<W, H>; \
+        p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_hps = \
+            interp4_horiz_ps_dotprod<W, H>;
 
 #define CHROMA_444_DOTPROD(W, H) \
         p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_hpp = \
-            interp4_horiz_pp_dotprod<W, H>;
+            interp4_horiz_pp_dotprod<W, H>; \
+        p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_hps = \
+            interp4_horiz_ps_dotprod<W, H>;
 
 void setupFilterPrimitives_neon_dotprod(EncoderPrimitives &p)
 {
