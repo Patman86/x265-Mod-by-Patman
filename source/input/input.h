@@ -53,7 +53,10 @@ struct InputFileInfo
 
     /* user supplied */
     int skipFrames;
+    int encodeToFrame;
     const char *filename;
+    /* reader specific options  */
+    const char *readerOpts;
 };
 
 class InputFile
@@ -69,6 +72,8 @@ public:
     static InputFile* open(InputFileInfo& info, bool bForceY4m);
 
     virtual void startReader() = 0;
+
+    virtual void stopReader() = 0;
 
     virtual void release() = 0;
 
