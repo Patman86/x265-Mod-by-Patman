@@ -55,6 +55,8 @@ protected:
 
     int colorSpace;
 
+    int frameCount;
+
     bool threadActive;
 
     ThreadSafeInteger readCount;
@@ -76,6 +78,7 @@ public:
     bool isEof() const            { return ifs && feof(ifs); }
     bool isFail()                 { return !(ifs && !ferror(ifs) && threadActive); }
     void startReader();
+    void stopReader() {}
     bool readPicture(x265_picture&);
 
     const char *getName() const   { return "y4m"; }
@@ -83,6 +86,9 @@ public:
     int getWidth() const                          { return width; }
 
     int getHeight() const                         { return height; }
+
+    template <typename T>
+    int readNumber(T &out);
 };
 }
 
