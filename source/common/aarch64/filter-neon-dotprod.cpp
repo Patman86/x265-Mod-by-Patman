@@ -642,9 +642,30 @@ void interp4_horiz_ps_dotprod(const uint8_t *src, intptr_t srcStride,
     }
 }
 
+// Declaration for use in interp_hv_pp_dotprod().
+template<int N, int width, int height>
+void interp_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
+                         intptr_t dstStride, int coeffIdx);
+
+// Implementation of luma_hvpp, using Neon DotProd implementation for the
+// horizontal part, and Armv8.0 Neon implementation for the vertical part.
+template<int width, int height>
+void interp_hv_pp_dotprod(const pixel *src, intptr_t srcStride, pixel *dst,
+                          intptr_t dstStride, int idxX, int idxY)
+{
+    const int N_TAPS = 8;
+    ALIGN_VAR_32(int16_t, immed[width * (height + N_TAPS - 1)]);
+
+    interp8_horiz_ps_dotprod<width, height>(src, srcStride, immed, width, idxX,
+                                            1);
+    interp_vert_sp_neon<N_TAPS, width, height>(immed + (N_TAPS / 2 - 1) * width,
+                                               width, dst, dstStride, idxY);
+}
+
 #define LUMA_DOTPROD(W, H) \
         p.pu[LUMA_ ## W ## x ## H].luma_hpp = interp8_horiz_pp_dotprod<W, H>; \
-        p.pu[LUMA_ ## W ## x ## H].luma_hps = interp8_horiz_ps_dotprod<W, H>;
+        p.pu[LUMA_ ## W ## x ## H].luma_hps = interp8_horiz_ps_dotprod<W, H>; \
+        p.pu[LUMA_ ## W ## x ## H].luma_hvpp = interp_hv_pp_dotprod<W, H>;
 
 #define CHROMA_420_DOTPROD(W, H) \
         p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_hpp = \
