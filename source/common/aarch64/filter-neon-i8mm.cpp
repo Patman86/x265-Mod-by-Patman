@@ -214,6 +214,24 @@ int16x4_t inline filter8_4_ps_matmul(uint8x16_t samples, const int8x16_t filter,
 
     return vadd_s16(vmovn_s32(matmul), vget_low_s16(constant));
 }
+
+uint8x8_t inline filter4_8_pp(uint8x16_t samples, const int8x8_t filter,
+                              const uint8x16x2_t tbl)
+{
+    // Permute input samples for dot product.
+    // { 0,  1,  2,  3,  1,  2,  3,  4,  2,  3,  4,  5,  3,  4,  5,  6 }
+    uint8x16_t perm_s0 = vqtbl1q_u8(samples, tbl.val[0]);
+    // { 4,  5,  6,  7,  5,  6,  7,  8,  6,  7,  8,  9,  7,  8,  9, 10 }
+    uint8x16_t perm_s1 = vqtbl1q_u8(samples, tbl.val[1]);
+
+    int32x4_t dotprod_lo = vusdotq_lane_s32(vdupq_n_s32(0), perm_s0, filter, 0);
+    int32x4_t dotprod_hi = vusdotq_lane_s32(vdupq_n_s32(0), perm_s1, filter, 0);
+
+    // Narrow and combine.
+    int16x8_t dotprod = vcombine_s16(vmovn_s32(dotprod_lo),
+                                     vmovn_s32(dotprod_hi));
+    return vqrshrun_n_s16(dotprod, IF_FILTER_PREC);
+}
 } // Unnamed namespace.
 
 namespace X265_NS {
@@ -646,9 +664,112 @@ void interp8_horiz_ps_i8mm(const uint8_t *src, intptr_t srcStride, int16_t *dst,
     }
 }
 
+template<int width, int height>
+void interp4_horiz_pp_i8mm(const uint8_t *src, intptr_t srcStride, uint8_t *dst,
+                           intptr_t dstStride, int coeffIdx)
+{
+    const int N_TAPS = 4;
+
+    src -= N_TAPS / 2 - 1;
+
+    const uint8x16x2_t tbl = vld1q_u8_x2(dotprod_permute_tbl);
+    const int16x4_t filter_16 = vld1_s16(g_chromaFilter[coeffIdx]);
+    const int8x8_t filter = vmovn_s16(vcombine_s16(filter_16, vdup_n_s16(0)));
+
+    for (int row = 0; row + 4 <= height; row += 4)
+    {
+        int col = 0;
+        for (; col + 16 <= width; col += 16)
+        {
+            uint8x16_t s0[4], s1[4];
+            load_u8x16xn<4>(src + col + 0, srcStride, s0);
+            load_u8x16xn<4>(src + col + 8, srcStride, s1);
+
+            uint8x8_t d_lo[4];
+            d_lo[0] = filter4_8_pp(s0[0], filter, tbl);
+            d_lo[1] = filter4_8_pp(s0[1], filter, tbl);
+            d_lo[2] = filter4_8_pp(s0[2], filter, tbl);
+            d_lo[3] = filter4_8_pp(s0[3], filter, tbl);
+
+            uint8x8_t d_hi[4];
+            d_hi[0] = filter4_8_pp(s1[0], filter, tbl);
+            d_hi[1] = filter4_8_pp(s1[1], filter, tbl);
+            d_hi[2] = filter4_8_pp(s1[2], filter, tbl);
+            d_hi[3] = filter4_8_pp(s1[3], filter, tbl);
+
+            uint8x16_t d[4];
+            d[0] = vcombine_u8(d_lo[0], d_hi[0]);
+            d[1] = vcombine_u8(d_lo[1], d_hi[1]);
+            d[2] = vcombine_u8(d_lo[2], d_hi[2]);
+            d[3] = vcombine_u8(d_lo[3], d_hi[3]);
+
+            store_u8x16xn<4>(dst + col, dstStride, d);
+        }
+
+        for (; col + 8 <= width; col += 8)
+        {
+            uint8x16_t s[4];
+            load_u8x16xn<4>(src + col, srcStride, s);
+
+            uint8x8_t d[4];
+            d[0] = filter4_8_pp(s[0], filter, tbl);
+            d[1] = filter4_8_pp(s[1], filter, tbl);
+            d[2] = filter4_8_pp(s[2], filter, tbl);
+            d[3] = filter4_8_pp(s[3], filter, tbl);
+
+            store_u8x8xn<4>(dst + col, dstStride, d);
+        }
+
+        // Block sizes 12xH, 6xH, 4xH, 2xH.
+        if (width % 8 != 0)
+        {
+            uint8x16_t s[4];
+            load_u8x16xn<4>(src + col, srcStride, s);
+
+            uint8x8_t d[4];
+            d[0] = filter4_8_pp(s[0], filter, tbl);
+            d[1] = filter4_8_pp(s[1], filter, tbl);
+            d[2] = filter4_8_pp(s[2], filter, tbl);
+            d[3] = filter4_8_pp(s[3], filter, tbl);
+
+            const int n_store = width < 8 ? width : 4;
+            store_u8xnxm<n_store, 4>(dst + col, dstStride, d);
+        }
+
+        src += 4 * srcStride;
+        dst += 4 * dstStride;
+    }
+
+    // Block sizes 8x6, 8x2, 4x2.
+    if (height & 2)
+    {
+        uint8x16_t s[4];
+        load_u8x16xn<2>(src, srcStride, s);
+
+        uint8x8_t d[4];
+        d[0] = filter4_8_pp(s[0], filter, tbl);
+        d[1] = filter4_8_pp(s[1], filter, tbl);
+
+        const int n_store = width < 8 ? width : 8;
+        store_u8xnxm<n_store, 2>(dst, dstStride, d);
+    }
+}
+
 #define LUMA_I8MM(W, H) \
         p.pu[LUMA_ ## W ## x ## H].luma_hpp = interp8_horiz_pp_i8mm<W, H>; \
         p.pu[LUMA_ ## W ## x ## H].luma_hps = interp8_horiz_ps_i8mm<W, H>;
+
+#define CHROMA_420_I8MM(W, H) \
+        p.chroma[X265_CSP_I420].pu[CHROMA_420_ ## W ## x ## H].filter_hpp = \
+            interp4_horiz_pp_i8mm<W, H>;
+
+#define CHROMA_422_I8MM(W, H) \
+        p.chroma[X265_CSP_I422].pu[CHROMA_422_ ## W ## x ## H].filter_hpp = \
+            interp4_horiz_pp_i8mm<W, H>;
+
+#define CHROMA_444_I8MM(W, H) \
+        p.chroma[X265_CSP_I444].pu[LUMA_ ## W ## x ## H].filter_hpp = \
+            interp4_horiz_pp_i8mm<W, H>;
 
 void setupFilterPrimitives_neon_i8mm(EncoderPrimitives &p)
 {
@@ -677,6 +798,82 @@ void setupFilterPrimitives_neon_i8mm(EncoderPrimitives &p)
     LUMA_I8MM(64, 32);
     LUMA_I8MM(64, 48);
     LUMA_I8MM(64, 64);
+
+    CHROMA_420_I8MM(2, 4);
+    CHROMA_420_I8MM(2, 8);
+    CHROMA_420_I8MM(4, 2);
+    CHROMA_420_I8MM(4, 4);
+    CHROMA_420_I8MM(4, 8);
+    CHROMA_420_I8MM(4, 16);
+    CHROMA_420_I8MM(6, 8);
+    CHROMA_420_I8MM(12, 16);
+    CHROMA_420_I8MM(8, 2);
+    CHROMA_420_I8MM(8, 4);
+    CHROMA_420_I8MM(8, 6);
+    CHROMA_420_I8MM(8, 8);
+    CHROMA_420_I8MM(8, 16);
+    CHROMA_420_I8MM(8, 32);
+    CHROMA_420_I8MM(16, 4);
+    CHROMA_420_I8MM(16, 8);
+    CHROMA_420_I8MM(16, 12);
+    CHROMA_420_I8MM(16, 16);
+    CHROMA_420_I8MM(16, 32);
+    CHROMA_420_I8MM(24, 32);
+    CHROMA_420_I8MM(32, 8);
+    CHROMA_420_I8MM(32, 16);
+    CHROMA_420_I8MM(32, 24);
+    CHROMA_420_I8MM(32, 32);
+
+    CHROMA_422_I8MM(2, 8);
+    CHROMA_422_I8MM(2, 16);
+    CHROMA_422_I8MM(4, 4);
+    CHROMA_422_I8MM(4, 8);
+    CHROMA_422_I8MM(4, 16);
+    CHROMA_422_I8MM(4, 32);
+    CHROMA_422_I8MM(6, 16);
+    CHROMA_422_I8MM(12, 32);
+    CHROMA_422_I8MM(8, 4);
+    CHROMA_422_I8MM(8, 8);
+    CHROMA_422_I8MM(8, 12);
+    CHROMA_422_I8MM(8, 16);
+    CHROMA_422_I8MM(8, 32);
+    CHROMA_422_I8MM(8, 64);
+    CHROMA_422_I8MM(16, 8);
+    CHROMA_422_I8MM(16, 16);
+    CHROMA_422_I8MM(16, 24);
+    CHROMA_422_I8MM(16, 32);
+    CHROMA_422_I8MM(16, 64);
+    CHROMA_422_I8MM(24, 64);
+    CHROMA_422_I8MM(32, 16);
+    CHROMA_422_I8MM(32, 32);
+    CHROMA_422_I8MM(32, 48);
+    CHROMA_422_I8MM(32, 64);
+
+    CHROMA_444_I8MM(4, 4);
+    CHROMA_444_I8MM(4, 8);
+    CHROMA_444_I8MM(4, 16);
+    CHROMA_444_I8MM(12, 16);
+    CHROMA_444_I8MM(8, 4);
+    CHROMA_444_I8MM(8, 8);
+    CHROMA_444_I8MM(8, 16);
+    CHROMA_444_I8MM(8, 32);
+    CHROMA_444_I8MM(16, 4);
+    CHROMA_444_I8MM(16, 8);
+    CHROMA_444_I8MM(16, 12);
+    CHROMA_444_I8MM(16, 16);
+    CHROMA_444_I8MM(16, 32);
+    CHROMA_444_I8MM(16, 64);
+    CHROMA_444_I8MM(24, 32);
+    CHROMA_444_I8MM(32, 8);
+    CHROMA_444_I8MM(32, 16);
+    CHROMA_444_I8MM(32, 24);
+    CHROMA_444_I8MM(32, 32);
+    CHROMA_444_I8MM(32, 64);
+    CHROMA_444_I8MM(48, 64);
+    CHROMA_444_I8MM(64, 16);
+    CHROMA_444_I8MM(64, 32);
+    CHROMA_444_I8MM(64, 48);
+    CHROMA_444_I8MM(64, 64);
 }
 }
 
