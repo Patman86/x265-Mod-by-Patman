@@ -550,6 +550,7 @@ typedef enum
 #define X265_CPU_SVE2            (1 << 3)   /* AArch64 SVE2 */
 #define X265_CPU_SVE             (1 << 4)   /* AArch64 SVE2 */
 #define X265_CPU_NEON_DOTPROD    (1 << 5)   /* AArch64 Neon DotProd */
+#define X265_CPU_NEON_I8MM       (1 << 6)   /* AArch64 Neon I8MM */
 
 /* IBM Power8 */
 #define X265_CPU_ALTIVEC         0x0000001

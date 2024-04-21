@@ -179,6 +179,7 @@ int main(int argc, char *argv[])
         { "SVE2", X265_CPU_SVE2 },
         { "SVE", X265_CPU_SVE },
         { "Neon_DotProd", X265_CPU_NEON_DOTPROD },
+        { "Neon_I8MM", X265_CPU_NEON_I8MM },
         { "FastNeonMRC", X265_CPU_FAST_NEON_MRC },
 #endif
         { "", 0 },
