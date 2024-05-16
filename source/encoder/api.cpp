@@ -162,6 +162,7 @@ x265_encoder *x265_encoder_open(x265_param *p)
 
         memcpy(param->svtHevcParam, encoder->m_svtAppData->svtHevcParams, sizeof(EB_H265_ENC_CONFIGURATION));
         encoder->m_param = param;
+        PARAM_NS::x265_param_free(zoneParam);
         return encoder;
     }
 #endif
