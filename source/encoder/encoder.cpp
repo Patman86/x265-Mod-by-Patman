@@ -1104,6 +1104,12 @@ void Encoder::copyUserSEIMessages(Frame *frame, const x265_picture* pic_in)
             else
                 input = pic_in->userSEI.payloads[i];
 
+            if (frame->m_userSEI.payloads[i].payload && (frame->m_userSEI.payloads[i].payloadSize < input.payloadSize))
+            {
+                delete[] frame->m_userSEI.payloads[i].payload;
+                frame->m_userSEI.payloads[i].payload = NULL;
+            }
+
             if (!frame->m_userSEI.payloads[i].payload)
                 frame->m_userSEI.payloads[i].payload = new uint8_t[input.payloadSize];
             memcpy(frame->m_userSEI.payloads[i].payload, input.payload, input.payloadSize);
