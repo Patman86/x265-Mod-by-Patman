@@ -104,7 +104,7 @@ int x265_exp2fix8(double x)
 
 void general_log(const x265_param* param, const char* caller, int level, const char* fmt, ...)
 {
-    if (param && level > param->logLevel && level > param->logfLevel))
+    if (param && level > param->logLevel && level > param->logfLevel)
         return;
     const int bufferSize = 4096;
     char buffer[bufferSize];
