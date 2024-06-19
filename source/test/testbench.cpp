@@ -163,6 +163,7 @@ int main(int argc, char *argv[])
         int flag;
     } test_arch[] =
     {
+#if X265_ARCH_X86
         { "SSE2", X265_CPU_SSE2 },
         { "SSE3", X265_CPU_SSE3 },
         { "SSSE3", X265_CPU_SSSE3 },
@@ -172,12 +173,14 @@ int main(int argc, char *argv[])
         { "AVX2", X265_CPU_AVX2 },
         { "BMI2", X265_CPU_AVX2 | X265_CPU_BMI1 | X265_CPU_BMI2 },
         { "AVX512", X265_CPU_AVX512 },
+#else
         { "ARMv6", X265_CPU_ARMV6 },
         { "NEON", X265_CPU_NEON },
         { "SVE2", X265_CPU_SVE2 },
         { "SVE", X265_CPU_SVE },
         { "Neon_DotProd", X265_CPU_NEON_DOTPROD },
         { "FastNeonMRC", X265_CPU_FAST_NEON_MRC },
+#endif
         { "", 0 },
     };
 
