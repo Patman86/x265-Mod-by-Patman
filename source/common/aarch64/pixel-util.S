@@ -609,13 +609,18 @@ endfunc
 
 //******* satd *******
 .macro satd_4x4_neon
-    ld1             {v0.s}[0], [x0], x1
+    ldr             s0, [x0]
+    ldr             s1, [x2]
+    add             x0, x0, x1
+    add             x2, x2, x3
     ld1             {v0.s}[1], [x0], x1
-    ld1             {v1.s}[0], [x2], x3
     ld1             {v1.s}[1], [x2], x3
-    ld1             {v2.s}[0], [x0], x1
+
+    ldr             s2, [x0]
+    ldr             s3, [x2]
+    add             x0, x0, x1
+    add             x2, x2, x3
     ld1             {v2.s}[1], [x0], x1
-    ld1             {v3.s}[0], [x2], x3
     ld1             {v3.s}[1], [x2], x3
 
     usubl           v4.8h, v0.8b, v1.8b
