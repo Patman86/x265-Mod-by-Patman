@@ -3,7 +3,7 @@
 
 #define PIXEL_MIN 0
 
-
+using namespace X265_NS;
 
 #if !(HIGH_BIT_DEPTH) && defined(HAVE_NEON)
 #include<arm_neon.h>
@@ -255,9 +255,63 @@ static void processSaoCUB0_neon(pixel *rec, const int8_t *offset, int ctuWidth, 
     }
 }
 
+void pelFilterLumaStrong_V_neon(pixel *src, intptr_t srcStep, intptr_t offset,
+                                int32_t tcP, int32_t tcQ)
+{
+    X265_CHECK(offset == 1, "Offset value must be 1 for LumaStrong Vertical\n");
+
+    src -= offset * 4;
+
+    const int16x8_t tc_vec = vcombine_s16(vdup_n_s16(tcP), vdup_n_s16(tcQ));
+    const int16x8_t neg_tc_vec = vnegq_s16(tc_vec);
+
+    static const uint8_t filter[3][8] =
+    {
+        { 0, 2, 1, 2, 2, 1, 1, 0 },
+        { 0, 3, 1, 2, 2, 1, 3, 0 },
+        { 0, 1, 1, 2, 2, 1, 2, 0 },
+    };
+
+    const uint8x8_t f0 = vld1_u8(filter[0]);
+    const uint8x8_t f1 = vld1_u8(filter[1]);
+    const uint8x8_t f2 = vld1_u8(filter[2]);
+
+    // -1 index means value is zero because TBL instructions
+    // zero elements that have out of range indices.
+    const uint8x8_t idx0 = { -1, 0,  1, 2, 3,  4, 5, -1 };
+    const uint8x8_t idx1 = { -1, 1,  2, 3, 4,  5, 6, -1 };
+    const uint8x8_t idx2 = { -1, 2,  3, 4, 5,  6, 7, -1 };
+    const uint8x8_t idx3 = { -1, 3,  4, 5, 6, -1, 3, -1 };
+    const uint8x8_t idx4 = { -1, 4, -1, 1, 2,  3, 4, -1 };
+
+    const int16x8_t neg_shift = { 0, -3, -2, -3, -3, -2, -3, 0 };
+
+    for (int i = 0; i < UNIT_SIZE; i++, src += srcStep)
+    {
+        uint8x8_t s = vld1_u8(src);
+        uint8x8_t s0 = vtbl1_u8(s, idx0);
+        uint8x8_t s1 = vtbl1_u8(s, idx1);
+        uint8x8_t s2 = vtbl1_u8(s, idx2);
+        uint8x8_t s3 = vtbl1_u8(s, idx3);
+        uint8x8_t s4 = vtbl1_u8(s, idx4);
+
+        uint16x8_t s34 = vaddl_u8(s3, s4);
+        uint16x8_t sum = vmlal_u8(s34, s0, f0);
+        sum = vmlal_u8(sum, s1, f1);
+        sum = vmlal_u8(sum, s2, f2);
+
+        sum = vrshlq_u16(sum, neg_shift);
+        sum = vsubw_u8(sum, s1);
+        sum = vreinterpretq_u16_s16(
+            vminq_s16(tc_vec, vmaxq_s16(neg_tc_vec, vreinterpretq_s16_u16(sum))));
+
+        uint8x8_t d = vmovn_u16(sum);
+        d = vadd_u8(d, s);
+        vst1_u8(src, d);
+    }
 }
 
-
+} // namespace
 
 namespace X265_NS
 {
@@ -273,6 +327,7 @@ void setupLoopFilterPrimitives_neon(EncoderPrimitives &p)
     p.saoCuOrgB0 = processSaoCUB0_neon;
     p.sign = calSign_neon;
 
+    p.pelFilterLumaStrong[0] = pelFilterLumaStrong_V_neon;
 }
 
 
