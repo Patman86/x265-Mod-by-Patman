@@ -32,7 +32,7 @@ InputFile* InputFile::open(InputFileInfo& info, bool bForceY4m, bool alpha, int 
     const char * s = strrchr(info.filename, '.');
 
     if (bForceY4m || (s && !strcmp(s, ".y4m")))
-        return new Y4MInput(info, alpha);
+        return new Y4MInput(info, alpha, format);
     else
         return new YUVInput(info, alpha, format);
 }

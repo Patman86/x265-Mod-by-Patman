@@ -71,7 +71,7 @@ protected:
 
 public:
 
-    Y4MInput(InputFileInfo& info, bool alpha);
+    Y4MInput(InputFileInfo& info, bool alpha, int format);
 
     virtual ~Y4MInput();
     void release();
