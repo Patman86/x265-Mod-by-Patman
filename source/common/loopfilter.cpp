@@ -28,6 +28,8 @@
 
 #define PIXEL_MIN 0
 
+using namespace X265_NS;
+
 namespace {
 
 static void calSign(int8_t *dst, const pixel *src1, const pixel *src2, const int endX)
@@ -172,6 +174,51 @@ static void pelFilterChroma_c(pixel* src, intptr_t srcStep, intptr_t offset, int
         src[0]        = x265_clip(m4 - (delta & maskQ));
     }
 }
+
+void pelFilterChroma_V_c(pixel *src, intptr_t srcStep, intptr_t offset, int32_t tc,
+                         int32_t maskP, int32_t maskQ)
+{
+    X265_CHECK(offset == 1, "Offset value must be 1 for Chroma Vertical\n");
+
+    (void)offset;
+
+    int16_t m2 = (int16_t)src[0 * srcStep - 2];
+    int16_t m3 = (int16_t)src[0 * srcStep - 1];
+    int16_t m4 = (int16_t)src[0 * srcStep + 0];
+    int16_t m5 = (int16_t)src[0 * srcStep + 1];
+
+    int32_t delta = x265_clip3(-tc, tc, ((m4 - m3) * 4 + m2 - m5 + 4) >> 3);
+    src[0 * srcStep - 1] = x265_clip(m3 + (delta & maskP));
+    src[0 * srcStep + 0] = x265_clip(m4 - (delta & maskQ));
+
+    m2 = (int16_t)src[1 * srcStep - 2];
+    m3 = (int16_t)src[1 * srcStep - 1];
+    m4 = (int16_t)src[1 * srcStep + 0];
+    m5 = (int16_t)src[1 * srcStep + 1];
+
+    delta = x265_clip3(-tc, tc, ((m4 - m3) * 4 + m2 - m5 + 4) >> 3);
+    src[1 * srcStep - 1] = x265_clip(m3 + (delta & maskP));
+    src[1 * srcStep + 0] = x265_clip(m4 - (delta & maskQ));
+
+    m2 = (int16_t)src[2 * srcStep - 2];
+    m3 = (int16_t)src[2 * srcStep - 1];
+    m4 = (int16_t)src[2 * srcStep + 0];
+    m5 = (int16_t)src[2 * srcStep + 1];
+
+    delta = x265_clip3(-tc, tc, ((m4 - m3) * 4 + m2 - m5 + 4) >> 3);
+    src[2 * srcStep - 1] = x265_clip(m3 + (delta & maskP));
+    src[2 * srcStep + 0] = x265_clip(m4 - (delta & maskQ));
+
+    m2 = (int16_t)src[3 * srcStep - 2];
+    m3 = (int16_t)src[3 * srcStep - 1];
+    m4 = (int16_t)src[3 * srcStep + 0];
+    m5 = (int16_t)src[3 * srcStep + 1];
+
+    delta = x265_clip3(-tc, tc, ((m4 - m3) * 4 + m2 - m5 + 4) >> 3);
+    src[3 * srcStep - 1] = x265_clip(m3 + (delta & maskP));
+    src[3 * srcStep + 0] = x265_clip(m4 - (delta & maskQ));
+}
+
 }
 
 namespace X265_NS {
@@ -190,7 +237,7 @@ void setupLoopFilterPrimitives_c(EncoderPrimitives &p)
     // C code is same for EDGE_VER and EDGE_HOR only asm code is different
     p.pelFilterLumaStrong[0] = pelFilterLumaStrong_c;
     p.pelFilterLumaStrong[1] = pelFilterLumaStrong_c;
-    p.pelFilterChroma[0]     = pelFilterChroma_c;
+    p.pelFilterChroma[0]     = pelFilterChroma_V_c;
     p.pelFilterChroma[1]     = pelFilterChroma_c;
 }
 }
