@@ -82,16 +82,18 @@ void Slice::setRefPicList(PicList& picList, PicList& refPicSetInterLayer0, PicLi
         return;
     }
 
-#if ENABLE_SCC_EXT
+#if ENABLE_SCC_EXT || ENABLE_MULTIVIEW || ENABLE_ALPHA
     /*Reset the number of references for I-slice marked as P-slice*/
-    if (m_param->bEnableSCC && m_sliceType != m_origSliceType)
+    if ((m_param->bEnableSCC || sLayerId) && m_sliceType != m_origSliceType)
     {
         memset(m_refFrameList, 0, sizeof(m_refFrameList));
         memset(m_refReconPicList, 0, sizeof(m_refReconPicList));
         memset(m_refPOCList, 0, sizeof(m_refPOCList));
         m_numRefIdx[0] = 1;
     }
+#endif
 
+#if ENABLE_SCC_EXT
     if (!checkNumPocTotalCurr && m_rps.numberOfPictures == 0)
     {
         Frame* prevPic = picList.getPOC(X265_MAX(0, m_poc - 1));

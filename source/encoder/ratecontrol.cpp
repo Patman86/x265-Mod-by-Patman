@@ -1348,7 +1348,11 @@ int RateControl::rateControlStart(Frame* curFrame, RateControlEntry* rce, Encode
 
     FrameData& curEncData = *curFrame->m_encData;
     m_curSlice = curEncData.m_slice;
-    m_sliceType = m_curSlice->m_origSliceType;
+    m_sliceType = m_curSlice->m_sliceType;
+#if ENABLE_SCC_EXT
+    if(m_param->bEnableSCC)
+        m_sliceType = m_curSlice->m_origSliceType;
+#endif
     rce->sliceType = m_sliceType;
     if (!m_2pass)
         rce->keptAsRef = IS_REFERENCED(curFrame);

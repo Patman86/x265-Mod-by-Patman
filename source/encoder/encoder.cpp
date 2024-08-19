@@ -2223,6 +2223,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture** pic_out)
                     frameEnc[layer]->m_lowres.sliceType = baseViewType;
                 else if(m_param->numViews > 1)
                     frameEnc[layer]->m_lowres.sliceType = IS_X265_TYPE_I(baseViewType) ? X265_TYPE_P : baseViewType;
+                frameEnc[layer]->m_lowres.bKeyframe = frameEnc[0]->m_lowres.bKeyframe;
             }
 #endif
 
@@ -2309,6 +2310,8 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture** pic_out)
                     slice->m_endCUAddr = slice->realEndAddress(m_sps.numCUsInFrame * m_param->num4x4Partitions);
                 }
                 frameEnc[layer]->m_valid = true;
+                int baseViewType = frameEnc[0]->m_lowres.sliceType;
+                frameEnc[layer]->m_encData->m_slice->m_origSliceType = IS_X265_TYPE_B(baseViewType) ? B_SLICE : (baseViewType == X265_TYPE_P) ? P_SLICE : I_SLICE;
             }
             if (m_param->analysisLoad && m_param->bDisableLookahead)
             {
@@ -3653,11 +3656,11 @@ void Encoder::initSPS(SPS *sps)
     sps->sps_extension_flag = false;
 
 #if ENABLE_MULTIVIEW
+    sps->maxViews = m_param->numViews;
     if (m_param->numViews > 1)
     {
         sps->sps_extension_flag = true;
         sps->setSpsExtOrMaxSubLayersMinus1 = 7;
-        sps->maxViews = m_param->numViews;
     }
 #endif
 
