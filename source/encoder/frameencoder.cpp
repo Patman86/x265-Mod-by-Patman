@@ -2323,8 +2323,7 @@ void FrameEncoder::vmafFrameLevelScore()
     vmafframedata->internalBitDepth = m_param->internalBitDepth;
     vmafframedata->reference_frame = fenc;
     vmafframedata->distorted_frame = recon;
-
-    fenc->m_vmafScore = x265_calculate_vmaf_framelevelscore(vmafframedata);
+    fenc->m_vmafScore = x265_calculate_vmaf_framelevelscore(m_param,vmafframedata);
 
     if (vmafframedata)
     x265_free(vmafframedata);

@@ -799,10 +799,9 @@ typedef struct x265_vmaf_commondata
     char *pool;
     int thread;
     int subsample;
-    int enable_conf_interval;
 }x265_vmaf_commondata;
 
-static const x265_vmaf_commondata vcd[] = { { NULL, (char *)"/usr/local/share/model/vmaf_v0.6.1.pkl", NULL, NULL, 0, 0, 0, 0, 0, 0, 0, NULL, 0, 1, 0 } };
+static x265_vmaf_commondata vcd[] = { { NULL, (char *)"/usr/local/share/model/vmaf_v0.6.1.json", NULL, NULL, 0, 0, 0, 0, 0, 0, 0, NULL, 0, 1} };
 
 typedef struct x265_temporal_layer {
     int poc_offset;      /* POC offset */
@@ -2600,7 +2599,7 @@ double x265_calculate_vmafscore(x265_param*, x265_vmaf_data*);
 
 /* x265_calculate_vmaf_framelevelscore:
  *    returns VMAF score for each frame in a given input video. */
-double x265_calculate_vmaf_framelevelscore(x265_vmaf_framedata*);
+double x265_calculate_vmaf_framelevelscore(x265_param*, x265_vmaf_framedata*);
 /* x265_vmaf_encoder_log:
  *       write a line to the configured CSV file.  If a CSV filename was not
  *       configured, or file open failed, this function will perform no write.
@@ -2665,7 +2664,7 @@ typedef struct x265_api
     int           (*set_analysis_data)(x265_encoder *encoder, x265_analysis_data *analysis_data, int poc, uint32_t cuBytes);
 #if ENABLE_LIBVMAF
     double        (*calculate_vmafscore)(x265_param *, x265_vmaf_data *);
-    double        (*calculate_vmaf_framelevelscore)(x265_vmaf_framedata *);
+    double        (*calculate_vmaf_framelevelscore)(x265_param *, x265_vmaf_framedata *);
     void          (*vmaf_encoder_log)(x265_encoder*, int, char**, x265_param *, x265_vmaf_data *);
 #endif
     int           (*zone_param_parse)(x265_param*, const char*, const char*);
