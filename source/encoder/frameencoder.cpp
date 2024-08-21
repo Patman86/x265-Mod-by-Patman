@@ -621,10 +621,18 @@ void FrameEncoder::compressFrame(int layer)
             ncu = m_top->m_rateControl->m_ncu * 4;
         else
             ncu = m_top->m_rateControl->m_ncu;
-        for (int i = 0; i < ncu; i++)
+        if (m_param->numViews > 1)
         {
-            m_frame[layer]->m_lowres.qpCuTreeOffset[i] = m_frame[0]->m_lowres.qpCuTreeOffset[i];
-            m_frame[layer]->m_lowres.qpAqOffset[i] = m_frame[0]->m_lowres.qpAqOffset[i];
+            for (int i = 0; i < ncu; i++)
+            {
+                m_frame[layer]->m_lowres.qpCuTreeOffset[i] = m_frame[0]->m_lowres.qpCuTreeOffset[i];
+                m_frame[layer]->m_lowres.qpAqOffset[i] = m_frame[0]->m_lowres.qpAqOffset[i];
+            }
+        }
+        else if (m_param->numScalableLayers > 1)
+        {
+            memset(m_frame[layer]->m_lowres.qpCuTreeOffset, 0, sizeof(double)*ncu);
+            memset(m_frame[layer]->m_lowres.qpAqOffset, 0, sizeof(double)* ncu);
         }
 
         m_frame[layer]->m_encData->m_avgQpAq = m_frame[0]->m_encData->m_avgQpAq;
@@ -645,13 +653,23 @@ void FrameEncoder::compressFrame(int layer)
                 double* pcCuTree0 = pcAQLayer0->dCuTreeOffset;
                 double* pcQP1 = pcAQLayer1->dQpOffset;
                 double* pcCuTree1 = pcAQLayer1->dCuTreeOffset;
-                for (uint32_t y = 0; y < m_frame[0]->m_fencPic->m_picHeight; y += aqPartHeight)
+                if (m_param->numViews > 1)
                 {
-                    for (uint32_t x = 0; x < m_frame[0]->m_fencPic->m_picWidth; x += aqPartWidth, pcQP0++, pcCuTree0++, pcQP1++, pcCuTree1++)
+                    for (uint32_t y = 0; y < m_frame[0]->m_fencPic->m_picHeight; y += aqPartHeight)
                     {
-                        *pcQP1 = *pcQP0;
-                        *pcCuTree1 = *pcCuTree0;
+                        for (uint32_t x = 0; x < m_frame[0]->m_fencPic->m_picWidth; x += aqPartWidth, pcQP0++, pcCuTree0++, pcQP1++, pcCuTree1++)
+                        {
+                            *pcQP1 = *pcQP0;
+                            *pcCuTree1 = *pcCuTree0;
+                        }
                     }
+                }
+                else if (m_param->numScalableLayers > 1)
+                {
+                    int numAQPartInWidth = (m_frame[0]->m_fencPic->m_picWidth + aqPartWidth - 1) / aqPartWidth;
+                    int numAQPartInHeight = (m_frame[0]->m_fencPic->m_picHeight + aqPartHeight - 1) / aqPartHeight;
+                    memset(m_frame[layer]->m_lowres.pAQLayer[d].dQpOffset, 0.0, sizeof(double)*numAQPartInWidth* numAQPartInHeight);
+                    memset(m_frame[layer]->m_lowres.pAQLayer[d].dCuTreeOffset, 0.0, sizeof(double)* numAQPartInWidth* numAQPartInHeight);
                 }
             }
         }
@@ -1213,9 +1231,21 @@ void FrameEncoder::compressFrame(int layer)
     /* rateControlEnd may also block for earlier frames to call rateControlUpdateStats */
     if (!layer && m_top->m_rateControl->rateControlEnd(m_frame[layer], m_accessUnitBits[layer], &m_rce, &filler) < 0)
         m_top->m_aborted = true;
-#if ENABLE_ALPHA || ENABLE_MULTIVIEW
-    if (!layer && m_frame[layer+1])
-        m_frame[1]->m_encData->m_avgQpAq = m_frame[layer]->m_encData->m_avgQpAq;
+
+#if ENABLE_ALPHA
+    if (layer && m_param->numScalableLayers > 1)
+        m_frame[layer]->m_encData->m_avgQpAq = m_frame[layer]->m_encData->m_avgQpRc;
+#endif
+#if ENABLE_MULTIVIEW
+    if (layer && m_param->numViews > 1)
+    {
+        double avgQpAq = 0;
+        for (uint32_t i = 0; i < slice->m_sps->numCuInHeight; i++)
+            avgQpAq += m_frame[layer]->m_encData->m_rowStat[i].sumQpAq;
+
+        avgQpAq /= (slice->m_sps->numCUsInFrame * m_param->num4x4Partitions);
+        m_frame[layer]->m_encData->m_avgQpAq = avgQpAq;
+    }
 #endif
 
     if (filler > 0)
