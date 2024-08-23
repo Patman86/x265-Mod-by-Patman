@@ -64,6 +64,8 @@ static const struct option long_options[] =
     { "no-pme",               no_argument, NULL, 0 },
     { "pme",                  no_argument, NULL, 0 },
     { "log-level",      required_argument, NULL, 0 },
+    { "log-file",       required_argument, NULL, 0 },
+    { "log-file-level", required_argument, NULL, 0 },
     { "profile",        required_argument, NULL, 'P' },
     { "level-idc",      required_argument, NULL, 0 },
     { "high-tier",            no_argument, NULL, 0 },
@@ -91,6 +93,7 @@ static const struct option long_options[] =
     { "seek",           required_argument, NULL, 0 },
     { "frame-skip",     required_argument, NULL, 0 },
     { "frames",         required_argument, NULL, 'f' },
+    { "reader-options", required_argument, NULL, 0 },
     { "recon",          required_argument, NULL, 'r' },
     { "recon-depth",    required_argument, NULL, 0 },
     { "no-wpp",               no_argument, NULL, 0 },
@@ -181,7 +184,10 @@ static const struct option long_options[] =
     { "bitrate",        required_argument, NULL, 0 },
     { "qp",             required_argument, NULL, 'q' },
     { "aq-mode",        required_argument, NULL, 0 },
+    { "auto-aq",              no_argument, NULL, 0 },
+    { "no-auto-aq",           no_argument, NULL, 0 },
     { "aq-strength",    required_argument, NULL, 0 },
+    { "aq-bias-strength", required_argument, NULL, 0 },
     { "sbrc",                 no_argument, NULL, 0 },
     { "no-sbrc",              no_argument, NULL, 0 },
     { "rc-grain",             no_argument, NULL, 0 },
@@ -426,6 +432,7 @@ static const struct option long_options[] =
         uint64_t totalbytes;
         int64_t startTime;
         int64_t prevUpdateTime;
+        const char* readerOpts;
 
         int argCnt;
         char** argString;
@@ -478,6 +485,7 @@ static const struct option long_options[] =
             saveLevel = 0;
             numRefs = 0;
             argCnt = 0;
+            readerOpts = NULL;
         }
 
         void destroy();

@@ -162,10 +162,11 @@ void FrameFilter::destroy()
 
     if (m_parallelFilter)
     {
-        if (m_useSao)
+        if (m_saoCreated)
         {
             for(int row = 0; row < m_numRows; row++)
                 m_parallelFilter[row].m_sao.destroy((row == 0 ? 1 : 0));
+            m_saoCreated = 0;
         }
 
         delete[] m_parallelFilter;
@@ -178,6 +179,7 @@ void FrameFilter::init(Encoder *top, FrameEncoder *frame, int numRows, uint32_t 
     m_param = frame->m_param;
     m_frameEncoder = frame;
     m_useSao = 1;
+    m_saoCreated = 0;
     m_numRows = numRows;
     m_numCols = numCols;
     m_hChromaShift = CHROMA_H_SHIFT(m_param->internalCsp);
@@ -221,6 +223,10 @@ void FrameFilter::init(Encoder *top, FrameEncoder *frame, int numRows, uint32_t 
 
             if (row > 0)
                 m_parallelFilter[row].m_prevRow = &m_parallelFilter[row - 1];
+        }
+        if (m_useSao)
+        {
+            m_saoCreated = 1;
         }
     }
 
