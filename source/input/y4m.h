@@ -54,6 +54,8 @@ protected:
     int height;
 
     int colorSpace;
+	
+    int frameCount;
 
     bool alphaAvailable;
 

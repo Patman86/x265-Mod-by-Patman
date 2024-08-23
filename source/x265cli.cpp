@@ -942,12 +942,12 @@ namespace X265_NS {
             info[i].sarWidth = param->vui.sarWidth;
             info[i].sarHeight = param->vui.sarHeight;
             info[i].skipFrames = seek;
-            info.encodeToFrame = this->framesToBeEncoded;
+            info[i].encodeToFrame = this->framesToBeEncoded;
             info[i].frameCount = 0;
             getParamAspectRatio(param, info[i].sarWidth, info[i].sarHeight);
 
             /* pass readerOpts to InputFileInfo in case certain reader wants it */
-            info.readerOpts = this->readerOpts;
+            info[i].readerOpts = this->readerOpts;
 
             this->input[i] = InputFile::open(info[i], this->bForceY4m, param->numScalableLayers > 1, param->format);
             if (!this->input[i] || this->input[i]->isFail())
