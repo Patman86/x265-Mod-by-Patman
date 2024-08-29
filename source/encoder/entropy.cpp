@@ -255,7 +255,7 @@ void Entropy::codeVPS(const VPS& vps, const SPS& sps)
     if (vps.m_numLayers > 1 || vps.m_numViews > 1)
     {
         WRITE_CODE(maxLayers - 1, 6, "vps_max_nuh_reserved_zero_layer_id");
-        WRITE_UVLC(vps.m_vpsNumLayerSetsMinus1, "vps_max_op_sets_minus1");
+        WRITE_UVLC(vps.m_vpsNumLayerSetsMinus1, "vps_num_layer_sets_minus1");
         for (int i = 1; i <= vps.m_vpsNumLayerSetsMinus1; i++)
         {
 #if ENABLE_MULTIVIEW
@@ -293,6 +293,8 @@ void Entropy::codeVPS(const VPS& vps, const SPS& sps)
 #if ENABLE_ALPHA || ENABLE_MULTIVIEW
     if (vps.m_numLayers > 1 || vps.m_numViews > 1)
     {
+        WRITE_FLAG(vps.vps_extension_flag, "vps_extension_flag");
+
         if (vps.vps_extension_flag)
         {
             while (m_bitIf->getNumberOfWrittenBits() % X265_BYTE != 0)
@@ -301,6 +303,16 @@ void Entropy::codeVPS(const VPS& vps, const SPS& sps)
             }
 
             WRITE_CODE(vps.ptl.levelIdc, 8, "general_level_idc");
+            if (vps.maxTempSubLayers > 1)
+            {
+                for (int i = 0; i < vps.maxTempSubLayers - 1; i++)
+                {
+                    WRITE_FLAG(0, "sub_layer_profile_present_flag[i]");
+                    WRITE_FLAG(0, "sub_layer_level_present_flag[i]");
+                }
+                for (int i = vps.maxTempSubLayers - 1; i < 8; i++)
+                    WRITE_CODE(0, 2, "reserved_zero_2bits");
+            }
 
             WRITE_FLAG(vps.splitting_flag, "splitting flag");
             for (int i = 0; i < MAX_VPS_NUM_SCALABILITY_TYPES; i++)
@@ -373,18 +385,22 @@ void Entropy::codeVPS(const VPS& vps, const SPS& sps)
                 WRITE_FLAG(1, "max_one_active_ref_layer_flag");
                 WRITE_FLAG(0, "vps_poc_lsb_aligned_flag");
                 WRITE_FLAG(1, "poc_lsb_not_present_flag[");
-                WRITE_FLAG(0, "sub_layer_flag_info_present_flag");
 
-                for (int i = 1; i <= 1; i++)
+                for (int i = 1; i < vps.m_vpsNumLayerSetsMinus1 + 1; i++)
                 {
-                    for (int j = 0; j < vps.m_numLayers; j++)
+                    WRITE_FLAG(vps.maxTempSubLayers > 1, "sub_layer_flag_info_present_flag");
+                    for (int j = 0; j < vps.maxTempSubLayers ; j++)
                     {
-                        WRITE_UVLC(vps.maxDecPicBuffering[0] - 1, "vps_max_dec_pic_buffering_minus1[i]");
+                        if(j > 0)
+                        WRITE_FLAG(vps.maxTempSubLayers > 1, "sub_layer_dpb_info_present_flag");
+
+                        for(int k = 0; k < vps.m_numLayersInIdList[i]; k++)
+                            WRITE_UVLC(vps.maxDecPicBuffering[j] - 1, "vps_max_dec_pic_buffering_minus1[i]");
+
+                        WRITE_UVLC(vps.numReorderPics[0], "vps_num_reorder_pics[i]");
+                        WRITE_UVLC(vps.maxLatencyIncrease[0] + 1, "vps_max_latency_increase_plus1[i]");
                     }
                 }
-
-                WRITE_UVLC(vps.numReorderPics[0], "vps_num_reorder_pics[i]");
-                WRITE_UVLC(vps.maxLatencyIncrease[0] + 1, "vps_max_latency_increase_plus1[i]");
 
                 WRITE_UVLC(0, "direct_dep_type_len_minus2");
 
@@ -454,17 +470,22 @@ void Entropy::codeVPS(const VPS& vps, const SPS& sps)
 
                 WRITE_FLAG(1, "max_one_active_ref_layer_flag");
                 WRITE_FLAG(0, "vps_poc_lsb_aligned_flag");
-                WRITE_FLAG(0, "sub_layer_flag_info_present_flag");
 
-                for (int i = 1; i <= vps.m_vpsNumLayerSetsMinus1; i++)
+                for (int i = 1; i < vps.m_vpsNumLayerSetsMinus1 + 1; i++)
                 {
-                    for (int j = 0; j < vps.m_numViews; j++)
+                    WRITE_FLAG(vps.maxTempSubLayers > 1, "sub_layer_flag_info_present_flag");
+                    for (int j = 0; j < vps.maxTempSubLayers; j++)
                     {
-                        WRITE_UVLC(vps.maxDecPicBuffering[0] - 1, "vps_max_dec_pic_buffering_minus1[i]");
+                        if (j > 0)
+                            WRITE_FLAG(vps.maxTempSubLayers > 1, "sub_layer_dpb_info_present_flag");
+
+                        for (int k = 0; k < vps.m_numLayersInIdList[i]; k++)
+                            WRITE_UVLC(vps.maxDecPicBuffering[j] - 1, "vps_max_dec_pic_buffering_minus1[i]");
+
+                        WRITE_UVLC(vps.numReorderPics[0], "vps_num_reorder_pics[i]");
+                        WRITE_UVLC(vps.maxLatencyIncrease[0] + 1, "vps_max_latency_increase_plus1[i]");
                     }
                 }
-                WRITE_UVLC(vps.numReorderPics[0], "vps_num_reorder_pics[i]");
-                WRITE_UVLC(vps.maxLatencyIncrease[0] + 1, "vps_max_latency_increase_plus1[i]");
 
                 WRITE_UVLC(0, "direct_dep_type_len_minus2");
 
@@ -488,14 +509,17 @@ void Entropy::codeSPS(const SPS& sps, const ScalingList& scalingList, const Prof
 {
     WRITE_CODE(0, 4, "sps_video_parameter_set_id");
 #if ENABLE_MULTIVIEW
-    if(layer != 0 && sps.setSpsExtOrMaxSubLayersMinus1 == 7)
+    if(layer != 0)
         WRITE_CODE(sps.setSpsExtOrMaxSubLayersMinus1, 3, "sps_ext_or_max_sub_layers_minus1");
+    else
+        WRITE_CODE(sps.maxTempSubLayers - 1, 3, "sps_max_sub_layers_minus1");
     if (!(layer != 0 && sps.setSpsExtOrMaxSubLayersMinus1 == 7))
+#else
+    WRITE_CODE(sps.maxTempSubLayers - 1, 3, "sps_max_sub_layers_minus1");
 #endif
     {
-        WRITE_CODE(sps.maxTempSubLayers - 1, 3, "sps_max_sub_layers_minus1");
         WRITE_FLAG(sps.maxTempSubLayers == 1, "sps_temporal_id_nesting_flag");
-        codeProfileTier(ptl, sps.maxTempSubLayers, layer);
+        codeProfileTier(ptl, sps.maxTempSubLayers);
     }
 
     WRITE_UVLC(layer, "sps_seq_parameter_set_id");

@@ -178,6 +178,7 @@ struct VPS
     uint8_t          m_layerIdInVps[MAX_VPS_LAYER_ID_PLUS1];
     int              m_viewIdLen;
     int              m_vpsNumLayerSetsMinus1;
+    int              m_numLayersInIdList[1023];
 #endif
 
 #if ENABLE_MULTIVIEW
