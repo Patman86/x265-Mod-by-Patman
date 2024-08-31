@@ -237,6 +237,8 @@ void all_angs_pred_neon(pixel *dest, pixel *refPix, pixel *filtPix, int bLuma)
 namespace X265_NS
 {
 // x265 private namespace
+extern "C" void PFX(intra_pred_planar8_neon)(pixel* dst, intptr_t dstStride, const pixel* srcPix, int dirMode, int bFilter);
+extern "C" void PFX(intra_pred_planar16_neon)(pixel* dst, intptr_t dstStride, const pixel* srcPix, int dirMode, int bFilter);
 
 void setupIntraPrimitives_neon(EncoderPrimitives &p)
 {
@@ -256,6 +258,11 @@ void setupIntraPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_8x8].intra_pred_allangs = all_angs_pred_neon<3>;
     p.cu[BLOCK_16x16].intra_pred_allangs = all_angs_pred_neon<4>;
     p.cu[BLOCK_32x32].intra_pred_allangs = all_angs_pred_neon<5>;
+
+#if !HIGH_BIT_DEPTH
+    p.cu[BLOCK_8x8].intra_pred[PLANAR_IDX] = PFX(intra_pred_planar8_neon);
+    p.cu[BLOCK_16x16].intra_pred[PLANAR_IDX] = PFX(intra_pred_planar16_neon);
+#endif
 }
 
 }
