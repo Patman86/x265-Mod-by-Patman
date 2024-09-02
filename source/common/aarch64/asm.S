@@ -194,4 +194,19 @@ ELF     .size   \name, . - \name
     vtrn            \t3, \t4, \s3, \s4
 .endm
 
+
+.macro push_vec_regs
+    stp             d8, d9, [sp,#-16]!
+    stp             d10, d11, [sp,#-16]!
+    stp             d12, d13, [sp,#-16]!
+    stp             d14, d15, [sp,#-16]!
+.endm
+
+.macro pop_vec_regs
+    ldp             d14, d15, [sp], #16
+    ldp             d12, d13, [sp], #16
+    ldp             d10, d11, [sp], #16
+    ldp             d8, d9, [sp], #16
+.endm
+
 #endif

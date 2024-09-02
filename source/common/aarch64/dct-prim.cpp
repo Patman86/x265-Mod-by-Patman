@@ -14,6 +14,8 @@
 #define X265_PRAGMA_UNROLL(n)
 #endif
 
+extern "C" void PFX(idct16_neon)(const int16_t *src, int16_t *dst, intptr_t dstStride);
+
 namespace
 {
 using namespace X265_NS;
@@ -1112,7 +1114,7 @@ void setupDCTPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_16x16].dct = dct16_neon;
     p.cu[BLOCK_32x32].dct = dct32_neon;
     p.cu[BLOCK_4x4].idct   = idct4_neon;
-    p.cu[BLOCK_16x16].idct = idct16_neon;
+    p.cu[BLOCK_16x16].idct = PFX(idct16_neon);
     p.cu[BLOCK_32x32].idct = idct32_neon;
     p.cu[BLOCK_4x4].count_nonzero = count_nonzero_neon<4>;
     p.cu[BLOCK_8x8].count_nonzero = count_nonzero_neon<8>;
