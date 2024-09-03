@@ -739,29 +739,44 @@ static inline void partialButterfly8_neon(const int16_t *src, int16_t *dst)
     }
 }
 
-static void partialButterflyInverse4(const int16_t *src, int16_t *dst, int shift, int line)
+template<int shift>
+static inline void partialButterflyInverse4_neon(const int16_t *src, int16_t *dst,
+                                                 intptr_t dstStride)
 {
-    int j;
-    int E[2], O[2];
-    int add = 1 << (shift - 1);
+    int16x4_t s0 = vld1_s16(src + 0);
+    int16x4_t s1 = vld1_s16(src + 4);
+    int16x4_t s2 = vld1_s16(src + 8);
+    int16x4_t s3 = vld1_s16(src + 12);
 
-    for (j = 0; j < line; j++)
-    {
-        /* Utilizing symmetry properties to the maximum to minimize the number of multiplications */
-        O[0] = g_t4[1][0] * src[line] + g_t4[3][0] * src[3 * line];
-        O[1] = g_t4[1][1] * src[line] + g_t4[3][1] * src[3 * line];
-        E[0] = g_t4[0][0] * src[0] + g_t4[2][0] * src[2 * line];
-        E[1] = g_t4[0][1] * src[0] + g_t4[2][1] * src[2 * line];
+    // Multiply and accumulate with g_t4 constants.
+    int32x4_t O[2];
+    O[0] = vmull_n_s16(s1, 83);
+    O[0] = vmlal_n_s16(O[0], s3, 36);
+    O[1] = vmull_n_s16(s1, 36);
+    O[1] = vmlal_n_s16(O[1], s3, -83);
 
-        /* Combining even and odd terms at each hierarchy levels to calculate the final spatial domain vector */
-        dst[0] = (int16_t)(x265_clip3(-32768, 32767, (E[0] + O[0] + add) >> shift));
-        dst[1] = (int16_t)(x265_clip3(-32768, 32767, (E[1] + O[1] + add) >> shift));
-        dst[2] = (int16_t)(x265_clip3(-32768, 32767, (E[1] - O[1] + add) >> shift));
-        dst[3] = (int16_t)(x265_clip3(-32768, 32767, (E[0] - O[0] + add) >> shift));
+    int32x4_t E[2];
+    E[0] = vaddl_s16(s0, s2);
+    E[0] = vmulq_n_s32(E[0], 64);
+    E[1] = vsubl_s16(s0, s2);
+    E[1] = vmulq_n_s32(E[1], 64);
 
-        src++;
-        dst += 4;
-    }
+    int32x4_t t0 = vaddq_s32(E[0], O[0]);
+    int32x4_t t1 = vaddq_s32(E[1], O[1]);
+    int32x4_t t2 = vsubq_s32(E[1], O[1]);
+    int32x4_t t3 = vsubq_s32(E[0], O[0]);
+
+    int16x4_t d0 = vqrshrn_n_s32(t0, shift);
+    int16x4_t d1 = vqrshrn_n_s32(t1, shift);
+    int16x4_t d2 = vqrshrn_n_s32(t2, shift);
+    int16x4_t d3 = vqrshrn_n_s32(t3, shift);
+
+    transpose_4x4_s16(d0, d1, d2, d3);
+
+    vst1_s16(dst + 0 * dstStride, d0);
+    vst1_s16(dst + 1 * dstStride, d1);
+    vst1_s16(dst + 2 * dstStride, d2);
+    vst1_s16(dst + 3 * dstStride, d3);
 }
 
 
@@ -1216,19 +1231,13 @@ void idst4_neon(const int16_t *src, int16_t *dst, intptr_t dstStride)
 
 void idct4_neon(const int16_t *src, int16_t *dst, intptr_t dstStride)
 {
-    const int shift_1st = 7;
-    const int shift_2nd = 12 - (X265_DEPTH - 8);
+    const int shift_pass1 = 7;
+    const int shift_pass2 = 12 - (X265_DEPTH - 8);
 
     ALIGN_VAR_32(int16_t, coef[4 * 4]);
-    ALIGN_VAR_32(int16_t, block[4 * 4]);
 
-    partialButterflyInverse4(src, coef, shift_1st, 4); // Forward DST BY FAST ALGORITHM, block input, coef output
-    partialButterflyInverse4(coef, block, shift_2nd, 4); // Forward DST BY FAST ALGORITHM, coef input, coeff output
-
-    for (int i = 0; i < 4; i++)
-    {
-        memcpy(&dst[i * dstStride], &block[i * 4], 4 * sizeof(int16_t));
-    }
+    partialButterflyInverse4_neon<shift_pass1>(src, coef, 4);
+    partialButterflyInverse4_neon<shift_pass2>(coef, dst, dstStride);
 }
 
 void idct16_neon(const int16_t *src, int16_t *dst, intptr_t dstStride)
