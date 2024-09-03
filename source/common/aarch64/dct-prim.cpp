@@ -310,6 +310,43 @@ static inline void inverseDst4_neon(const int16_t *src, int16_t *dst, intptr_t d
 }
 
 template<int shift>
+static inline void partialButterfly4_neon(const int16_t *src, int16_t *dst)
+{
+    int16x4_t s0 = vld1_s16(src + 0);
+    int16x4_t s1 = vld1_s16(src + 4);
+    int16x4_t s2 = vld1_s16(src + 8);
+    int16x4_t s3 = vld1_s16(src + 12);
+
+    transpose_4x4_s16(s0, s1, s2, s3);
+
+    int32x4_t E[2], O[2];
+    E[0] = vaddl_s16(s0, s3);
+    O[0] = vsubl_s16(s0, s3);
+    E[1] = vaddl_s16(s1, s2);
+    O[1] = vsubl_s16(s1, s2);
+
+    // Multiply and accumulate with g_t4 constants.
+    int32x4_t t0 = vaddq_s32(E[0], E[1]);
+    t0 = vmulq_n_s32(t0, 64);
+    int32x4_t t1 = vmulq_n_s32(O[0], 83);
+    t1 = vmlaq_n_s32(t1, O[1], 36);
+    int32x4_t t2 = vsubq_s32(E[0], E[1]);
+    t2 = vmulq_n_s32(t2, 64);
+    int32x4_t t3 = vmulq_n_s32(O[0], 36);
+    t3 = vmlaq_n_s32(t3, O[1], -83);
+
+    int16x4_t d0 = vrshrn_n_s32(t0, shift);
+    int16x4_t d1 = vrshrn_n_s32(t1, shift);
+    int16x4_t d2 = vrshrn_n_s32(t2, shift);
+    int16x4_t d3 = vrshrn_n_s32(t3, shift);
+
+    vst1_s16(dst + 0, d0);
+    vst1_s16(dst + 4, d1);
+    vst1_s16(dst + 8, d2);
+    vst1_s16(dst + 12, d3);
+}
+
+template<int shift>
 static inline void partialButterfly16_neon(const int16_t *src, int16_t *dst)
 {
     const int line = 16;
@@ -1098,6 +1135,23 @@ void dst4_neon(const int16_t *src, int16_t *dst, intptr_t srcStride)
     fastForwardDst4_neon<shift_pass2>(coef, dst);
 }
 
+void dct4_neon(const int16_t *src, int16_t *dst, intptr_t srcStride)
+{
+    const int shift_pass1 = 1 + X265_DEPTH - 8;
+    const int shift_pass2 = 8;
+
+    ALIGN_VAR_32(int16_t, coef[4 * 4]);
+    ALIGN_VAR_32(int16_t, block[4 * 4]);
+
+    for (int i = 0; i < 4; i++)
+    {
+        memcpy(&block[i * 4], &src[i * srcStride], 4 * sizeof(int16_t));
+    }
+
+    partialButterfly4_neon<shift_pass1>(block, coef);
+    partialButterfly4_neon<shift_pass2>(coef, dst);
+}
+
 void dct8_neon(const int16_t *src, int16_t *dst, intptr_t srcStride)
 {
     const int shift_pass1 = 2 + X265_DEPTH - 8;
@@ -1222,6 +1276,7 @@ void setupDCTPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_16x16].psyRdoQuant = psyRdoQuant_neon<4>;
     p.cu[BLOCK_32x32].psyRdoQuant = psyRdoQuant_neon<5>;
     p.dst4x4 = dst4_neon;
+    p.cu[BLOCK_4x4].dct   = dct4_neon;
     p.cu[BLOCK_8x8].dct   = dct8_neon;
     p.cu[BLOCK_16x16].dct = PFX(dct16_neon);
     p.cu[BLOCK_32x32].dct = dct32_neon;
