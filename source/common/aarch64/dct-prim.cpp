@@ -270,6 +270,46 @@ static inline void fastForwardDst4_neon(const int16_t *src, int16_t *dst)
 }
 
 template<int shift>
+static inline void inverseDst4_neon(const int16_t *src, int16_t *dst, intptr_t dstStride)
+{
+    int16x4_t s0 = vld1_s16(src + 0);
+    int16x4_t s1 = vld1_s16(src + 4);
+    int16x4_t s2 = vld1_s16(src + 8);
+    int16x4_t s3 = vld1_s16(src + 12);
+
+    int32x4_t c0 = vaddl_s16(s0, s2);
+    int32x4_t c1 = vaddl_s16(s2, s3);
+    int32x4_t c2 = vsubl_s16(s0, s3);
+    int32x4_t c3 = vmull_n_s16(s1, 74);
+
+    int32x4_t t0 = vmlaq_n_s32(c3, c0, 29);
+    t0 = vmlaq_n_s32(t0, c1, 55);
+
+    int32x4_t t1 = vmlaq_n_s32(c3, c2, 55);
+    t1 = vmlsq_n_s32(t1, c1, 29);
+
+    int32x4_t t2 = vaddl_s16(s0, s3);
+    t2 = vsubw_s16(t2, s2);
+    t2 = vmulq_n_s32(t2, 74);
+
+    int32x4_t t3 = vmulq_n_s32(c0, 55);
+    t3 = vmlaq_n_s32(t3, c2, 29);
+    t3 = vsubq_s32(t3, c3);
+
+    int16x4_t d0 = vqrshrn_n_s32(t0, shift);
+    int16x4_t d1 = vqrshrn_n_s32(t1, shift);
+    int16x4_t d2 = vqrshrn_n_s32(t2, shift);
+    int16x4_t d3 = vqrshrn_n_s32(t3, shift);
+
+    transpose_4x4_s16(d0, d1, d2, d3);
+
+    vst1_s16(dst + 0 * dstStride, d0);
+    vst1_s16(dst + 1 * dstStride, d1);
+    vst1_s16(dst + 2 * dstStride, d2);
+    vst1_s16(dst + 3 * dstStride, d3);
+}
+
+template<int shift>
 static inline void partialButterfly16_neon(const int16_t *src, int16_t *dst)
 {
     const int line = 16;
@@ -1109,6 +1149,17 @@ void dct32_neon(const int16_t *src, int16_t *dst, intptr_t srcStride)
     partialButterfly32_neon<shift_pass2>(coef, dst);
 }
 
+void idst4_neon(const int16_t *src, int16_t *dst, intptr_t dstStride)
+{
+    const int shift_pass1 = 7;
+    const int shift_pass2 = 12 - (X265_DEPTH - 8);
+
+    ALIGN_VAR_32(int16_t, coef[4 * 4]);
+
+    inverseDst4_neon<shift_pass1>(src, coef, 4);
+    inverseDst4_neon<shift_pass2>(coef, dst, dstStride);
+}
+
 void idct4_neon(const int16_t *src, int16_t *dst, intptr_t dstStride)
 {
     const int shift_1st = 7;
@@ -1174,6 +1225,7 @@ void setupDCTPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_8x8].dct   = dct8_neon;
     p.cu[BLOCK_16x16].dct = PFX(dct16_neon);
     p.cu[BLOCK_32x32].dct = dct32_neon;
+    p.idst4x4 = idst4_neon;
     p.cu[BLOCK_4x4].idct   = idct4_neon;
     p.cu[BLOCK_16x16].idct = PFX(idct16_neon);
     p.cu[BLOCK_32x32].idct = idct32_neon;
