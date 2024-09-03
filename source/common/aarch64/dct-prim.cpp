@@ -21,21 +21,23 @@ namespace
 {
 using namespace X265_NS;
 
-static void transpose_4x4x16(int16x4_t &x0, int16x4_t &x1, int16x4_t &x2, int16x4_t &x3)
+static inline void transpose_4x4_s16(int16x4_t &s0, int16x4_t &s1, int16x4_t &s2, int16x4_t &s3)
 {
-    int32x2_t s0, s1, s2, s3;
+    int16x8_t s0q = vcombine_s16(s0, vdup_n_s16(0));
+    int16x8_t s1q = vcombine_s16(s1, vdup_n_s16(0));
+    int16x8_t s2q = vcombine_s16(s2, vdup_n_s16(0));
+    int16x8_t s3q = vcombine_s16(s3, vdup_n_s16(0));
 
-    s0 = vtrn1_s32(vreinterpret_s32_s16(x0), vreinterpret_s32_s16(x2));
-    s1 = vtrn1_s32(vreinterpret_s32_s16(x1), vreinterpret_s32_s16(x3));
-    s2 = vtrn2_s32(vreinterpret_s32_s16(x0), vreinterpret_s32_s16(x2));
-    s3 = vtrn2_s32(vreinterpret_s32_s16(x1), vreinterpret_s32_s16(x3));
+    int16x8_t s02 = vzip1q_s16(s0q, s2q);
+    int16x8_t s13 = vzip1q_s16(s1q, s3q);
 
-    x0 = vtrn1_s16(vreinterpret_s16_s32(s0), vreinterpret_s16_s32(s1));
-    x1 = vtrn2_s16(vreinterpret_s16_s32(s0), vreinterpret_s16_s32(s1));
-    x2 = vtrn1_s16(vreinterpret_s16_s32(s2), vreinterpret_s16_s32(s3));
-    x3 = vtrn2_s16(vreinterpret_s16_s32(s2), vreinterpret_s16_s32(s3));
+    int16x8x2_t s0123 = vzipq_s16(s02, s13);
+
+    s0 = vget_low_s16(s0123.val[0]);
+    s1 = vget_high_s16(s0123.val[0]);
+    s2 = vget_low_s16(s0123.val[1]);
+    s3 = vget_high_s16(s0123.val[1]);
 }
-
 
 
 static int scanPosLast_opt(const uint16_t *scan, const coeff_t *coeff, uint16_t *coeffSign, uint16_t *coeffFlag,
@@ -225,6 +227,46 @@ uint32_t copy_count_neon(int16_t *coeff, const int16_t *residual, intptr_t resiS
     }
 
     return numSig - vaddvq_s16(vcount);
+}
+
+template<int shift>
+static inline void fastForwardDst4_neon(const int16_t *src, int16_t *dst)
+{
+    int16x4_t s0 = vld1_s16(src + 0);
+    int16x4_t s1 = vld1_s16(src + 4);
+    int16x4_t s2 = vld1_s16(src + 8);
+    int16x4_t s3 = vld1_s16(src + 12);
+
+    transpose_4x4_s16(s0, s1, s2, s3);
+
+    int32x4_t c0 = vaddl_s16(s0, s3);
+    int32x4_t c1 = vaddl_s16(s1, s3);
+    int32x4_t c2 = vsubl_s16(s0, s1);
+    int32x4_t c3 = vmull_n_s16(s2, 74);
+
+    int32x4_t t0 = vmlaq_n_s32(c3, c0, 29);
+    t0 = vmlaq_n_s32(t0, c1, 55);
+
+    int32x4_t t1 = vaddl_s16(s0, s1);
+    t1 = vsubw_s16(t1, s3);
+    t1 = vmulq_n_s32(t1, 74);
+
+    int32x4_t t2 = vmulq_n_s32(c2, 29);
+    t2 = vmlaq_n_s32(t2, c0, 55);
+    t2 = vsubq_s32(t2, c3);
+
+    int32x4_t t3 = vmlaq_n_s32(c3, c2, 55);
+    t3 = vmlsq_n_s32(t3, c1, 29);
+
+    int16x4_t d0 = vrshrn_n_s32(t0, shift);
+    int16x4_t d1 = vrshrn_n_s32(t1, shift);
+    int16x4_t d2 = vrshrn_n_s32(t2, shift);
+    int16x4_t d3 = vrshrn_n_s32(t3, shift);
+
+    vst1_s16(dst + 0, d0);
+    vst1_s16(dst + 4, d1);
+    vst1_s16(dst + 8, d2);
+    vst1_s16(dst + 12, d3);
 }
 
 template<int shift>
@@ -766,7 +808,7 @@ X265_PRAGMA_UNROLL(2)
             t = vminq_s32(t, max);
             x3 = vmovn_s32(t);
 
-            transpose_4x4x16(x0, x1, x2, x3);
+            transpose_4x4_s16(x0, x1, x2, x3);
             vst1_s16(&orig_dst[0 * 16 + k], x0);
             vst1_s16(&orig_dst[1 * 16 + k], x1);
             vst1_s16(&orig_dst[2 * 16 + k], x2);
@@ -805,7 +847,7 @@ X265_PRAGMA_UNROLL(2)
             t = vminq_s32(t, max);
             x3 = vmovn_s32(t);
 
-            transpose_4x4x16(x0, x1, x2, x3);
+            transpose_4x4_s16(x0, x1, x2, x3);
             vst1_s16(&orig_dst[0 * 16 + k + 8], x0);
             vst1_s16(&orig_dst[1 * 16 + k + 8], x1);
             vst1_s16(&orig_dst[2 * 16 + k + 8], x2);
@@ -974,7 +1016,7 @@ X265_PRAGMA_UNROLL(8)
             int16x4_t x1 = dst[k + 1];
             int16x4_t x2 = dst[k + 2];
             int16x4_t x3 = dst[k + 3];
-            transpose_4x4x16(x0, x1, x2, x3);
+            transpose_4x4_s16(x0, x1, x2, x3);
             vst1_s16(&orig_dst[0 * 32 + k], x0);
             vst1_s16(&orig_dst[1 * 32 + k], x1);
             vst1_s16(&orig_dst[2 * 32 + k], x2);
@@ -999,6 +1041,23 @@ X265_PRAGMA_UNROLL(8)
 namespace X265_NS
 {
 // x265 private namespace
+void dst4_neon(const int16_t *src, int16_t *dst, intptr_t srcStride)
+{
+    const int shift_pass1 = 1 + X265_DEPTH - 8;
+    const int shift_pass2 = 8;
+
+    ALIGN_VAR_32(int16_t, coef[4 * 4]);
+    ALIGN_VAR_32(int16_t, block[4 * 4]);
+
+    for (int i = 0; i < 4; i++)
+    {
+        memcpy(&block[i * 4], &src[i * srcStride], 4 * sizeof(int16_t));
+    }
+
+    fastForwardDst4_neon<shift_pass1>(block, coef);
+    fastForwardDst4_neon<shift_pass2>(coef, dst);
+}
+
 void dct8_neon(const int16_t *src, int16_t *dst, intptr_t srcStride)
 {
     const int shift_pass1 = 2 + X265_DEPTH - 8;
@@ -1111,6 +1170,7 @@ void setupDCTPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_8x8].psyRdoQuant = psyRdoQuant_neon<3>;
     p.cu[BLOCK_16x16].psyRdoQuant = psyRdoQuant_neon<4>;
     p.cu[BLOCK_32x32].psyRdoQuant = psyRdoQuant_neon<5>;
+    p.dst4x4 = dst4_neon;
     p.cu[BLOCK_8x8].dct   = dct8_neon;
     p.cu[BLOCK_16x16].dct = PFX(dct16_neon);
     p.cu[BLOCK_32x32].dct = dct32_neon;
