@@ -182,7 +182,6 @@ struct VPS
 #endif
 
 #if ENABLE_MULTIVIEW
-    int              m_viewId[MAX_VIEWS];
     int              m_layerIdIncludedFlag;
 #endif
 };

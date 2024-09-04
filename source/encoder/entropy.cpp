@@ -415,7 +415,7 @@ void Entropy::codeVPS(const VPS& vps, const SPS& sps)
             if (vps.m_numViews > 1)
             {
                 for (uint8_t i = 0; i < vps.m_numViews; i++)
-                    WRITE_CODE(vps.m_viewId[i], vps.m_viewIdLen, "view_id_val[i]");
+                    WRITE_CODE(i, vps.m_viewIdLen, "view_id_val[i]");
 
                 for (int i = 1; i < vps.m_numViews; i++)
                 {

@@ -3567,11 +3567,8 @@ void Encoder::initVPS(VPS *vps)
         }
         vps->m_dimensionIdLen[1] = auxDimIdLen;
 
-        vps->m_nuhLayerIdPresentFlag = 0;
+        vps->m_nuhLayerIdPresentFlag = 1;
         vps->m_viewIdLen = 1;
-
-        vps->m_viewId[0] = 1;
-        vps->m_viewId[1] = 0;
 
         vps->m_vpsNumLayerSetsMinus1 = 1;
         vps->m_numLayersInIdList[0] = 1;
