@@ -316,6 +316,21 @@ int16x8_t inline filter8_8_ps_partial(const uint8x16_t s0, const uint8x16_t s1,
                                      vmovn_s32(dotpro_hi));
     return vaddq_s16(dotprod, constant);
 }
+
+uint8x8_t inline filter8_8_pp_partial(const uint8x16_t s0, const uint8x16_t s1,
+                                      const uint8x16_t s2, const uint8x16_t s3,
+                                      const int8x8_t filter)
+{
+    int32x4_t dotprod_lo = vusdotq_lane_s32(vdupq_n_s32(0), s0, filter, 0);
+    dotprod_lo = vusdotq_lane_s32(dotprod_lo, s2, filter, 1);
+    int32x4_t dotprod_hi = vusdotq_lane_s32(vdupq_n_s32(0), s1, filter, 0);
+    dotprod_hi = vusdotq_lane_s32(dotprod_hi, s3, filter, 1);
+
+    // Narrow and combine.
+    int16x8_t dotprod = vcombine_s16(vmovn_s32(dotprod_lo),
+                                     vmovn_s32(dotprod_hi));
+    return vqrshrun_n_s16(dotprod, IF_FILTER_PREC);
+}
 } // Unnamed namespace.
 
 namespace X265_NS {
@@ -1042,6 +1057,206 @@ void interp8_vert_ps_i8mm(const uint8_t *src, intptr_t srcStride, int16_t *dst,
     }
 }
 
+template<int width, int height>
+void interp8_vert_pp_i8mm(const uint8_t *src, intptr_t srcStride, uint8_t *dst,
+                          intptr_t dstStride, int coeffIdx)
+{
+    const int N_TAPS = 8;
+
+    src -= (N_TAPS / 2 - 1) * srcStride;
+
+    const uint8x16x3_t merge_block_tbl = vld1q_u8_x3(dot_prod_merge_block_tbl);
+    const int8x8_t filter = vmovn_s16(vld1q_s16(g_lumaFilter[coeffIdx]));
+
+    if (width % 8 != 0)
+    {
+        uint8x8_t s[11];
+        uint8x16x2_t samples_tbl;
+        uint8x16_t s_lo[8];
+        uint8x16_t s_hi[8];
+        const uint8_t *src_ptr = src;
+        uint8_t *dst_ptr = dst;
+
+        if (width == 12)
+        {
+            load_u8x8xn<7>(src_ptr, srcStride, s);
+
+            s[7] = vdup_n_u8(0);
+            s[8] = vdup_n_u8(0);
+            s[9] = vdup_n_u8(0);
+
+            transpose_concat_8x4(s + 0, s_lo[0], s_hi[0]);
+            transpose_concat_8x4(s + 1, s_lo[1], s_hi[1]);
+            transpose_concat_8x4(s + 2, s_lo[2], s_hi[2]);
+            transpose_concat_8x4(s + 3, s_lo[3], s_hi[3]);
+            transpose_concat_8x4(s + 4, s_lo[4], s_hi[4]);
+            transpose_concat_8x4(s + 5, s_lo[5], s_hi[5]);
+            transpose_concat_8x4(s + 6, s_lo[6], s_hi[6]);
+
+            src_ptr += 7 * srcStride;
+
+            for (int row = 0; row < height; row += 4)
+            {
+                load_u8x8xn<4>(src_ptr, srcStride, s + 7);
+
+                transpose_concat_8x4(s + 7, s_lo[7], s_hi[7]);
+
+                // Merge new data into block from previous iteration.
+                samples_tbl.val[0] = s_lo[3]; // rows 3, 4, 5, 6
+                samples_tbl.val[1] = s_lo[7]; // rows 7, 8, 9, 10
+                s_lo[4] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[0]);
+                s_lo[5] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[1]);
+                s_lo[6] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[2]);
+                samples_tbl.val[0] = s_hi[3]; // rows 3, 4, 5, 6
+                samples_tbl.val[1] = s_hi[7]; // rows 7, 8, 9, 10
+                s_hi[4] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[0]);
+                s_hi[5] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[1]);
+                s_hi[6] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[2]);
+
+                uint8x8_t d[4];
+                d[0] = filter8_8_pp_partial(s_lo[0], s_hi[0], s_lo[4], s_hi[4],
+                                            filter);
+                d[1] = filter8_8_pp_partial(s_lo[1], s_hi[1], s_lo[5], s_hi[5],
+                                            filter);
+                d[2] = filter8_8_pp_partial(s_lo[2], s_hi[2], s_lo[6], s_hi[6],
+                                            filter);
+                d[3] = filter8_8_pp_partial(s_lo[3], s_hi[3], s_lo[7], s_hi[7],
+                                            filter);
+
+                store_u8x8xn<4>(dst_ptr, dstStride, d);
+
+                s_lo[0] = s_lo[4];
+                s_lo[1] = s_lo[5];
+                s_lo[2] = s_lo[6];
+                s_lo[3] = s_lo[7];
+                s_hi[0] = s_hi[4];
+                s_hi[1] = s_hi[5];
+                s_hi[2] = s_hi[6];
+                s_hi[3] = s_hi[7];
+
+                src_ptr += 4 * srcStride;
+                dst_ptr += 4 * dstStride;
+            }
+
+            src_ptr = src + 8;
+            dst_ptr = dst + 8;
+        }
+
+        load_u8x8xn<7>(src_ptr, srcStride, s);
+
+        s[7] = vdup_n_u8(0);
+        s[8] = vdup_n_u8(0);
+        s[9] = vdup_n_u8(0);
+
+        transpose_concat_4x4(s + 0, s_lo[0]);
+        transpose_concat_4x4(s + 1, s_lo[1]);
+        transpose_concat_4x4(s + 2, s_lo[2]);
+        transpose_concat_4x4(s + 3, s_lo[3]);
+        transpose_concat_4x4(s + 4, s_lo[4]);
+        transpose_concat_4x4(s + 5, s_lo[5]);
+        transpose_concat_4x4(s + 6, s_lo[6]);
+
+        src_ptr += 7 * srcStride;
+
+        for (int row = 0; row < height; row += 4)
+        {
+            load_u8x8xn<4>(src_ptr, srcStride, s + 7);
+
+            transpose_concat_4x4(s + 7, s_lo[7]);
+
+            // Merge new data into block from previous iteration.
+            samples_tbl.val[0] = s_lo[3]; // rows 3, 4, 5, 6
+            samples_tbl.val[1] = s_lo[7]; // rows 7, 8, 9, 10
+            s_lo[4] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[0]);
+            s_lo[5] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[1]);
+            s_lo[6] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[2]);
+
+            uint8x8_t d[2];
+            d[0] = filter8_8_pp_partial(s_lo[0], s_lo[1], s_lo[4], s_lo[5],
+                                        filter);
+            d[1] = filter8_8_pp_partial(s_lo[2], s_lo[3], s_lo[6], s_lo[7],
+                                        filter);
+
+            store_u8x4_strided_xN<4>(dst_ptr, dstStride, d);
+
+            s_lo[0] = s_lo[4];
+            s_lo[1] = s_lo[5];
+            s_lo[2] = s_lo[6];
+            s_lo[3] = s_lo[7];
+
+            src_ptr += 4 * srcStride;
+            dst_ptr += 4 * dstStride;
+        }
+    }
+    else
+    {
+        for (int col = 0; col < width; col += 8)
+        {
+            const uint8_t *src_ptr = src + col;
+            uint8_t *dst_ptr = dst + col;
+            uint8x8_t s[11];
+            uint8x16x2_t samples_tbl;
+            uint8x16_t s_lo[8];
+            uint8x16_t s_hi[8];
+
+            load_u8x8xn<7>(src_ptr, srcStride, s);
+
+            transpose_concat_8x4(s + 0, s_lo[0], s_hi[0]);
+            transpose_concat_8x4(s + 1, s_lo[1], s_hi[1]);
+            transpose_concat_8x4(s + 2, s_lo[2], s_hi[2]);
+            transpose_concat_8x4(s + 3, s_lo[3], s_hi[3]);
+            transpose_concat_8x4(s + 4, s_lo[4], s_hi[4]);
+            transpose_concat_8x4(s + 5, s_lo[5], s_hi[5]);
+            transpose_concat_8x4(s + 6, s_lo[6], s_hi[6]);
+
+            src_ptr += 7 * srcStride;
+
+            for (int row = 0; row < height; row += 4)
+            {
+                load_u8x8xn<4>(src_ptr, srcStride, s + 7);
+
+                transpose_concat_8x4(s + 7, s_lo[7], s_hi[7]);
+
+                // Merge new data into block from previous iteration.
+                samples_tbl.val[0] = s_lo[3]; // rows 3, 4, 5, 6
+                samples_tbl.val[1] = s_lo[7]; // rows 7, 8, 9, 10
+                s_lo[4] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[0]);
+                s_lo[5] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[1]);
+                s_lo[6] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[2]);
+                samples_tbl.val[0] = s_hi[3]; // rows 3, 4, 5, 6
+                samples_tbl.val[1] = s_hi[7]; // rows 7, 8, 9, 10
+                s_hi[4] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[0]);
+                s_hi[5] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[1]);
+                s_hi[6] = vqtbl2q_u8(samples_tbl, merge_block_tbl.val[2]);
+
+                uint8x8_t d[4];
+                d[0] = filter8_8_pp_partial(s_lo[0], s_hi[0], s_lo[4], s_hi[4],
+                                            filter);
+                d[1] = filter8_8_pp_partial(s_lo[1], s_hi[1], s_lo[5], s_hi[5],
+                                            filter);
+                d[2] = filter8_8_pp_partial(s_lo[2], s_hi[2], s_lo[6], s_hi[6],
+                                            filter);
+                d[3] = filter8_8_pp_partial(s_lo[3], s_hi[3], s_lo[7], s_hi[7],
+                                            filter);
+
+                store_u8x8xn<4>(dst_ptr, dstStride, d);
+
+                s_lo[0] = s_lo[4];
+                s_lo[1] = s_lo[5];
+                s_lo[2] = s_lo[6];
+                s_lo[3] = s_lo[7];
+                s_hi[0] = s_hi[4];
+                s_hi[1] = s_hi[5];
+                s_hi[2] = s_hi[6];
+                s_hi[3] = s_hi[7];
+
+                src_ptr += 4 * srcStride;
+                dst_ptr += 4 * dstStride;
+            }
+        }
+    }
+}
+
 // Declaration for use in interp_hv_pp_i8mm().
 template<int N, int width, int height>
 void interp_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
@@ -1065,6 +1280,7 @@ void interp_hv_pp_i8mm(const pixel *src, intptr_t srcStride, pixel *dst,
         p.pu[LUMA_ ## W ## x ## H].luma_hpp = interp8_horiz_pp_i8mm<W, H>; \
         p.pu[LUMA_ ## W ## x ## H].luma_hps = interp8_horiz_ps_i8mm<W, H>; \
         p.pu[LUMA_ ## W ## x ## H].luma_vps = interp8_vert_ps_i8mm<W, H>;  \
+        p.pu[LUMA_ ## W ## x ## H].luma_vpp = interp8_vert_pp_i8mm<W, H>;  \
         p.pu[LUMA_ ## W ## x ## H].luma_hvpp = interp_hv_pp_i8mm<W, H>;
 
 #define CHROMA_420_I8MM(W, H) \

@@ -25,6 +25,7 @@
 #define X265_COMMON_AARCH64_MEM_NEON_H
 
 #include <arm_neon.h>
+#include <cassert>
 #include <stdint.h>
 
 // Load 4 bytes into the low half of a uint8x8_t, zero the upper half.
@@ -54,6 +55,21 @@ static uint8x8_t inline load_u8x4x2(const uint8_t *s, intptr_t stride)
 static void inline store_u8x4x1(uint8_t *d, const uint8x8_t s)
 {
     vst1_lane_u32((uint32_t *)d, vreinterpret_u32_u8(s), 0);
+}
+
+// Store N blocks of 32-bits from (N / 2) D-Registers.
+template<int N>
+static void inline store_u8x4_strided_xN(uint8_t *d, intptr_t stride,
+                                         const uint8x8_t *s)
+{
+    assert(N % 2 == 0);
+    for (int i = 0; i < N / 2; ++i)
+    {
+        vst1_lane_u32(d, vreinterpret_u32_u8(s[i]), 0);
+        d += stride;
+        vst1_lane_u32(d, vreinterpret_u32_u8(s[i]), 1);
+        d += stride;
+    }
 }
 
 template<int N>
