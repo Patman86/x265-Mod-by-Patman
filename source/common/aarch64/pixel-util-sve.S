@@ -190,27 +190,27 @@ endfunc
     ld1b            {z7.h}, p0/z, [x2, x11]
     add             x0, x0, x1
     add             x2, x2, x3
-    ld1b            {z29.h}, p0/z, [x0]
-    ld1b            {z9.h}, p0/z, [x0, x11]
-    ld1b            {z10.h}, p0/z, [x2]
-    ld1b            {z11.h}, p0/z, [x2, x11]
-    add             x0, x0, x1
-    add             x2, x2, x3
-    ld1b            {z12.h}, p0/z, [x0]
-    ld1b            {z13.h}, p0/z, [x0, x11]
-    ld1b            {z14.h}, p0/z, [x2]
-    ld1b            {z15.h}, p0/z, [x2, x11]
-    add             x0, x0, x1
-    add             x2, x2, x3
-
     sub             \v0\().h, z0.h, z2.h
     sub             \v4\().h, z1.h, z3.h
     sub             \v1\().h, z4.h, z6.h
     sub             \v5\().h, z5.h, z7.h
-    sub             \v2\().h, z29.h, z10.h
-    sub             \v6\().h, z9.h, z11.h
-    sub             \v3\().h, z12.h, z14.h
-    sub             \v7\().h, z13.h, z15.h
+
+    ld1b            {z0.h}, p0/z, [x0]
+    ld1b            {z1.h}, p0/z, [x0, x11]
+    ld1b            {z2.h}, p0/z, [x2]
+    ld1b            {z3.h}, p0/z, [x2, x11]
+    add             x0, x0, x1
+    add             x2, x2, x3
+    ld1b            {z4.h}, p0/z, [x0]
+    ld1b            {z5.h}, p0/z, [x0, x11]
+    ld1b            {z6.h}, p0/z, [x2]
+    ld1b            {z7.h}, p0/z, [x2, x11]
+    add             x0, x0, x1
+    add             x2, x2, x3
+    sub             \v2\().h, z0.h, z2.h
+    sub             \v6\().h, z1.h, z3.h
+    sub             \v3\().h, z4.h, z6.h
+    sub             \v7\().h, z5.h, z7.h
 .endm
 
 // one vertical hadamard pass and two horizontal
