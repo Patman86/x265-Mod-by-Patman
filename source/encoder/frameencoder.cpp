@@ -2338,8 +2338,8 @@ void FrameEncoder::readModel(FilmGrainCharacteristics* m_filmGrain, FILE* filmgr
 #if ENABLE_LIBVMAF
 void FrameEncoder::vmafFrameLevelScore()
 {
-    PicYuv *fenc = m_frame->m_fencPic;
-    PicYuv *recon = m_frame->m_reconPic[0];
+    PicYuv *fenc = m_frame[0]->m_fencPic;
+    PicYuv *recon = m_frame[0]->m_reconPic[0];
 
     x265_vmaf_framedata *vmafframedata = (x265_vmaf_framedata*)x265_malloc(sizeof(x265_vmaf_framedata));
     if (!vmafframedata)

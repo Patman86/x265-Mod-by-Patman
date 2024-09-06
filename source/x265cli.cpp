@@ -1009,7 +1009,7 @@ namespace X265_NS {
             x265_log(param, X265_LOG_ERROR, "recon file must be specified to get VMAF score, try --help for help\n");
             return true;
         }
-        const char *str = strrchr(info.filename, '.');
+        const char *str = strrchr(info[0].filename, '.');
 
         if (!strcmp(str, ".y4m"))
         {
@@ -1018,8 +1018,8 @@ namespace X265_NS {
         }
         if (param->internalCsp == X265_CSP_I420 || param->internalCsp == X265_CSP_I422 || param->internalCsp == X265_CSP_I444)
         {
-            vmafData->reference_file = x265_fopen(inputfn, "rb");
-            vmafData->distorted_file = x265_fopen(reconfn, "rb");
+            vmafData->reference_file = x265_fopen(inputfn[0], "rb");
+            vmafData->distorted_file = x265_fopen(reconfn[0], "rb");
         }
         else
         {

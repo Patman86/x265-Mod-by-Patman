@@ -173,7 +173,7 @@ struct VPS
     int              scalabilityTypes;
     uint8_t          m_dimensionIdLen[MAX_VPS_NUM_SCALABILITY_TYPES];
     uint8_t          m_dimensionId[MAX_VPS_LAYER_ID_PLUS1][MAX_VPS_NUM_SCALABILITY_TYPES];
-    bool              m_nuhLayerIdPresentFlag;
+    bool             m_nuhLayerIdPresentFlag;
     uint8_t          m_layerIdInNuh[MAX_VPS_LAYER_ID_PLUS1];
     uint8_t          m_layerIdInVps[MAX_VPS_LAYER_ID_PLUS1];
     int              m_viewIdLen;

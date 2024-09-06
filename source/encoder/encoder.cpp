@@ -3670,7 +3670,10 @@ void Encoder::initSPS(SPS *sps)
     }
 #endif
 
-    sps->sps_extension_flag = m_param->bEnableSCC ? true : false;
+#if ENABLE_SCC_EXT
+    if(m_param->bEnableSCC)
+        sps->sps_extension_flag = true;
+#endif
 
 }
 
