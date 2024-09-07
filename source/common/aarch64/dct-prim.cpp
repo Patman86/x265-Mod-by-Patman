@@ -1148,176 +1148,576 @@ static inline void partialButterflyInverse16_neon(const int16_t *src, int16_t *d
     }
 }
 
-
-
-static void partialButterflyInverse32_neon(const int16_t *src, int16_t *orig_dst, int shift, int line)
+template<int shift>
+static inline void partialButterflyInverse32_neon(const int16_t *src, int16_t *dst,
+                                                  intptr_t dstStride)
 {
-#define MUL(x) vmull_s16(vdup_n_s16(g_t32[x][k]),vld1_s16(&src[x*line]));
-#define FMA(x) s = vmlal_s16(s,vdup_n_s16(g_t32[x][k]),vld1_s16(&src[x*line]));
-#define FMAK(x,l) s[l] = vmlal_lane_s16(s[l],vld1_s16(&src[x*line]),vld1_s16(&g_t32[x][k]),l);
-#define MULK(x,l) vmull_lane_s16(vld1_s16(&src[x*line]),vld1_s16(&g_t32[x][k]),l);
-#define ODD31(k) FMAK(3,k);FMAK(5,k);FMAK(7,k);FMAK(9,k);FMAK(11,k);FMAK(13,k);FMAK(15,k);FMAK(17,k);FMAK(19,k);FMAK(21,k);FMAK(23,k);FMAK(25,k);FMAK(27,k);FMAK(29,k);FMAK(31,k);
+    const int line = 32;
 
-#define ODD15(k) FMAK(6,k);FMAK(10,k);FMAK(14,k);FMAK(18,k);FMAK(22,k);FMAK(26,k);FMAK(30,k);
-#define ODD7(k) FMAK(12,k);FMAK(20,k);FMAK(28,k);
-
-
-    int j, k;
-    int32x4_t E[16], O[16];
-    int32x4_t EE[8], EO[8];
-    int32x4_t EEE[4], EEO[4];
-    int32x4_t EEEE[2], EEEO[2];
-    int16x4_t dst[32];
-    int add = 1 << (shift - 1);
-
-X265_PRAGMA_UNROLL(8)
-    for (j = 0; j < line; j += 4)
+    for (int i = 0; i < 8; i++)
     {
-X265_PRAGMA_UNROLL(4)
-        for (k = 0; k < 16; k += 4)
+        int32x4_t EEEE[2];
+        const int16x4_t s0 = vld1_s16(src + 0 * line + 4 * i);
+        const int16x4_t s16 = vld1_s16(src + 16 * line + 4 * i);
+        // Replace multiply by 64 with left shift by 6.
+        EEEE[0] = vshlq_n_s32(vaddl_s16(s0, s16), 6);
+        EEEE[1] = vshlq_n_s32(vsubl_s16(s0, s16), 6);
+
+        int32x4_t EEEO[2];
+        const int16x4_t c8 = vld1_s16(g_t32[8]);
+        const int16x4_t s8 = vld1_s16(src + 8 * line + 4 * i);
+        EEEO[0] = vmull_lane_s16(s8, c8, 0); // 83
+        EEEO[1] = vmull_lane_s16(s8, c8, 1); // 36
+
+        const int16x4_t s24 = vld1_s16(src + 24 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s24), 0) != 0)
         {
-            int32x4_t s[4];
-            s[0] = MULK(1, 0);
-            s[1] = MULK(1, 1);
-            s[2] = MULK(1, 2);
-            s[3] = MULK(1, 3);
-            ODD31(0);
-            ODD31(1);
-            ODD31(2);
-            ODD31(3);
-            O[k] = s[0];
-            O[k + 1] = s[1];
-            O[k + 2] = s[2];
-            O[k + 3] = s[3];
-
-
+            EEEO[0] = vmlal_lane_s16(EEEO[0], s24, c8, 1); //  36
+            EEEO[1] = vmlsl_lane_s16(EEEO[1], s24, c8, 0); // -83
         }
 
-
-X265_PRAGMA_UNROLL(2)
-        for (k = 0; k < 8; k += 4)
+        int32x4_t EEE[4];
+        for (int j = 0; j < 2; j++)
         {
-            int32x4_t s[4];
-            s[0] = MULK(2, 0);
-            s[1] = MULK(2, 1);
-            s[2] = MULK(2, 2);
-            s[3] = MULK(2, 3);
-
-            ODD15(0);
-            ODD15(1);
-            ODD15(2);
-            ODD15(3);
-
-            EO[k] = s[0];
-            EO[k + 1] = s[1];
-            EO[k + 2] = s[2];
-            EO[k + 3] = s[3];
+            EEE[j] = vaddq_s32(EEEE[j], EEEO[j]);
+            EEE[j + 2] = vsubq_s32(EEEE[1 - j], EEEO[1 - j]);
         }
 
+        int32x4_t EEO[4];
+        const int16x4_t c4 = vld1_s16(g_t32[4]);
+        const int16x4_t s4 = vld1_s16(src + 4 * line + 4 * i);
+        EEO[0] = vmull_lane_s16(s4, c4, 0); // 89
+        EEO[1] = vmull_lane_s16(s4, c4, 1); // 75
+        EEO[2] = vmull_lane_s16(s4, c4, 2); // 50
+        EEO[3] = vmull_lane_s16(s4, c4, 3); // 18
 
-        for (k = 0; k < 4; k += 4)
+        const int16x4_t s12 = vld1_s16(src + 12 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s12), 0) != 0)
         {
-            int32x4_t s[4];
-            s[0] = MULK(4, 0);
-            s[1] = MULK(4, 1);
-            s[2] = MULK(4, 2);
-            s[3] = MULK(4, 3);
-
-            ODD7(0);
-            ODD7(1);
-            ODD7(2);
-            ODD7(3);
-
-            EEO[k] = s[0];
-            EEO[k + 1] = s[1];
-            EEO[k + 2] = s[2];
-            EEO[k + 3] = s[3];
+            EEO[0] = vmlal_lane_s16(EEO[0], s12, c4, 1); //  75
+            EEO[1] = vmlsl_lane_s16(EEO[1], s12, c4, 3); // -18
+            EEO[2] = vmlsl_lane_s16(EEO[2], s12, c4, 0); // -89
+            EEO[3] = vmlsl_lane_s16(EEO[3], s12, c4, 2); // -50
         }
 
-X265_PRAGMA_UNROLL(2)
-        for (k = 0; k < 2; k++)
+        const int16x4_t s20 = vld1_s16(src + 20 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s20), 0) != 0)
         {
-            int32x4_t s;
-            s = MUL(8);
-            EEEO[k] = FMA(24);
-            s = MUL(0);
-            EEEE[k] = FMA(16);
-        }
-        /* Combining even and odd terms at each hierarchy levels to calculate the final spatial domain vector */
-        EEE[0] = vaddq_s32(EEEE[0], EEEO[0]);
-        EEE[3] = vsubq_s32(EEEE[0], EEEO[0]);
-        EEE[1] = vaddq_s32(EEEE[1], EEEO[1]);
-        EEE[2] = vsubq_s32(EEEE[1], EEEO[1]);
-
-X265_PRAGMA_UNROLL(4)
-        for (k = 0; k < 4; k++)
-        {
-            EE[k] = vaddq_s32(EEE[k], EEO[k]);
-            EE[k + 4] = vsubq_s32((EEE[3 - k]), (EEO[3 - k]));
+            EEO[0] = vmlal_lane_s16(EEO[0], s20, c4, 2); //  50
+            EEO[1] = vmlsl_lane_s16(EEO[1], s20, c4, 0); // -89
+            EEO[2] = vmlal_lane_s16(EEO[2], s20, c4, 3); //  18
+            EEO[3] = vmlal_lane_s16(EEO[3], s20, c4, 1); //  75
         }
 
-X265_PRAGMA_UNROLL(8)
-        for (k = 0; k < 8; k++)
+        const int16x4_t s28 = vld1_s16(src + 28 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s28), 0) != 0)
         {
-            E[k] = vaddq_s32(EE[k], EO[k]);
-            E[k + 8] = vsubq_s32((EE[7 - k]), (EO[7 - k]));
+            EEO[0] = vmlal_lane_s16(EEO[0], s28, c4, 3); //  18
+            EEO[1] = vmlsl_lane_s16(EEO[1], s28, c4, 2); // -50
+            EEO[2] = vmlal_lane_s16(EEO[2], s28, c4, 1); //  75
+            EEO[3] = vmlsl_lane_s16(EEO[3], s28, c4, 0); // -89
         }
 
-        static const int32x4_t min = vdupq_n_s32(-32768);
-        static const int32x4_t max = vdupq_n_s32(32767);
-
-
-
-X265_PRAGMA_UNROLL(16)
-        for (k = 0; k < 16; k++)
+        int32x4_t EE[8];
+        for (int j = 0; j < 4; j++)
         {
-            int32x4_t adde = vaddq_s32(vdupq_n_s32(add), E[k]);
-            int32x4_t s = vaddq_s32(adde, O[k]);
-            s = vshlq_s32(s, vdupq_n_s32(-shift));
-            s = vmaxq_s32(s, min);
-            s = vminq_s32(s, max);
-
-
-
-            dst[k] = vmovn_s32(s);
-            adde = vaddq_s32(vdupq_n_s32(add), (E[15 - k]));
-            s  = vsubq_s32(adde, (O[15 - k]));
-            s = vshlq_s32(s, vdupq_n_s32(-shift));
-            s = vmaxq_s32(s, min);
-            s = vminq_s32(s, max);
-
-            dst[k + 16] = vmovn_s32(s);
+            EE[j] = vaddq_s32(EEE[j], EEO[j]);
+            EE[j + 4] = vsubq_s32(EEE[3 - j], EEO[3 - j]);
         }
 
+        int32x4_t EO[8];
+        const int16x8_t c2 = vld1q_s16(g_t32[2]);
+        const int16x4_t s2 = vld1_s16(src + 2 * line + 4 * i);
+        EO[0] = vmull_laneq_s16(s2, c2, 0); // 90
+        EO[1] = vmull_laneq_s16(s2, c2, 1); // 87
+        EO[2] = vmull_laneq_s16(s2, c2, 2); // 80
+        EO[3] = vmull_laneq_s16(s2, c2, 3); // 70
+        EO[4] = vmull_laneq_s16(s2, c2, 4); // 57
+        EO[5] = vmull_laneq_s16(s2, c2, 5); // 43
+        EO[6] = vmull_laneq_s16(s2, c2, 6); // 25
+        EO[7] = vmull_laneq_s16(s2, c2, 7); //  9
 
-X265_PRAGMA_UNROLL(8)
-        for (k = 0; k < 32; k += 4)
+        const int16x4_t s6 = vld1_s16(src + 6 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s6), 0) != 0)
         {
-            int16x4_t x0 = dst[k + 0];
-            int16x4_t x1 = dst[k + 1];
-            int16x4_t x2 = dst[k + 2];
-            int16x4_t x3 = dst[k + 3];
-            transpose_4x4_s16(x0, x1, x2, x3);
-            vst1_s16(&orig_dst[0 * 32 + k], x0);
-            vst1_s16(&orig_dst[1 * 32 + k], x1);
-            vst1_s16(&orig_dst[2 * 32 + k], x2);
-            vst1_s16(&orig_dst[3 * 32 + k], x3);
+            EO[0] = vmlal_laneq_s16(EO[0], s6, c2, 1); //  87
+            EO[1] = vmlal_laneq_s16(EO[1], s6, c2, 4); //  57
+            EO[2] = vmlal_laneq_s16(EO[2], s6, c2, 7); //   9
+            EO[3] = vmlsl_laneq_s16(EO[3], s6, c2, 5); // -43
+            EO[4] = vmlsl_laneq_s16(EO[4], s6, c2, 2); // -80
+            EO[5] = vmlsl_laneq_s16(EO[5], s6, c2, 0); // -90
+            EO[6] = vmlsl_laneq_s16(EO[6], s6, c2, 3); // -70
+            EO[7] = vmlsl_laneq_s16(EO[7], s6, c2, 6); // -25
         }
-        orig_dst += 4 * 32;
-        src += 4;
+
+        const int16x4_t s10 = vld1_s16(src + 10 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s10), 0) != 0)
+        {
+            EO[0] = vmlal_laneq_s16(EO[0], s10, c2, 2); //  80
+            EO[1] = vmlal_laneq_s16(EO[1], s10, c2, 7); //   9
+            EO[2] = vmlsl_laneq_s16(EO[2], s10, c2, 3); // -70
+            EO[3] = vmlsl_laneq_s16(EO[3], s10, c2, 1); // -87
+            EO[4] = vmlsl_laneq_s16(EO[4], s10, c2, 6); // -25
+            EO[5] = vmlal_laneq_s16(EO[5], s10, c2, 4); //  57
+            EO[6] = vmlal_laneq_s16(EO[6], s10, c2, 0); //  90
+            EO[7] = vmlal_laneq_s16(EO[7], s10, c2, 5); //  43
+        }
+
+        const int16x4_t s14 = vld1_s16(src + 14 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s14), 0) != 0)
+        {
+            EO[0] = vmlal_laneq_s16(EO[0], s14, c2, 3); //  70
+            EO[1] = vmlsl_laneq_s16(EO[1], s14, c2, 5); // -43
+            EO[2] = vmlsl_laneq_s16(EO[2], s14, c2, 1); // -87
+            EO[3] = vmlal_laneq_s16(EO[3], s14, c2, 7); //   9
+            EO[4] = vmlal_laneq_s16(EO[4], s14, c2, 0); //  90
+            EO[5] = vmlal_laneq_s16(EO[5], s14, c2, 6); //  25
+            EO[6] = vmlsl_laneq_s16(EO[6], s14, c2, 2); // -80
+            EO[7] = vmlsl_laneq_s16(EO[7], s14, c2, 4); // -57
+        }
+
+        const int16x4_t s18 = vld1_s16(src + 18 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s18), 0) != 0)
+        {
+            EO[0] = vmlal_laneq_s16(EO[0], s18, c2, 4); //  57
+            EO[1] = vmlsl_laneq_s16(EO[1], s18, c2, 2); // -80
+            EO[2] = vmlsl_laneq_s16(EO[2], s18, c2, 6); // -25
+            EO[3] = vmlal_laneq_s16(EO[3], s18, c2, 0); //  90
+            EO[4] = vmlsl_laneq_s16(EO[4], s18, c2, 7); //  -9
+            EO[5] = vmlsl_laneq_s16(EO[5], s18, c2, 1); // -87
+            EO[6] = vmlal_laneq_s16(EO[6], s18, c2, 5); //  43
+            EO[7] = vmlal_laneq_s16(EO[7], s18, c2, 3); //  70
+        }
+
+        const int16x4_t s22 = vld1_s16(src + 22 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s22), 0) != 0)
+        {
+            EO[0] = vmlal_laneq_s16(EO[0], s22, c2, 5); //  43
+            EO[1] = vmlsl_laneq_s16(EO[1], s22, c2, 0); // -90
+            EO[2] = vmlal_laneq_s16(EO[2], s22, c2, 4); //  57
+            EO[3] = vmlal_laneq_s16(EO[3], s22, c2, 6); //  25
+            EO[4] = vmlsl_laneq_s16(EO[4], s22, c2, 1); // -87
+            EO[5] = vmlal_laneq_s16(EO[5], s22, c2, 3); //  70
+            EO[6] = vmlal_laneq_s16(EO[6], s22, c2, 7); //   9
+            EO[7] = vmlsl_laneq_s16(EO[7], s22, c2, 2); // -80
+        }
+
+        const int16x4_t s26 = vld1_s16(src + 26 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s26), 0) != 0)
+        {
+            EO[0] = vmlal_laneq_s16(EO[0], s26, c2, 6); //  25
+            EO[1] = vmlsl_laneq_s16(EO[1], s26, c2, 3); // -70
+            EO[2] = vmlal_laneq_s16(EO[2], s26, c2, 0); //  90
+            EO[3] = vmlsl_laneq_s16(EO[3], s26, c2, 2); // -80
+            EO[4] = vmlal_laneq_s16(EO[4], s26, c2, 5); //  43
+            EO[5] = vmlal_laneq_s16(EO[5], s26, c2, 7); //   9
+            EO[6] = vmlsl_laneq_s16(EO[6], s26, c2, 4); // -57
+            EO[7] = vmlal_laneq_s16(EO[7], s26, c2, 1); //  87
+        }
+
+        const int16x4_t s30 = vld1_s16(src + 30 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s30), 0) != 0)
+        {
+            EO[0] = vmlal_laneq_s16(EO[0], s30, c2, 7); //   9
+            EO[1] = vmlsl_laneq_s16(EO[1], s30, c2, 6); // -25
+            EO[2] = vmlal_laneq_s16(EO[2], s30, c2, 5); //  43
+            EO[3] = vmlsl_laneq_s16(EO[3], s30, c2, 4); // -57
+            EO[4] = vmlal_laneq_s16(EO[4], s30, c2, 3); //  70
+            EO[5] = vmlsl_laneq_s16(EO[5], s30, c2, 2); // -80
+            EO[6] = vmlal_laneq_s16(EO[6], s30, c2, 1); //  87
+            EO[7] = vmlsl_laneq_s16(EO[7], s30, c2, 0); // -90
+        }
+
+        int32x4_t E[16];
+        for (int j = 0; j < 8; j++)
+        {
+            E[j] = vaddq_s32(EE[j], EO[j]);
+            E[j + 8] = vsubq_s32(EE[7 - j], EO[7 - j]);
+        }
+
+        int32x4_t O[16];
+        const int16x8_t c1_lo = vld1q_s16(g_t32[1] + 0);
+        const int16x8_t c1_hi = vld1q_s16(g_t32[1] + 8);
+        const int16x4_t s1 = vld1_s16(src + 1 * line + 4 * i);
+        O[0] = vmull_laneq_s16(s1, c1_lo, 0);  // 90
+        O[1] = vmull_laneq_s16(s1, c1_lo, 1);  // 90
+        O[2] = vmull_laneq_s16(s1, c1_lo, 2);  // 88
+        O[3] = vmull_laneq_s16(s1, c1_lo, 3);  // 85
+        O[4] = vmull_laneq_s16(s1, c1_lo, 4);  // 82
+        O[5] = vmull_laneq_s16(s1, c1_lo, 5);  // 78
+        O[6] = vmull_laneq_s16(s1, c1_lo, 6);  // 73
+        O[7] = vmull_laneq_s16(s1, c1_lo, 7);  // 67
+        O[8] = vmull_laneq_s16(s1, c1_hi, 0);  // 61
+        O[9] = vmull_laneq_s16(s1, c1_hi, 1);  // 54
+        O[10] = vmull_laneq_s16(s1, c1_hi, 2); // 46
+        O[11] = vmull_laneq_s16(s1, c1_hi, 3); // 38
+        O[12] = vmull_laneq_s16(s1, c1_hi, 4); // 31
+        O[13] = vmull_laneq_s16(s1, c1_hi, 5); // 22
+        O[14] = vmull_laneq_s16(s1, c1_hi, 6); // 13
+        O[15] = vmull_laneq_s16(s1, c1_hi, 7); //  4
+
+        const int16x4_t s3 = vld1_s16(src + 3 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s3), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s3, c1_lo, 1);   //  90
+            O[1] = vmlal_laneq_s16(O[1], s3, c1_lo, 4);   //  82
+            O[2] = vmlal_laneq_s16(O[2], s3, c1_lo, 7);   //  67
+            O[3] = vmlal_laneq_s16(O[3], s3, c1_hi, 2);   //  46
+            O[4] = vmlal_laneq_s16(O[4], s3, c1_hi, 5);   //  22
+            O[5] = vmlsl_laneq_s16(O[5], s3, c1_hi, 7);   //  -4
+            O[6] = vmlsl_laneq_s16(O[6], s3, c1_hi, 4);   // -31
+            O[7] = vmlsl_laneq_s16(O[7], s3, c1_hi, 1);   // -54
+            O[8] = vmlsl_laneq_s16(O[8], s3, c1_lo, 6);   // -73
+            O[9] = vmlsl_laneq_s16(O[9], s3, c1_lo, 3);   // -85
+            O[10] = vmlsl_laneq_s16(O[10], s3, c1_lo, 0); // -90
+            O[11] = vmlsl_laneq_s16(O[11], s3, c1_lo, 2); // -88
+            O[12] = vmlsl_laneq_s16(O[12], s3, c1_lo, 5); // -78
+            O[13] = vmlsl_laneq_s16(O[13], s3, c1_hi, 0); // -61
+            O[14] = vmlsl_laneq_s16(O[14], s3, c1_hi, 3); // -38
+            O[15] = vmlsl_laneq_s16(O[15], s3, c1_hi, 6); // -13
+        }
+
+        const int16x4_t s5 = vld1_s16(src + 5 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s5), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s5, c1_lo, 2);   //  88
+            O[1] = vmlal_laneq_s16(O[1], s5, c1_lo, 7);   //  67
+            O[2] = vmlal_laneq_s16(O[2], s5, c1_hi, 4);   //  31
+            O[3] = vmlsl_laneq_s16(O[3], s5, c1_hi, 6);   // -13
+            O[4] = vmlsl_laneq_s16(O[4], s5, c1_hi, 1);   // -54
+            O[5] = vmlsl_laneq_s16(O[5], s5, c1_lo, 4);   // -82
+            O[6] = vmlsl_laneq_s16(O[6], s5, c1_lo, 0);   // -90
+            O[7] = vmlsl_laneq_s16(O[7], s5, c1_lo, 5);   // -78
+            O[8] = vmlsl_laneq_s16(O[8], s5, c1_hi, 2);   // -46
+            O[9] = vmlsl_laneq_s16(O[9], s5, c1_hi, 7);   //  -4
+            O[10] = vmlal_laneq_s16(O[10], s5, c1_hi, 3); //  38
+            O[11] = vmlal_laneq_s16(O[11], s5, c1_lo, 6); //  73
+            O[12] = vmlal_laneq_s16(O[12], s5, c1_lo, 1); //  90
+            O[13] = vmlal_laneq_s16(O[13], s5, c1_lo, 3); //  85
+            O[14] = vmlal_laneq_s16(O[14], s5, c1_hi, 0); //  61
+            O[15] = vmlal_laneq_s16(O[15], s5, c1_hi, 5); //  22
+        }
+
+        const int16x4_t s7 = vld1_s16(src + 7 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s7), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s7, c1_lo, 3);   //  85
+            O[1] = vmlal_laneq_s16(O[1], s7, c1_hi, 2);   //  46
+            O[2] = vmlsl_laneq_s16(O[2], s7, c1_hi, 6);   // -13
+            O[3] = vmlsl_laneq_s16(O[3], s7, c1_lo, 7);   // -67
+            O[4] = vmlsl_laneq_s16(O[4], s7, c1_lo, 0);   // -90
+            O[5] = vmlsl_laneq_s16(O[5], s7, c1_lo, 6);   // -73
+            O[6] = vmlsl_laneq_s16(O[6], s7, c1_hi, 5);   // -22
+            O[7] = vmlal_laneq_s16(O[7], s7, c1_hi, 3);   //  38
+            O[8] = vmlal_laneq_s16(O[8], s7, c1_lo, 4);   //  82
+            O[9] = vmlal_laneq_s16(O[9], s7, c1_lo, 2);   //  88
+            O[10] = vmlal_laneq_s16(O[10], s7, c1_hi, 1); //  54
+            O[11] = vmlsl_laneq_s16(O[11], s7, c1_hi, 7); //  -4
+            O[12] = vmlsl_laneq_s16(O[12], s7, c1_hi, 0); // -61
+            O[13] = vmlsl_laneq_s16(O[13], s7, c1_lo, 1); // -90
+            O[14] = vmlsl_laneq_s16(O[14], s7, c1_lo, 5); // -78
+            O[15] = vmlsl_laneq_s16(O[15], s7, c1_hi, 4); // -31
+        }
+
+        const int16x4_t s9 = vld1_s16(src + 9 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s9), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s9, c1_lo, 4);   //  82
+            O[1] = vmlal_laneq_s16(O[1], s9, c1_hi, 5);   //  22
+            O[2] = vmlsl_laneq_s16(O[2], s9, c1_hi, 1);   // -54
+            O[3] = vmlsl_laneq_s16(O[3], s9, c1_lo, 0);   // -90
+            O[4] = vmlsl_laneq_s16(O[4], s9, c1_hi, 0);   // -61
+            O[5] = vmlal_laneq_s16(O[5], s9, c1_hi, 6);   //  13
+            O[6] = vmlal_laneq_s16(O[6], s9, c1_lo, 5);   //  78
+            O[7] = vmlal_laneq_s16(O[7], s9, c1_lo, 3);   //  85
+            O[8] = vmlal_laneq_s16(O[8], s9, c1_hi, 4);   //  31
+            O[9] = vmlsl_laneq_s16(O[9], s9, c1_hi, 2);   // -46
+            O[10] = vmlsl_laneq_s16(O[10], s9, c1_lo, 1); // -90
+            O[11] = vmlsl_laneq_s16(O[11], s9, c1_lo, 7); // -67
+            O[12] = vmlal_laneq_s16(O[12], s9, c1_hi, 7); //   4
+            O[13] = vmlal_laneq_s16(O[13], s9, c1_lo, 6); //  73
+            O[14] = vmlal_laneq_s16(O[14], s9, c1_lo, 2); //  88
+            O[15] = vmlal_laneq_s16(O[15], s9, c1_hi, 3); //  38
+        }
+
+        const int16x4_t s11 = vld1_s16(src + 11 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s11), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s11, c1_lo, 5);   //  78
+            O[1] = vmlsl_laneq_s16(O[1], s11, c1_hi, 7);   //  -4
+            O[2] = vmlsl_laneq_s16(O[2], s11, c1_lo, 4);   // -82
+            O[3] = vmlsl_laneq_s16(O[3], s11, c1_lo, 6);   // -73
+            O[4] = vmlal_laneq_s16(O[4], s11, c1_hi, 6);   //  13
+            O[5] = vmlal_laneq_s16(O[5], s11, c1_lo, 3);   //  85
+            O[6] = vmlal_laneq_s16(O[6], s11, c1_lo, 7);   //  67
+            O[7] = vmlsl_laneq_s16(O[7], s11, c1_hi, 5);   // -22
+            O[8] = vmlsl_laneq_s16(O[8], s11, c1_lo, 2);   // -88
+            O[9] = vmlsl_laneq_s16(O[9], s11, c1_hi, 0);   // -61
+            O[10] = vmlal_laneq_s16(O[10], s11, c1_hi, 4); //  31
+            O[11] = vmlal_laneq_s16(O[11], s11, c1_lo, 1); //  90
+            O[12] = vmlal_laneq_s16(O[12], s11, c1_hi, 1); //  54
+            O[13] = vmlsl_laneq_s16(O[13], s11, c1_hi, 3); // -38
+            O[14] = vmlsl_laneq_s16(O[14], s11, c1_lo, 0); // -90
+            O[15] = vmlsl_laneq_s16(O[15], s11, c1_hi, 2); // -46
+        }
+
+        const int16x4_t s13 = vld1_s16(src + 13 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s13), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s13, c1_lo, 6);   //  73
+            O[1] = vmlsl_laneq_s16(O[1], s13, c1_hi, 4);   // -31
+            O[2] = vmlsl_laneq_s16(O[2], s13, c1_lo, 0);   // -90
+            O[3] = vmlsl_laneq_s16(O[3], s13, c1_hi, 5);   // -22
+            O[4] = vmlal_laneq_s16(O[4], s13, c1_lo, 5);   //  78
+            O[5] = vmlal_laneq_s16(O[5], s13, c1_lo, 7);   //  67
+            O[6] = vmlsl_laneq_s16(O[6], s13, c1_hi, 3);   // -38
+            O[7] = vmlsl_laneq_s16(O[7], s13, c1_lo, 1);   // -90
+            O[8] = vmlsl_laneq_s16(O[8], s13, c1_hi, 6);   // -13
+            O[9] = vmlal_laneq_s16(O[9], s13, c1_lo, 4);   //  82
+            O[10] = vmlal_laneq_s16(O[10], s13, c1_hi, 0); //  61
+            O[11] = vmlsl_laneq_s16(O[11], s13, c1_hi, 2); // -46
+            O[12] = vmlsl_laneq_s16(O[12], s13, c1_lo, 2); // -88
+            O[13] = vmlsl_laneq_s16(O[13], s13, c1_hi, 7); //  -4
+            O[14] = vmlal_laneq_s16(O[14], s13, c1_lo, 3); //  85
+            O[15] = vmlal_laneq_s16(O[15], s13, c1_hi, 1); //  54
+        }
+
+        const int16x4_t s15 = vld1_s16(src + 15 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s15), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s15, c1_lo, 7);   //  67
+            O[1] = vmlsl_laneq_s16(O[1], s15, c1_hi, 1);   // -54
+            O[2] = vmlsl_laneq_s16(O[2], s15, c1_lo, 5);   // -78
+            O[3] = vmlal_laneq_s16(O[3], s15, c1_hi, 3);   //  38
+            O[4] = vmlal_laneq_s16(O[4], s15, c1_lo, 3);   //  85
+            O[5] = vmlsl_laneq_s16(O[5], s15, c1_hi, 5);   // -22
+            O[6] = vmlsl_laneq_s16(O[6], s15, c1_lo, 1);   // -90
+            O[7] = vmlal_laneq_s16(O[7], s15, c1_hi, 7);   //   4
+            O[8] = vmlal_laneq_s16(O[8], s15, c1_lo, 0);   //  90
+            O[9] = vmlal_laneq_s16(O[9], s15, c1_hi, 6);   //  13
+            O[10] = vmlsl_laneq_s16(O[10], s15, c1_lo, 2); // -88
+            O[11] = vmlsl_laneq_s16(O[11], s15, c1_hi, 4); // -31
+            O[12] = vmlal_laneq_s16(O[12], s15, c1_lo, 4); //  82
+            O[13] = vmlal_laneq_s16(O[13], s15, c1_hi, 2); //  46
+            O[14] = vmlsl_laneq_s16(O[14], s15, c1_lo, 6); // -73
+            O[15] = vmlsl_laneq_s16(O[15], s15, c1_hi, 0); // -61
+        }
+
+        const int16x4_t s17 = vld1_s16(src + 17 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s17), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s17, c1_hi, 0);   //  61
+            O[1] = vmlsl_laneq_s16(O[1], s17, c1_lo, 6);   // -73
+            O[2] = vmlsl_laneq_s16(O[2], s17, c1_hi, 2);   // -46
+            O[3] = vmlal_laneq_s16(O[3], s17, c1_lo, 4);   //  82
+            O[4] = vmlal_laneq_s16(O[4], s17, c1_hi, 4);   //  31
+            O[5] = vmlsl_laneq_s16(O[5], s17, c1_lo, 2);   // -88
+            O[6] = vmlsl_laneq_s16(O[6], s17, c1_hi, 6);   // -13
+            O[7] = vmlal_laneq_s16(O[7], s17, c1_lo, 0);   //  90
+            O[8] = vmlsl_laneq_s16(O[8], s17, c1_hi, 7);   //  -4
+            O[9] = vmlsl_laneq_s16(O[9], s17, c1_lo, 1);   // -90
+            O[10] = vmlal_laneq_s16(O[10], s17, c1_hi, 5); //  22
+            O[11] = vmlal_laneq_s16(O[11], s17, c1_lo, 3); //  85
+            O[12] = vmlsl_laneq_s16(O[12], s17, c1_hi, 3); // -38
+            O[13] = vmlsl_laneq_s16(O[13], s17, c1_lo, 5); // -78
+            O[14] = vmlal_laneq_s16(O[14], s17, c1_hi, 1); //  54
+            O[15] = vmlal_laneq_s16(O[15], s17, c1_lo, 7); //  67
+        }
+
+        const int16x4_t s19 = vld1_s16(src + 19 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s19), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s19, c1_hi, 1);   //  54
+            O[1] = vmlsl_laneq_s16(O[1], s19, c1_lo, 3);   // -85
+            O[2] = vmlsl_laneq_s16(O[2], s19, c1_hi, 7);   //  -4
+            O[3] = vmlal_laneq_s16(O[3], s19, c1_lo, 2);   //  88
+            O[4] = vmlsl_laneq_s16(O[4], s19, c1_hi, 2);   // -46
+            O[5] = vmlsl_laneq_s16(O[5], s19, c1_hi, 0);   // -61
+            O[6] = vmlal_laneq_s16(O[6], s19, c1_lo, 4);   //  82
+            O[7] = vmlal_laneq_s16(O[7], s19, c1_hi, 6);   //  13
+            O[8] = vmlsl_laneq_s16(O[8], s19, c1_lo, 1);   // -90
+            O[9] = vmlal_laneq_s16(O[9], s19, c1_hi, 3);   //  38
+            O[10] = vmlal_laneq_s16(O[10], s19, c1_lo, 7); //  67
+            O[11] = vmlsl_laneq_s16(O[11], s19, c1_lo, 5); // -78
+            O[12] = vmlsl_laneq_s16(O[12], s19, c1_hi, 5); // -22
+            O[13] = vmlal_laneq_s16(O[13], s19, c1_lo, 0); //  90
+            O[14] = vmlsl_laneq_s16(O[14], s19, c1_hi, 4); // -31
+            O[15] = vmlsl_laneq_s16(O[15], s19, c1_lo, 6); // -73
+        }
+
+        const int16x4_t s21 = vld1_s16(src + 21 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s21), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s21, c1_hi, 2);   //  46
+            O[1] = vmlsl_laneq_s16(O[1], s21, c1_lo, 0);   // -90
+            O[2] = vmlal_laneq_s16(O[2], s21, c1_hi, 3);   //  38
+            O[3] = vmlal_laneq_s16(O[3], s21, c1_hi, 1);   //  54
+            O[4] = vmlsl_laneq_s16(O[4], s21, c1_lo, 1);   // -90
+            O[5] = vmlal_laneq_s16(O[5], s21, c1_hi, 4);   //  31
+            O[6] = vmlal_laneq_s16(O[6], s21, c1_hi, 0);   //  61
+            O[7] = vmlsl_laneq_s16(O[7], s21, c1_lo, 2);   // -88
+            O[8] = vmlal_laneq_s16(O[8], s21, c1_hi, 5);   //  22
+            O[9] = vmlal_laneq_s16(O[9], s21, c1_lo, 7);   //  67
+            O[10] = vmlsl_laneq_s16(O[10], s21, c1_lo, 3); // -85
+            O[11] = vmlal_laneq_s16(O[11], s21, c1_hi, 6); //  13
+            O[12] = vmlal_laneq_s16(O[12], s21, c1_lo, 6); //  73
+            O[13] = vmlsl_laneq_s16(O[13], s21, c1_lo, 4); // -82
+            O[14] = vmlal_laneq_s16(O[14], s21, c1_hi, 7); //   4
+            O[15] = vmlal_laneq_s16(O[15], s21, c1_lo, 5); //  78
+        }
+
+        const int16x4_t s23 = vld1_s16(src + 23 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s23), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s23, c1_hi, 3);   //  38
+            O[1] = vmlsl_laneq_s16(O[1], s23, c1_lo, 2);   // -88
+            O[2] = vmlal_laneq_s16(O[2], s23, c1_lo, 6);   //  73
+            O[3] = vmlsl_laneq_s16(O[3], s23, c1_hi, 7);   //  -4
+            O[4] = vmlsl_laneq_s16(O[4], s23, c1_lo, 7);   // -67
+            O[5] = vmlal_laneq_s16(O[5], s23, c1_lo, 1);   //  90
+            O[6] = vmlsl_laneq_s16(O[6], s23, c1_hi, 2);   // -46
+            O[7] = vmlsl_laneq_s16(O[7], s23, c1_hi, 4);   // -31
+            O[8] = vmlal_laneq_s16(O[8], s23, c1_lo, 3);   //  85
+            O[9] = vmlsl_laneq_s16(O[9], s23, c1_lo, 5);   // -78
+            O[10] = vmlal_laneq_s16(O[10], s23, c1_hi, 6); //  13
+            O[11] = vmlal_laneq_s16(O[11], s23, c1_hi, 0); //  61
+            O[12] = vmlsl_laneq_s16(O[12], s23, c1_lo, 0); // -90
+            O[13] = vmlal_laneq_s16(O[13], s23, c1_hi, 1); //  54
+            O[14] = vmlal_laneq_s16(O[14], s23, c1_hi, 5); //  22
+            O[15] = vmlsl_laneq_s16(O[15], s23, c1_lo, 4); // -82
+        }
+
+        const int16x4_t s25 = vld1_s16(src + 25 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s25), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s25, c1_hi, 4);   //  31
+            O[1] = vmlsl_laneq_s16(O[1], s25, c1_lo, 5);   // -78
+            O[2] = vmlal_laneq_s16(O[2], s25, c1_lo, 1);   //  90
+            O[3] = vmlsl_laneq_s16(O[3], s25, c1_hi, 0);   // -61
+            O[4] = vmlal_laneq_s16(O[4], s25, c1_hi, 7);   //   4
+            O[5] = vmlal_laneq_s16(O[5], s25, c1_hi, 1);   //  54
+            O[6] = vmlsl_laneq_s16(O[6], s25, c1_lo, 2);   // -88
+            O[7] = vmlal_laneq_s16(O[7], s25, c1_lo, 4);   //  82
+            O[8] = vmlsl_laneq_s16(O[8], s25, c1_hi, 3);   // -38
+            O[9] = vmlsl_laneq_s16(O[9], s25, c1_hi, 5);   // -22
+            O[10] = vmlal_laneq_s16(O[10], s25, c1_lo, 6); //  73
+            O[11] = vmlsl_laneq_s16(O[11], s25, c1_lo, 0); // -90
+            O[12] = vmlal_laneq_s16(O[12], s25, c1_lo, 7); //  67
+            O[13] = vmlsl_laneq_s16(O[13], s25, c1_hi, 6); // -13
+            O[14] = vmlsl_laneq_s16(O[14], s25, c1_hi, 2); // -46
+            O[15] = vmlal_laneq_s16(O[15], s25, c1_lo, 3); //  85
+        }
+
+        const int16x4_t s27 = vld1_s16(src + 27 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s27), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s27, c1_hi, 5);   //  22
+            O[1] = vmlsl_laneq_s16(O[1], s27, c1_hi, 0);   // -61
+            O[2] = vmlal_laneq_s16(O[2], s27, c1_lo, 3);   //  85
+            O[3] = vmlsl_laneq_s16(O[3], s27, c1_lo, 1);   // -90
+            O[4] = vmlal_laneq_s16(O[4], s27, c1_lo, 6);   //  73
+            O[5] = vmlsl_laneq_s16(O[5], s27, c1_hi, 3);   // -38
+            O[6] = vmlsl_laneq_s16(O[6], s27, c1_hi, 7);   //  -4
+            O[7] = vmlal_laneq_s16(O[7], s27, c1_hi, 2);   //  46
+            O[8] = vmlsl_laneq_s16(O[8], s27, c1_lo, 5);   // -78
+            O[9] = vmlal_laneq_s16(O[9], s27, c1_lo, 0);   //  90
+            O[10] = vmlsl_laneq_s16(O[10], s27, c1_lo, 4); // -82
+            O[11] = vmlal_laneq_s16(O[11], s27, c1_hi, 1); //  54
+            O[12] = vmlsl_laneq_s16(O[12], s27, c1_hi, 6); // -13
+            O[13] = vmlsl_laneq_s16(O[13], s27, c1_hi, 4); // -31
+            O[14] = vmlal_laneq_s16(O[14], s27, c1_lo, 7); //  67
+            O[15] = vmlsl_laneq_s16(O[15], s27, c1_lo, 2); // -88
+        }
+
+        const int16x4_t s29 = vld1_s16(src + 29 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s29), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s29, c1_hi, 6);   //  13
+            O[1] = vmlsl_laneq_s16(O[1], s29, c1_hi, 3);   // -38
+            O[2] = vmlal_laneq_s16(O[2], s29, c1_hi, 0);   //  61
+            O[3] = vmlsl_laneq_s16(O[3], s29, c1_lo, 5);   // -78
+            O[4] = vmlal_laneq_s16(O[4], s29, c1_lo, 2);   //  88
+            O[5] = vmlsl_laneq_s16(O[5], s29, c1_lo, 0);   // -90
+            O[6] = vmlal_laneq_s16(O[6], s29, c1_lo, 3);   //  85
+            O[7] = vmlsl_laneq_s16(O[7], s29, c1_lo, 6);   // -73
+            O[8] = vmlal_laneq_s16(O[8], s29, c1_hi, 1);   //  54
+            O[9] = vmlsl_laneq_s16(O[9], s29, c1_hi, 4);   // -31
+            O[10] = vmlal_laneq_s16(O[10], s29, c1_hi, 7); //   4
+            O[11] = vmlal_laneq_s16(O[11], s29, c1_hi, 5); //  22
+            O[12] = vmlsl_laneq_s16(O[12], s29, c1_hi, 2); // -46
+            O[13] = vmlal_laneq_s16(O[13], s29, c1_lo, 7); //  67
+            O[14] = vmlsl_laneq_s16(O[14], s29, c1_lo, 4); // -82
+            O[15] = vmlal_laneq_s16(O[15], s29, c1_lo, 1); //  90
+        }
+
+        const int16x4_t s31 = vld1_s16(src + 31 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s31), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s31, c1_hi, 7);   //   4
+            O[1] = vmlsl_laneq_s16(O[1], s31, c1_hi, 6);   // -13
+            O[2] = vmlal_laneq_s16(O[2], s31, c1_hi, 5);   //  22
+            O[3] = vmlsl_laneq_s16(O[3], s31, c1_hi, 4);   // -31
+            O[4] = vmlal_laneq_s16(O[4], s31, c1_hi, 3);   //  38
+            O[5] = vmlsl_laneq_s16(O[5], s31, c1_hi, 2);   // -46
+            O[6] = vmlal_laneq_s16(O[6], s31, c1_hi, 1);   //  54
+            O[7] = vmlsl_laneq_s16(O[7], s31, c1_hi, 0);   // -61
+            O[8] = vmlal_laneq_s16(O[8], s31, c1_lo, 7);   //  67
+            O[9] = vmlsl_laneq_s16(O[9], s31, c1_lo, 6);   // -73
+            O[10] = vmlal_laneq_s16(O[10], s31, c1_lo, 5); //  78
+            O[11] = vmlsl_laneq_s16(O[11], s31, c1_lo, 4); // -82
+            O[12] = vmlal_laneq_s16(O[12], s31, c1_lo, 3); //  85
+            O[13] = vmlsl_laneq_s16(O[13], s31, c1_lo, 2); // -88
+            O[14] = vmlal_laneq_s16(O[14], s31, c1_lo, 1); //  90
+            O[15] = vmlsl_laneq_s16(O[15], s31, c1_lo, 0); // -90
+        }
+
+        int16x4_t d_lo[16];
+        int16x4_t d_hi[16];
+        for (int j = 0; j < 16; j++)
+        {
+            int32x4_t t_lo = vaddq_s32(E[j], O[j]);
+            d_lo[j] = vqrshrn_n_s32(t_lo, shift);
+
+            int32x4_t t_hi = vsubq_s32(E[15 - j], O[15 - j]);
+            d_hi[j] = vqrshrn_n_s32(t_hi, shift);
+        }
+
+        int16x8_t d0[4];
+        int16x8_t d1[4];
+        int16x8_t d2[4];
+        int16x8_t d3[4];
+        transpose_4x8_s16(d_lo[0], d_lo[1], d_lo[2], d_lo[3], d_lo[4], d_lo[5], d_lo[6], d_lo[7],
+                          d0[0], d1[0], d2[0], d3[0]);
+        transpose_4x8_s16(d_lo[8], d_lo[9], d_lo[10], d_lo[11], d_lo[12], d_lo[13], d_lo[14], d_lo[15],
+                          d0[1], d1[1], d2[1], d3[1]);
+        transpose_4x8_s16(d_hi[0], d_hi[1], d_hi[2], d_hi[3], d_hi[4], d_hi[5], d_hi[6], d_hi[7],
+                          d0[2], d1[2], d2[2], d3[2]);
+        transpose_4x8_s16(d_hi[8], d_hi[9], d_hi[10], d_hi[11], d_hi[12], d_hi[13], d_hi[14], d_hi[15],
+                          d0[3], d1[3], d2[3], d3[3]);
+
+        vst1q_s16(dst + (4 * i + 0) * dstStride + 8 * 0, d0[0]);
+        vst1q_s16(dst + (4 * i + 0) * dstStride + 8 * 1, d0[1]);
+        vst1q_s16(dst + (4 * i + 0) * dstStride + 8 * 2, d0[2]);
+        vst1q_s16(dst + (4 * i + 0) * dstStride + 8 * 3, d0[3]);
+
+        vst1q_s16(dst + (4 * i + 1) * dstStride + 8 * 0, d1[0]);
+        vst1q_s16(dst + (4 * i + 1) * dstStride + 8 * 1, d1[1]);
+        vst1q_s16(dst + (4 * i + 1) * dstStride + 8 * 2, d1[2]);
+        vst1q_s16(dst + (4 * i + 1) * dstStride + 8 * 3, d1[3]);
+
+        vst1q_s16(dst + (4 * i + 2) * dstStride + 8 * 0, d2[0]);
+        vst1q_s16(dst + (4 * i + 2) * dstStride + 8 * 1, d2[1]);
+        vst1q_s16(dst + (4 * i + 2) * dstStride + 8 * 2, d2[2]);
+        vst1q_s16(dst + (4 * i + 2) * dstStride + 8 * 3, d2[3]);
+
+        vst1q_s16(dst + (4 * i + 3) * dstStride + 8 * 0, d3[0]);
+        vst1q_s16(dst + (4 * i + 3) * dstStride + 8 * 1, d3[1]);
+        vst1q_s16(dst + (4 * i + 3) * dstStride + 8 * 2, d3[2]);
+        vst1q_s16(dst + (4 * i + 3) * dstStride + 8 * 3, d3[3]);
     }
-#undef MUL
-#undef FMA
-#undef FMAK
-#undef MULK
-#undef ODD31
-#undef ODD15
-#undef ODD7
-
 }
 
-
-}
+} // namespace
 
 namespace X265_NS
 {
@@ -1453,19 +1853,13 @@ void idct16_neon(const int16_t *src, int16_t *dst, intptr_t dstStride)
 
 void idct32_neon(const int16_t *src, int16_t *dst, intptr_t dstStride)
 {
-    const int shift_1st = 7;
-    const int shift_2nd = 12 - (X265_DEPTH - 8);
+    const int shift_pass1 = 7;
+    const int shift_pass2 = 12 - (X265_DEPTH - 8);
 
     ALIGN_VAR_32(int16_t, coef[32 * 32]);
-    ALIGN_VAR_32(int16_t, block[32 * 32]);
 
-    partialButterflyInverse32_neon(src, coef, shift_1st, 32);
-    partialButterflyInverse32_neon(coef, block, shift_2nd, 32);
-
-    for (int i = 0; i < 32; i++)
-    {
-        memcpy(&dst[i * dstStride], &block[i * 32], 32 * sizeof(int16_t));
-    }
+    partialButterflyInverse32_neon<shift_pass1>(src, coef, 32);
+    partialButterflyInverse32_neon<shift_pass2>(coef, dst, dstStride);
 }
 
 void setupDCTPrimitives_neon(EncoderPrimitives &p)
