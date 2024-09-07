@@ -936,182 +936,216 @@ static inline void partialButterflyInverse8_neon(const int16_t *src, int16_t *ds
     vst1q_s16(dst + 7 * dstStride, d7);
 }
 
-static void partialButterflyInverse16_neon(const int16_t *src, int16_t *orig_dst, int shift, int line)
+template<int shift>
+static inline void partialButterflyInverse16_neon(const int16_t *src, int16_t *dst,
+                                                  intptr_t dstStride)
 {
-#define FMAK(x,l) s[l] = vmlal_lane_s16(s[l],vld1_s16(&src[x*line]),vld1_s16(&g_t16[x][k]),l);
-#define MULK(x,l) vmull_lane_s16(vld1_s16(&src[x*line]),vld1_s16(&g_t16[x][k]),l);
-#define ODD3_15(k) FMAK(3,k);FMAK(5,k);FMAK(7,k);FMAK(9,k);FMAK(11,k);FMAK(13,k);FMAK(15,k);
-#define EVEN6_14_STEP4(k) FMAK(6,k);FMAK(10,k);FMAK(14,k);
+    const int line = 16;
 
-
-    int j, k;
-    int32x4_t E[8], O[8];
-    int32x4_t EE[4], EO[4];
-    int32x4_t EEE[2], EEO[2];
-    const int add = 1 << (shift - 1);
-
-
-X265_PRAGMA_UNROLL(4)
-    for (j = 0; j < line; j += 4)
+    for (int i = 0; i < 4; i++)
     {
-        /* Utilizing symmetry properties to the maximum to minimize the number of multiplications */
+        int32x4_t EEE[2];
+        const int16x4_t s0 = vld1_s16(src + 0 * line + 4 * i);
+        const int16x4_t s8 = vld1_s16(src + 8 * line + 4 * i);
+        // Replace multiply by 64 with left shift by 6.
+        EEE[0] = vshlq_n_s32(vaddl_s16(s0, s8), 6);
+        EEE[1] = vshlq_n_s32(vsubl_s16(s0, s8), 6);
 
-X265_PRAGMA_UNROLL(2)
-        for (k = 0; k < 2; k++)
+        int32x4_t EEO[2];
+        const int16x4_t c4_even = vld1_s16(g_t16[4]);
+        const int16x4_t s4 = vld1_s16(src + 4 * line + 4 * i);
+        EEO[0] = vmull_lane_s16(s4, c4_even, 0); // 83
+        EEO[1] = vmull_lane_s16(s4, c4_even, 1); // 36
+
+        const int16x4_t s12 = vld1_s16(src + 12 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s12), 0) != 0)
         {
-            int32x4_t s;
-            s = vmull_s16(vdup_n_s16(g_t16[4][k]), vld1_s16(&src[4 * line]));
-            EEO[k] = vmlal_s16(s, vdup_n_s16(g_t16[12][k]),
-                               vld1_s16(&src[12 * line]));
-            s = vmull_s16(vdup_n_s16(g_t16[0][k]), vld1_s16(&src[0 * line]));
-            EEE[k] = vmlal_s16(s, vdup_n_s16(g_t16[8][k]),
-                               vld1_s16(&src[8 * line]));
+            EEO[0] = vmlal_lane_s16(EEO[0], s12, c4_even, 1); //  36
+            EEO[1] = vmlsl_lane_s16(EEO[1], s12, c4_even, 0); // -83
         }
 
-        /* Combining even and odd terms at each hierarchy levels to calculate the final spatial domain vector */
-        EE[0] = vaddq_s32(EEE[0] , EEO[0]);
-        EE[2] = vsubq_s32(EEE[1] , EEO[1]);
-        EE[1] = vaddq_s32(EEE[1] , EEO[1]);
-        EE[3] = vsubq_s32(EEE[0] , EEO[0]);
-
-
-X265_PRAGMA_UNROLL(1)
-        for (k = 0; k < 4; k += 4)
+        int32x4_t EE[4];
+        for (int j = 0; j < 2; j++)
         {
-            int32x4_t s[4];
-            s[0] = MULK(2, 0);
-            s[1] = MULK(2, 1);
-            s[2] = MULK(2, 2);
-            s[3] = MULK(2, 3);
-
-            EVEN6_14_STEP4(0);
-            EVEN6_14_STEP4(1);
-            EVEN6_14_STEP4(2);
-            EVEN6_14_STEP4(3);
-
-            EO[k] = s[0];
-            EO[k + 1] = s[1];
-            EO[k + 2] = s[2];
-            EO[k + 3] = s[3];
+            EE[j] = vaddq_s32(EEE[j], EEO[j]);
+            EE[j + 2] = vsubq_s32(EEE[1 - j], EEO[1 - j]);
         }
 
+        int32x4_t EO[4];
+        const int16x4_t c2_even = vld1_s16(g_t16[2]);
+        const int16x4_t s2 = vld1_s16(src + 2 * line + 4 * i);
+        EO[0] = vmull_lane_s16(s2, c2_even, 0); // 89
+        EO[1] = vmull_lane_s16(s2, c2_even, 1); // 75
+        EO[2] = vmull_lane_s16(s2, c2_even, 2); // 50
+        EO[3] = vmull_lane_s16(s2, c2_even, 3); // 18
 
-
-        static const int32x4_t min = vdupq_n_s32(-32768);
-        static const int32x4_t max = vdupq_n_s32(32767);
-        const int32x4_t minus_shift = vdupq_n_s32(-shift);
-
-X265_PRAGMA_UNROLL(4)
-        for (k = 0; k < 4; k++)
+        const int16x4_t s6 = vld1_s16(src + 6 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s6), 0) != 0)
         {
-            E[k] = vaddq_s32(EE[k] , EO[k]);
-            E[k + 4] = vsubq_s32(EE[3 - k] , EO[3 - k]);
+            EO[0] = vmlal_lane_s16(EO[0], s6, c2_even, 1); //  75
+            EO[1] = vmlsl_lane_s16(EO[1], s6, c2_even, 3); // -18
+            EO[2] = vmlsl_lane_s16(EO[2], s6, c2_even, 0); // -89
+            EO[3] = vmlsl_lane_s16(EO[3], s6, c2_even, 2); // -50
         }
 
-X265_PRAGMA_UNROLL(2)
-        for (k = 0; k < 8; k += 4)
+        const int16x4_t s10 = vld1_s16(src + 10 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s10), 0) != 0)
         {
-            int32x4_t s[4];
-            s[0] = MULK(1, 0);
-            s[1] = MULK(1, 1);
-            s[2] = MULK(1, 2);
-            s[3] = MULK(1, 3);
-            ODD3_15(0);
-            ODD3_15(1);
-            ODD3_15(2);
-            ODD3_15(3);
-            O[k] = s[0];
-            O[k + 1] = s[1];
-            O[k + 2] = s[2];
-            O[k + 3] = s[3];
-            int32x4_t t;
-            int16x4_t x0, x1, x2, x3;
-
-            E[k] = vaddq_s32(vdupq_n_s32(add), E[k]);
-            t = vaddq_s32(E[k], O[k]);
-            t = vshlq_s32(t, minus_shift);
-            t = vmaxq_s32(t, min);
-            t = vminq_s32(t, max);
-            x0 = vmovn_s32(t);
-
-            E[k + 1] = vaddq_s32(vdupq_n_s32(add), E[k + 1]);
-            t = vaddq_s32(E[k + 1], O[k + 1]);
-            t = vshlq_s32(t, minus_shift);
-            t = vmaxq_s32(t, min);
-            t = vminq_s32(t, max);
-            x1 = vmovn_s32(t);
-
-            E[k + 2] = vaddq_s32(vdupq_n_s32(add), E[k + 2]);
-            t = vaddq_s32(E[k + 2], O[k + 2]);
-            t = vshlq_s32(t, minus_shift);
-            t = vmaxq_s32(t, min);
-            t = vminq_s32(t, max);
-            x2 = vmovn_s32(t);
-
-            E[k + 3] = vaddq_s32(vdupq_n_s32(add), E[k + 3]);
-            t = vaddq_s32(E[k + 3], O[k + 3]);
-            t = vshlq_s32(t, minus_shift);
-            t = vmaxq_s32(t, min);
-            t = vminq_s32(t, max);
-            x3 = vmovn_s32(t);
-
-            transpose_4x4_s16(x0, x1, x2, x3);
-            vst1_s16(&orig_dst[0 * 16 + k], x0);
-            vst1_s16(&orig_dst[1 * 16 + k], x1);
-            vst1_s16(&orig_dst[2 * 16 + k], x2);
-            vst1_s16(&orig_dst[3 * 16 + k], x3);
+            EO[0] = vmlal_lane_s16(EO[0], s10, c2_even, 2); //  50
+            EO[1] = vmlsl_lane_s16(EO[1], s10, c2_even, 0); // -89
+            EO[2] = vmlal_lane_s16(EO[2], s10, c2_even, 3); //  18
+            EO[3] = vmlal_lane_s16(EO[3], s10, c2_even, 1); //  75
         }
 
-
-X265_PRAGMA_UNROLL(2)
-        for (k = 0; k < 8; k += 4)
+        const int16x4_t s14 = vld1_s16(src + 14 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s14), 0) != 0)
         {
-            int32x4_t t;
-            int16x4_t x0, x1, x2, x3;
-
-            t = vsubq_s32(E[7 - k], O[7 - k]);
-            t = vshlq_s32(t, minus_shift);
-            t = vmaxq_s32(t, min);
-            t = vminq_s32(t, max);
-            x0 = vmovn_s32(t);
-
-            t = vsubq_s32(E[6 - k], O[6 - k]);
-            t = vshlq_s32(t, minus_shift);
-            t = vmaxq_s32(t, min);
-            t = vminq_s32(t, max);
-            x1 = vmovn_s32(t);
-
-            t = vsubq_s32(E[5 - k], O[5 - k]);
-
-            t = vshlq_s32(t, minus_shift);
-            t = vmaxq_s32(t, min);
-            t = vminq_s32(t, max);
-            x2 = vmovn_s32(t);
-
-            t = vsubq_s32(E[4 - k], O[4 - k]);
-            t = vshlq_s32(t, minus_shift);
-            t = vmaxq_s32(t, min);
-            t = vminq_s32(t, max);
-            x3 = vmovn_s32(t);
-
-            transpose_4x4_s16(x0, x1, x2, x3);
-            vst1_s16(&orig_dst[0 * 16 + k + 8], x0);
-            vst1_s16(&orig_dst[1 * 16 + k + 8], x1);
-            vst1_s16(&orig_dst[2 * 16 + k + 8], x2);
-            vst1_s16(&orig_dst[3 * 16 + k + 8], x3);
+            EO[0] = vmlal_lane_s16(EO[0], s14, c2_even, 3); //  18
+            EO[1] = vmlsl_lane_s16(EO[1], s14, c2_even, 2); // -50
+            EO[2] = vmlal_lane_s16(EO[2], s14, c2_even, 1); //  75
+            EO[3] = vmlsl_lane_s16(EO[3], s14, c2_even, 0); // -89
         }
-        orig_dst += 4 * 16;
-        src += 4;
+
+        int32x4_t E[8];
+        for (int j = 0; j < 4; j++)
+        {
+            E[j] = vaddq_s32(EE[j], EO[j]);
+            E[j + 4] = vsubq_s32(EE[3 - j], EO[3 - j]);
+        }
+
+        int32x4_t O[8];
+        const int16x8_t c_odd = vld1q_s16(g_t16[1]);
+        const int16x4_t s1 = vld1_s16(src + 1 * line + 4 * i);
+        O[0] = vmull_laneq_s16(s1, c_odd, 0); // 90
+        O[1] = vmull_laneq_s16(s1, c_odd, 1); // 87
+        O[2] = vmull_laneq_s16(s1, c_odd, 2); // 80
+        O[3] = vmull_laneq_s16(s1, c_odd, 3); // 70
+        O[4] = vmull_laneq_s16(s1, c_odd, 4); // 57
+        O[5] = vmull_laneq_s16(s1, c_odd, 5); // 43
+        O[6] = vmull_laneq_s16(s1, c_odd, 6); // 25
+        O[7] = vmull_laneq_s16(s1, c_odd, 7); //  9
+
+        const int16x4_t s3 = vld1_s16(src + 3 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s3), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s3, c_odd, 1); //  87
+            O[1] = vmlal_laneq_s16(O[1], s3, c_odd, 4); //  57
+            O[2] = vmlal_laneq_s16(O[2], s3, c_odd, 7); //   9
+            O[3] = vmlsl_laneq_s16(O[3], s3, c_odd, 5); // -43
+            O[4] = vmlsl_laneq_s16(O[4], s3, c_odd, 2); // -80
+            O[5] = vmlsl_laneq_s16(O[5], s3, c_odd, 0); // -90
+            O[6] = vmlsl_laneq_s16(O[6], s3, c_odd, 3); // -70
+            O[7] = vmlsl_laneq_s16(O[7], s3, c_odd, 6); // -25
+        }
+
+        const int16x4_t s5 = vld1_s16(src + 5 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s5), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s5, c_odd, 2); //  80
+            O[1] = vmlal_laneq_s16(O[1], s5, c_odd, 7); //   9
+            O[2] = vmlsl_laneq_s16(O[2], s5, c_odd, 3); // -70
+            O[3] = vmlsl_laneq_s16(O[3], s5, c_odd, 1); // -87
+            O[4] = vmlsl_laneq_s16(O[4], s5, c_odd, 6); // -25
+            O[5] = vmlal_laneq_s16(O[5], s5, c_odd, 4); //  57
+            O[6] = vmlal_laneq_s16(O[6], s5, c_odd, 0); //  90
+            O[7] = vmlal_laneq_s16(O[7], s5, c_odd, 5); //  43
+        }
+
+        const int16x4_t s7 = vld1_s16(src + 7 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s7), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s7, c_odd, 3); //  70
+            O[1] = vmlsl_laneq_s16(O[1], s7, c_odd, 5); // -43
+            O[2] = vmlsl_laneq_s16(O[2], s7, c_odd, 1); // -87
+            O[3] = vmlal_laneq_s16(O[3], s7, c_odd, 7); //   9
+            O[4] = vmlal_laneq_s16(O[4], s7, c_odd, 0); //  90
+            O[5] = vmlal_laneq_s16(O[5], s7, c_odd, 6); //  25
+            O[6] = vmlsl_laneq_s16(O[6], s7, c_odd, 2); // -80
+            O[7] = vmlsl_laneq_s16(O[7], s7, c_odd, 4); // -57
+        }
+
+        const int16x4_t s9 = vld1_s16(src + 9 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s9), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s9, c_odd, 4); //  57
+            O[1] = vmlsl_laneq_s16(O[1], s9, c_odd, 2); // -80
+            O[2] = vmlsl_laneq_s16(O[2], s9, c_odd, 6); // -25
+            O[3] = vmlal_laneq_s16(O[3], s9, c_odd, 0); //  90
+            O[4] = vmlsl_laneq_s16(O[4], s9, c_odd, 7); //  -9
+            O[5] = vmlsl_laneq_s16(O[5], s9, c_odd, 1); // -87
+            O[6] = vmlal_laneq_s16(O[6], s9, c_odd, 5); //  43
+            O[7] = vmlal_laneq_s16(O[7], s9, c_odd, 3); //  70
+        }
+
+        const int16x4_t s11 = vld1_s16(src + 11 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s11), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s11, c_odd, 5); //  43
+            O[1] = vmlsl_laneq_s16(O[1], s11, c_odd, 0); // -90
+            O[2] = vmlal_laneq_s16(O[2], s11, c_odd, 4); //  57
+            O[3] = vmlal_laneq_s16(O[3], s11, c_odd, 6); //  25
+            O[4] = vmlsl_laneq_s16(O[4], s11, c_odd, 1); // -87
+            O[5] = vmlal_laneq_s16(O[5], s11, c_odd, 3); //  70
+            O[6] = vmlal_laneq_s16(O[6], s11, c_odd, 7); //   9
+            O[7] = vmlsl_laneq_s16(O[7], s11, c_odd, 2); // -80
+        }
+
+        const int16x4_t s13 = vld1_s16(src + 13 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s13), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s13, c_odd, 6); //  25
+            O[1] = vmlsl_laneq_s16(O[1], s13, c_odd, 3); // -70
+            O[2] = vmlal_laneq_s16(O[2], s13, c_odd, 0); //  90
+            O[3] = vmlsl_laneq_s16(O[3], s13, c_odd, 2); // -80
+            O[4] = vmlal_laneq_s16(O[4], s13, c_odd, 5); //  43
+            O[5] = vmlal_laneq_s16(O[5], s13, c_odd, 7); //   9
+            O[6] = vmlsl_laneq_s16(O[6], s13, c_odd, 4); // -57
+            O[7] = vmlal_laneq_s16(O[7], s13, c_odd, 1); //  87
+        }
+
+        const int16x4_t s15 = vld1_s16(src + 15 * line + 4 * i);
+        if (vget_lane_u64(vreinterpret_u64_s16(s15), 0) != 0)
+        {
+            O[0] = vmlal_laneq_s16(O[0], s15, c_odd, 7); //   9
+            O[1] = vmlsl_laneq_s16(O[1], s15, c_odd, 6); // -25
+            O[2] = vmlal_laneq_s16(O[2], s15, c_odd, 5); //  43
+            O[3] = vmlsl_laneq_s16(O[3], s15, c_odd, 4); // -57
+            O[4] = vmlal_laneq_s16(O[4], s15, c_odd, 3); //  70
+            O[5] = vmlsl_laneq_s16(O[5], s15, c_odd, 2); // -80
+            O[6] = vmlal_laneq_s16(O[6], s15, c_odd, 1); //  87
+            O[7] = vmlsl_laneq_s16(O[7], s15, c_odd, 0); // -90
+        }
+
+        int16x4_t d_lo[8];
+        int16x4_t d_hi[8];
+        for (int j = 0; j < 8; j++)
+        {
+            int32x4_t t_lo = vaddq_s32(E[j], O[j]);
+            d_lo[j] = vqrshrn_n_s32(t_lo, shift);
+
+            int32x4_t t_hi = vsubq_s32(E[7 - j], O[7 - j]);
+            d_hi[j] = vqrshrn_n_s32(t_hi, shift);
+        }
+
+        int16x8_t d0_lo, d1_lo, d2_lo, d3_lo;
+        int16x8_t d0_hi, d1_hi, d2_hi, d3_hi;
+        transpose_4x8_s16(d_lo[0], d_lo[1], d_lo[2], d_lo[3], d_lo[4], d_lo[5], d_lo[6], d_lo[7],
+                          d0_lo, d1_lo, d2_lo, d3_lo);
+        transpose_4x8_s16(d_hi[0], d_hi[1], d_hi[2], d_hi[3], d_hi[4], d_hi[5], d_hi[6], d_hi[7],
+                          d0_hi, d1_hi, d2_hi, d3_hi);
+
+        vst1q_s16(dst + (4 * i + 0) * dstStride + 8 * 0, d0_lo);
+        vst1q_s16(dst + (4 * i + 0) * dstStride + 8 * 1, d0_hi);
+
+        vst1q_s16(dst + (4 * i + 1) * dstStride + 8 * 0, d1_lo);
+        vst1q_s16(dst + (4 * i + 1) * dstStride + 8 * 1, d1_hi);
+
+        vst1q_s16(dst + (4 * i + 2) * dstStride + 8 * 0, d2_lo);
+        vst1q_s16(dst + (4 * i + 2) * dstStride + 8 * 1, d2_hi);
+
+        vst1q_s16(dst + (4 * i + 3) * dstStride + 8 * 0, d3_lo);
+        vst1q_s16(dst + (4 * i + 3) * dstStride + 8 * 1, d3_hi);
     }
-
-#undef MUL
-#undef FMA
-#undef FMAK
-#undef MULK
-#undef ODD3_15
-#undef EVEN6_14_STEP4
-
-
 }
 
 
@@ -1408,19 +1442,13 @@ void idct8_neon(const int16_t *src, int16_t *dst, intptr_t dstStride)
 
 void idct16_neon(const int16_t *src, int16_t *dst, intptr_t dstStride)
 {
-    const int shift_1st = 7;
-    const int shift_2nd = 12 - (X265_DEPTH - 8);
+    const int shift_pass1 = 7;
+    const int shift_pass2 = 12 - (X265_DEPTH - 8);
 
     ALIGN_VAR_32(int16_t, coef[16 * 16]);
-    ALIGN_VAR_32(int16_t, block[16 * 16]);
 
-    partialButterflyInverse16_neon(src, coef, shift_1st, 16);
-    partialButterflyInverse16_neon(coef, block, shift_2nd, 16);
-
-    for (int i = 0; i < 16; i++)
-    {
-        memcpy(&dst[i * dstStride], &block[i * 16], 16 * sizeof(int16_t));
-    }
+    partialButterflyInverse16_neon<shift_pass1>(src, coef, 16);
+    partialButterflyInverse16_neon<shift_pass2>(coef, dst, dstStride);
 }
 
 void idct32_neon(const int16_t *src, int16_t *dst, intptr_t dstStride)
@@ -1458,7 +1486,7 @@ void setupDCTPrimitives_neon(EncoderPrimitives &p)
     p.idst4x4 = idst4_neon;
     p.cu[BLOCK_4x4].idct   = idct4_neon;
     p.cu[BLOCK_8x8].idct   = idct8_neon;
-    p.cu[BLOCK_16x16].idct = PFX(idct16_neon);
+    p.cu[BLOCK_16x16].idct = idct16_neon;
     p.cu[BLOCK_32x32].idct = idct32_neon;
     p.cu[BLOCK_4x4].count_nonzero = count_nonzero_neon<4>;
     p.cu[BLOCK_8x8].count_nonzero = count_nonzero_neon<8>;
