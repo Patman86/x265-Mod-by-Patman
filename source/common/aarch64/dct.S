@@ -35,8 +35,8 @@
 .align 4
 
 .text
-.set idct_shift_1, 7
-.set idct_shift_2, 12
+.set idct16_shift_1, 7
+.set idct16_shift_2, 12
 
 .align 4
 // NOTE: Hardcoded due to asm syntax issue, don't reorder!
@@ -157,8 +157,9 @@ function PFX(idct16_neon)
     smlsl           v8.4s, v17.4h, v1.h[3]          // v8 = O6 = 25*[1]-70*[3]
     smlsl           v9.4s, v17.4h, v1.h[6]          // v9 = O7 =  9*[1]-25*[3]
 
-    cmp             x7, #0
-    beq             1f
+    //cmp             x7, #0
+    //beq             1f
+    cbz             x7, 1f
 
     smlal           v2.4s, v18.4h, v1.h[2]          // v2 = O0 = 90*[1]+87*[3]+80*[5]
     smlal           v3.4s, v18.4h, v1.h[7]          // v3 = O1 = 87*[1]+57*[3]+ 9*[5]
@@ -184,8 +185,9 @@ function PFX(idct16_neon)
     ldr             d18, [x0, #(13*16*2)]
     ldr             d19, [x0, #(15*16*2)]
 
-    cmp             x6, #0
-    beq             1f
+    //cmp             x6, #0
+    //beq             1f
+    cbz             x6, 1f
 
     smlal           v24.4s, v20.4h, v0.h[0]         // EEE0 = 64*[0]+64*[8]
     smlsl           v25.4s, v20.4h, v0.h[0]         // EEE1 = 64*[0]-64*[8]
@@ -222,8 +224,9 @@ function PFX(idct16_neon)
     add             v30.4s, v23.4s, v31.4s          // v30 = E3 = EE3+EO3
     sub             v31.4s, v23.4s, v31.4s          // v31 = E4 = EE3-EO3
 
-    cmp             x6, #0
-    beq             1f
+    //cmp             x6, #0
+    //beq             1f
+    cbz             x6, 1f
 
     smlal           v2.4s, v16.4h, v1.h[4]          // v2 = O0 = 90*[1]+87*[3]+80*[5]+70*[7]+57*[9]
     smlsl           v3.4s, v16.4h, v1.h[2]          // v3 = O1 = 87*[1]+57*[3]+ 9*[5]-43*[7]-80*[9]
@@ -244,8 +247,9 @@ function PFX(idct16_neon)
     smlsl           v9.4s, v17.4h, v1.h[2]          // v9 = O7 =  9*[1]-25*[3]+43*[5]-57*[7]+70*[9]-80*[11]
 
 1:
-    cmp             x7, #0
-    beq             1f
+    //cmp             x7, #0
+    //beq             1f
+    cbz             x7, 1f
 
     smlal           v2.4s, v18.4h, v1.h[6]          // v2 = O0 = 90*[1]+87*[3]+80*[5]+70*[7]+57*[9]+43*[11]+25*[13]
     smlsl           v3.4s, v18.4h, v1.h[3]          // v3 = O1 = 87*[1]+57*[3]+ 9*[5]-43*[7]-80*[9]-90*[11]-70*[13]
@@ -274,14 +278,14 @@ function PFX(idct16_neon)
     sub             v21.4s, v28.4s, v4.4s           // [13] = E2-O2
     add             v22.4s, v30.4s, v5.4s           // [ 3] = E3+O3
     sub             v23.4s, v30.4s, v5.4s           // [12] = E3-O3
-    sqrshrn         v16.4h, v16.4s, #idct_shift_1
-    sqrshrn         v17.4h, v17.4s, #idct_shift_1
-    sqrshrn         v18.4h, v18.4s, #idct_shift_1
-    sqrshrn         v19.4h, v19.4s, #idct_shift_1
-    sqrshrn         v20.4h, v20.4s, #idct_shift_1
-    sqrshrn         v21.4h, v21.4s, #idct_shift_1
-    sqrshrn         v22.4h, v22.4s, #idct_shift_1
-    sqrshrn         v23.4h, v23.4s, #idct_shift_1
+    sqrshrn         v16.4h, v16.4s, #idct16_shift_1
+    sqrshrn         v17.4h, v17.4s, #idct16_shift_1
+    sqrshrn         v18.4h, v18.4s, #idct16_shift_1
+    sqrshrn         v19.4h, v19.4s, #idct16_shift_1
+    sqrshrn         v20.4h, v20.4s, #idct16_shift_1
+    sqrshrn         v21.4h, v21.4s, #idct16_shift_1
+    sqrshrn         v22.4h, v22.4s, #idct16_shift_1
+    sqrshrn         v23.4h, v23.4s, #idct16_shift_1
     str             d16, [x5, #( 0*16*2)]
     str             d17, [x5, #(15*16*2)]
     str             d18, [x5, #( 1*16*2)]
@@ -299,14 +303,14 @@ function PFX(idct16_neon)
     sub             v21.4s, v27.4s, v8.4s           // [ 9] = E6-O6
     add             v22.4s, v25.4s, v9.4s           // [ 7] = E7+O7
     sub             v23.4s, v25.4s, v9.4s           // [ 8] = E7-O7
-    sqrshrn         v16.4h, v16.4s, #idct_shift_1
-    sqrshrn         v17.4h, v17.4s, #idct_shift_1
-    sqrshrn         v18.4h, v18.4s, #idct_shift_1
-    sqrshrn         v19.4h, v19.4s, #idct_shift_1
-    sqrshrn         v20.4h, v20.4s, #idct_shift_1
-    sqrshrn         v21.4h, v21.4s, #idct_shift_1
-    sqrshrn         v22.4h, v22.4s, #idct_shift_1
-    sqrshrn         v23.4h, v23.4s, #idct_shift_1
+    sqrshrn         v16.4h, v16.4s, #idct16_shift_1
+    sqrshrn         v17.4h, v17.4s, #idct16_shift_1
+    sqrshrn         v18.4h, v18.4s, #idct16_shift_1
+    sqrshrn         v19.4h, v19.4s, #idct16_shift_1
+    sqrshrn         v20.4h, v20.4s, #idct16_shift_1
+    sqrshrn         v21.4h, v21.4s, #idct16_shift_1
+    sqrshrn         v22.4h, v22.4s, #idct16_shift_1
+    sqrshrn         v23.4h, v23.4s, #idct16_shift_1
     str             d16, [x5, #( 4*16*2)]
     str             d17, [x5, #(11*16*2)]
     str             d18, [x5, #( 5*16*2)]
@@ -399,8 +403,9 @@ function PFX(idct16_neon)
     smull   v29.4s, v31.4h, v16.4h                  // v29 = [O6]
     smull   v30.4s, v31.4h, v17.4h                  // v30 = [O7]
 
-    cmp     x6, #0
-    beq     1f
+    //cmp     x6, #0
+    //beq     1f
+    cbz     x6, 1f
 
     smlal2  v23.4s, v31.8h, v4.8h
     smlal2  v24.4s, v31.8h, v5.8h
@@ -443,10 +448,10 @@ function PFX(idct16_neon)
     tbl     v26.16b, {v26.16b}, v18.16b             // v26 = [7 6 5 4]
     tbl     v27.16b, {v27.16b}, v18.16b             // v27 = [15 14 13 12]
 
-    sqrshrn         v20.4h, v25.4s, #idct_shift_2
-    sqrshrn         v21.4h, v26.4s, #idct_shift_2
-    sqrshrn         v22.4h, v28.4s, #idct_shift_2
-    sqrshrn         v23.4h, v27.4s, #idct_shift_2
+    sqrshrn         v20.4h, v25.4s, #idct16_shift_2
+    sqrshrn         v21.4h, v26.4s, #idct16_shift_2
+    sqrshrn         v22.4h, v28.4s, #idct16_shift_2
+    sqrshrn         v23.4h, v27.4s, #idct16_shift_2
     stp             d20, d21, [x1, #0]
     stp             d22, d23, [x1, #16]
 
