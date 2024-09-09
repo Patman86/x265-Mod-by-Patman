@@ -408,6 +408,8 @@ typedef struct x265_picture
      * on output */
     int64_t dts;
 
+    int vbvEndFlag; // New flag for VBV end feature
+
     /* force quantizer for != X265_QP_AUTO */
     /* The value provided on input is returned with the same picture (POC) on
      * output */
@@ -2495,6 +2497,12 @@ int x265_encoder_headers(x265_encoder *, x265_nal **pp_nal, uint32_t *pi_nal);
  *      Once flushing has begun, all subsequent calls must pass pic_in as NULL. */
 int x265_encoder_encode(x265_encoder *encoder, x265_nal **pp_nal, uint32_t *pi_nal, x265_picture *pic_in, x265_picture **pic_out);
 
+/*
+x265_configure_vbv_end:
+* Set the Vbvend flag based on the totalstreamduration.
+*/
+void x265_configure_vbv_end(x265_encoder* enc, x265_picture* picture, double totalstreamduration);
+
 /* x265_encoder_reconfig:
  *      various parameters from x265_param are copied.
  *      this takes effect immediately, on whichever frame is encoded next;
@@ -2647,6 +2655,7 @@ typedef struct x265_api
     int           (*encoder_reconfig)(x265_encoder*, x265_param*);
     int           (*encoder_reconfig_zone)(x265_encoder*, x265_zone*);
     int           (*encoder_headers)(x265_encoder*, x265_nal**, uint32_t*);
+    void          (*configure_vbv_end)(x265_encoder*, x265_picture*, double );
     int           (*encoder_encode)(x265_encoder*, x265_nal**, uint32_t*, x265_picture*, x265_picture**);
     void          (*encoder_get_stats)(x265_encoder*, x265_stats*, uint32_t);
     void          (*encoder_log)(x265_encoder*, int, char**);
