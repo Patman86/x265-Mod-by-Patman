@@ -738,7 +738,7 @@ namespace X265_NS {
                 OPT("frames") this->framesToBeEncoded = (uint32_t)x265_atoi(optarg, bError);
                 OPT("no-progress") this->bProgress = false;
                 OPT("output") outputfn = optarg;
-                OPT("input") inputfn[0] = optarg;
+                OPT("input") strcpy(inputfn[0] , optarg);
                 OPT("recon") reconfn[0] = optarg;
                 OPT("input-depth") inputBitDepth = (uint32_t)x265_atoi(optarg, bError);
                 OPT("dither") this->bDither = true;
@@ -1034,6 +1034,15 @@ namespace X265_NS {
             return true;
         }
         general_log_file(param, this->output->getName(), X265_LOG_INFO, "output file: %s\n", outputfn);
+
+        for (int view = 0; view < MAX_VIEWS; view++)
+        {
+            if (inputfn[view] != NULL)
+            {
+                X265_FREE(inputfn[view]);
+                inputfn[view] = NULL;
+            }
+        }
         return false;
     }
 

@@ -289,7 +289,12 @@ void DPB::prepareEncode(Frame *newFrame)
         slice->m_numRefIdx[0] = x265_clip3(1, newFrame->m_param->maxNumReferences, numRef + newFrame->refPicSetInterLayer0.size() + newFrame->refPicSetInterLayer1.size());
     else
         slice->m_numRefIdx[0] = X265_MIN(newFrame->m_param->maxNumReferences, numRef); // Ensuring L0 contains just the -ve POC
-    slice->m_numRefIdx[1] = X265_MIN(newFrame->m_param->bBPyramid ? 3 : 2, slice->m_rps.numberOfPositivePictures + newFrame->refPicSetInterLayer0.size() + newFrame->refPicSetInterLayer1.size());
+#if ENABLE_MULTIVIEW || ENABLE_SCC_EXT
+    if(slice->m_param->numViews > 1 || !!slice->m_param->bEnableSCC)
+        slice->m_numRefIdx[1] = X265_MIN(newFrame->m_param->bBPyramid ? 3 : 2, slice->m_rps.numberOfPositivePictures + newFrame->refPicSetInterLayer0.size() + newFrame->refPicSetInterLayer1.size());
+    else
+#endif
+        slice->m_numRefIdx[1] = X265_MIN(newFrame->m_param->bBPyramid ? 2 : 1, slice->m_rps.numberOfPositivePictures);
     slice->setRefPicList(m_picList, newFrame->refPicSetInterLayer0, newFrame->refPicSetInterLayer1, layer);
 
     X265_CHECK(slice->m_sliceType != B_SLICE || slice->m_numRefIdx[1], "B slice without L1 references (non-fatal)\n");
