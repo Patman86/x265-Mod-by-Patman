@@ -669,7 +669,11 @@ void ThreadPool::getFrameThreadsCount(x265_param* p, int cpuCount)
     else if (cpuCount >= 16)
         p->frameNumThreads = 4; 
     else if (cpuCount >= 8)
+#if _WIN32 && X265_ARCH_ARM64
+        p->frameNumThreads = cpuCount;
+#else
         p->frameNumThreads = 3;
+#endif
     else if (cpuCount >= 4)
         p->frameNumThreads = 2;
     else
