@@ -65,9 +65,9 @@ static void inline store_u8x4_strided_xN(uint8_t *d, intptr_t stride,
     assert(N % 2 == 0);
     for (int i = 0; i < N / 2; ++i)
     {
-        vst1_lane_u32(d, vreinterpret_u32_u8(s[i]), 0);
+        vst1_lane_u32((uint32_t *)d, vreinterpret_u32_u8(s[i]), 0);
         d += stride;
-        vst1_lane_u32(d, vreinterpret_u32_u8(s[i]), 1);
+        vst1_lane_u32((uint32_t *)d, vreinterpret_u32_u8(s[i]), 1);
         d += stride;
     }
 }
