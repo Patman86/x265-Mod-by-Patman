@@ -2883,60 +2883,73 @@ See section :ref:`svthevc <SvtHevc>` for more details.
     **CLI_ONLY**
 
 Alpha Encode Options
-===================
+====================
 
 .. option:: --alpha
 
-	Enable alpha layer encoding support in x265.This option can be enabled
-	only when ENABLE_ALPHA is set during the make of x265.When enabled
-	--alpha always expects an input file in YUVA420 format.
+	Alpha channel is particularly important for applications where video elements need
+	to be composited or layered together, such as visual effects, motion graphics, and animation.
+	With an alpha channel, multiple video elements can be blended seamlessly, realistic drop shadows,
+	reflections, and other effects can be created, and text or graphics overlays can be added.
+	This option can be enabled only when ENABLE_ALPHA is set during the build of x265 using Cmake. Default disabled.
+
+	When enabled :option:`--alpha` always expects an input file in YUVA420 format.
 
 **CLI_ONLY**
 
 Multiview Encode Options
-===================
+========================
 
-	Enable multiview encoding support in x265.This option can be enabled
-	only when ENABLE_MULTIVIEW is set during the make of x265.
+	The multiview HEVC (MV-HEVC) is an extension of the HEVC standard that is capable of multiview
+	video coding with or without accompanying depth views. In x265, the implementation of MV-HEVC
+	is done.  Support for Stereoscopic video, providing two views (left and right view). One of
+	the two views is used as the base layer and the other as the non-base layer.
+	This option can be enabled only when ENABLE_MULTIVIEW is set during the build of x265 using Cmake.
+	Default disabled.
 
-.. option:: --num-views <integer>
-	Specify the number of views in the multiview input video.
-
-.. option:: --format <integer>
-	Specify the format of the input video
-	 0 : Two separate input videos
-	 1 : One input video with both views in left and right format
-	 2 : One input video with both views in top and bottom format
-
-.. option:: --multiview-config <filename>
-	File containing the configurations to enable multiview encoding.
+.. option:: --multiview-config <config_file>
 
 	Sample config file::
 
+		#Configure number of views in the multiview input video#
+		#--num-views <integer>#
 		--num-views 2
-		--format    0
-		--input     multiview-input-01.yuv
-		--input     multiview-input-02.yuv
+
+		#Configuration for the input format of the video#
+		#--format <integer>#
+		# 0 : Two seperate input frames#
+		# 1 : One input frame with left and right view#
+		# 2 : One input frame with top and bottom view#
+		--format 0
+
+		#Configure input file path for each view#
+		##NOTE:Other input parameters such as input-csp/input-depth/fps must be configured through CLI##
+		#--input "left-right.yuv"
+		--input "left_view.yuv"
+		--input "right_view.yuv"
+
 
 	Other input parameters such as input-csp/input-depth/input-res/fps must be configured through
-	normal CLI and is expected to be same for all views
+	normal CLI and is expected to be same for all views.
 
 **CLI_ONLY**
 
+Screen Content Coding (SCC) Options
+===================================
 
-Screen Content Coding Options
-===================
 .. option:: --scc <integer>
 
-    Enable screen content coding support in x265. Default disabled.
-    This option can be enabled only when ENABLE_SCC_EXT is set during the make of x265.
-    SCC enables intrablockcopy in CTU analysis which can be enabled in two modes [1-2].
-    Mode 1- Does limited search,faster than mode 2
-    Mode 2- Does full and exhaustive search
+	Screen Content coding (SCC) is particularly important for applications where video sequences
+	are usually rich in text and graphics and present sharp edges with less noise. Enabling SCC
+	significantly improved compression performance for videos containing a substantial amount
+	of still or moving rendered graphics, text, and animation.
+	This option can be enabled only when ENABLE_SCC_EXT is set during the build of x265 using Cmake. Default disabled.
 
-    Note : Enabling SCC will disable weight prediction.
-           Enabling SCC expects rd-level of 6.
+	SCC enables intrablockcopy in CTU analysis which can be enabled in two modes [1-2]::
 
-    **CLI_ONLY**
+		Mode 1- Does limited search, faster than mode 2
+		Mode 2- Does a full and exhaustive search
+
+**CLI_ONLY**
 
 .. vim: noet
