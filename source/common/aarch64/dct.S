@@ -36,9 +36,9 @@
 
 .text
 .set idct16_shift_1, 7
-.set idct16_shift_2, 12
+.set idct16_shift_2, 12-(BIT_DEPTH-8)
 
-.set dct16_shift_1, 3
+.set dct16_shift_1, 3+(BIT_DEPTH-8)
 .set dct16_shift_2, 10
 
 .align 4
