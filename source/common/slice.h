@@ -73,7 +73,11 @@ namespace Profile {
         MAIN10 = 2,
         MAINSTILLPICTURE = 3,
         MAINREXT = 4,
-        HIGHTHROUGHPUTREXT = 5
+        HIGHTHROUGHPUTREXT = 5,
+        MULTIVIEWMAIN = 6,
+        SCALABLEMAIN = 7,
+        SCALABLEMAIN10 = 8,
+        MAINSCC = 9
     };
 }
 
@@ -106,7 +110,7 @@ namespace Level {
 
 struct ProfileTierLevel
 {
-    int      profileIdc;
+    int      profileIdc[MAX_LAYERS];
     int      levelIdc;
     uint32_t minCrForLevel;
     uint32_t maxLumaSrForLevel;
@@ -159,6 +163,27 @@ struct VPS
     uint32_t         numReorderPics[MAX_T_LAYERS];
     uint32_t         maxDecPicBuffering[MAX_T_LAYERS];
     uint32_t         maxLatencyIncrease[MAX_T_LAYERS];
+    int              m_numLayers;
+    int              m_numViews;
+    bool             vps_extension_flag;
+
+#if (ENABLE_ALPHA || ENABLE_MULTIVIEW)
+    bool             splitting_flag;
+    int              m_scalabilityMask[MAX_VPS_NUM_SCALABILITY_TYPES];
+    int              scalabilityTypes;
+    uint8_t          m_dimensionIdLen[MAX_VPS_NUM_SCALABILITY_TYPES];
+    uint8_t          m_dimensionId[MAX_VPS_LAYER_ID_PLUS1][MAX_VPS_NUM_SCALABILITY_TYPES];
+    bool             m_nuhLayerIdPresentFlag;
+    uint8_t          m_layerIdInNuh[MAX_VPS_LAYER_ID_PLUS1];
+    uint8_t          m_layerIdInVps[MAX_VPS_LAYER_ID_PLUS1];
+    int              m_viewIdLen;
+    int              m_vpsNumLayerSetsMinus1;
+    int              m_numLayersInIdList[1023];
+#endif
+
+#if ENABLE_MULTIVIEW
+    int              m_layerIdIncludedFlag;
+#endif
 };
 
 struct Window
@@ -252,6 +277,13 @@ struct SPS
 
     Window   conformanceWindow;
     VUI      vuiParameters;
+    bool     sps_extension_flag;
+
+#if ENABLE_MULTIVIEW
+    int      setSpsExtOrMaxSubLayersMinus1;
+    int      maxViews;
+    bool     vui_parameters_present_flag;
+#endif
 
     SPS()
     {
@@ -290,6 +322,11 @@ struct PPS
 
     int      numRefIdxDefault[2];
     bool     pps_slice_chroma_qp_offsets_present_flag;
+
+    bool     pps_extension_flag;
+    int      maxViews;
+
+    int      profileIdc;
 };
 
 struct WeightParam
@@ -339,6 +376,7 @@ public:
 
     NalUnitType m_nalUnitType;
     SliceType   m_sliceType;
+    SliceType   m_origSliceType;
     int         m_sliceQp;
     int         m_chromaQpOffset[2];
     int         m_poc;
@@ -365,6 +403,13 @@ public:
     int         m_fieldNum;
     Frame*      m_mcstfRefFrameList[2][MAX_MCSTF_TEMPORAL_WINDOW_LENGTH];
 
+#if  ENABLE_SCC_EXT
+    Frame*      m_lastEncPic;
+    bool        m_bLMvdL1Zero;
+    bool        m_useIntegerMv;
+#endif
+    bool        m_bTemporalMvp;
+
     Slice()
     {
         m_lastIDR = 0;
@@ -380,11 +425,23 @@ public:
         m_rpsIdx = -1;
         m_chromaQpOffset[0] = m_chromaQpOffset[1] = 0;
         m_fieldNum = 0;
+#if  ENABLE_SCC_EXT
+        m_lastEncPic = NULL;
+        m_useIntegerMv = false;
+#endif
+        m_bTemporalMvp = false;
     }
 
     void disableWeights();
 
-    void setRefPicList(PicList& picList);
+    void setRefPicList(PicList& picList, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1, int viewId);
+#if ENABLE_MULTIVIEW
+    void createInterLayerReferencePictureSet(PicList& picList, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1);
+#endif
+
+#if  ENABLE_SCC_EXT
+    bool isOnlyCurrentPictureAsReference() const;
+#endif
 
     bool getRapPicFlag() const
     {

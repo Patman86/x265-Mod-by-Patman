@@ -290,6 +290,10 @@ void CUData::initCTU(const Frame& frame, uint32_t cuAddr, int qp, uint32_t first
     m_bFirstRowInSlice = (uint8_t)firstRowInSlice;
     m_bLastRowInSlice  = (uint8_t)lastRowInSlice;
     m_bLastCuInSlice   = (uint8_t)lastCuInSlice;
+#if ENABLE_SCC_EXT
+    m_lastIntraBCMv[0].set(0, 0);
+    m_lastIntraBCMv[1].set(0, 0);
+#endif
 
     /* sequential memsets */
     m_partSet((uint8_t*)m_qp, (uint8_t)qp);
@@ -323,7 +327,7 @@ void CUData::initCTU(const Frame& frame, uint32_t cuAddr, int qp, uint32_t first
 }
 
 // initialize Sub partition
-void CUData::initSubCU(const CUData& ctu, const CUGeom& cuGeom, int qp)
+void CUData::initSubCU(const CUData& ctu, const CUGeom& cuGeom, int qp, MV lastIntraBCMv[2])
 {
     m_absIdxInCTU   = cuGeom.absPartIdx;
     m_encData       = ctu.m_encData;
@@ -360,6 +364,14 @@ void CUData::initSubCU(const CUData& ctu, const CUGeom& cuGeom, int qp)
     /* initialize the remaining CU data in one memset */
     memset(m_predMode, 0, (ctu.m_chromaFormat == X265_CSP_I400 ? BytesPerPartition - 13 : BytesPerPartition - 9) * m_numPartitions);
     memset(m_distortion, 0, m_numPartitions * sizeof(sse_t));
+
+#if ENABLE_SCC_EXT
+    if (lastIntraBCMv)
+    {
+        for (int i = 0; i < 2; i++)
+            m_lastIntraBCMv[i] = lastIntraBCMv[i];
+    }
+#endif
 }
 
 /* Copy the results of a sub-part (split) CU to the parent CU */
@@ -415,6 +427,10 @@ void CUData::copyPartFrom(const CUData& subCU, const CUGeom& childGeom, uint32_t
         memcpy(m_trCoeff[1] + tmpC2, subCU.m_trCoeff[1], sizeof(coeff_t) * tmpC);
         memcpy(m_trCoeff[2] + tmpC2, subCU.m_trCoeff[2], sizeof(coeff_t) * tmpC);
     }
+#if ENABLE_SCC_EXT
+    for (int i = 0; i < 2; i++)
+        m_lastIntraBCMv[i] = subCU.m_lastIntraBCMv[i];
+#endif
 }
 
 /* If a sub-CU part is not present (off the edge of the picture) its depth and
@@ -1591,7 +1607,11 @@ uint32_t CUData::getInterMergeCandidates(uint32_t absPartIdx, uint32_t puIdx, MV
                 return maxNumMergeCand;
         }
     }
+#if ENABLE_SCC_EXT
+    if (m_slice->m_bTemporalMvp)
+#else
     if (m_slice->m_sps->bTemporalMVPEnabled)
+#endif
     {
         uint32_t partIdxRB = deriveRightBottomIdx(puIdx);
         MV colmv;
@@ -1681,10 +1701,15 @@ uint32_t CUData::getInterMergeCandidates(uint32_t absPartIdx, uint32_t puIdx, MV
             }
         }
     }
-    int numRefIdx = (isInterB) ? X265_MIN(m_slice->m_numRefIdx[0], m_slice->m_numRefIdx[1]) : m_slice->m_numRefIdx[0];
+    int numRefIdx0 = m_slice->m_numRefIdx[0];
+#if ENABLE_SCC_EXT
+    if (m_slice->m_param->bEnableSCC)
+        numRefIdx0--;
+#endif
+    int numRefIdx = (isInterB) ? X265_MIN(numRefIdx0, m_slice->m_numRefIdx[1]) : numRefIdx0;
     int r = 0;
     int refcnt = 0;
-    while (count < maxNumMergeCand)
+    while (numRefIdx && (count < maxNumMergeCand))
     {
         candDir[count] = 1;
         candMvField[count][0].mv.word = 0;
@@ -1712,28 +1737,61 @@ uint32_t CUData::getInterMergeCandidates(uint32_t absPartIdx, uint32_t puIdx, MV
 }
 
 // Create the PMV list. Called for each reference index.
-int CUData::getPMV(InterNeighbourMV *neighbours, uint32_t picList, uint32_t refIdx, MV* amvpCand, MV* pmv) const
+int CUData::getPMV(InterNeighbourMV* neighbours, uint32_t picList, uint32_t refIdx, MV* amvpCand, MV* pmv, uint32_t puIdx, uint32_t absPartIdx) const
 {
     MV directMV[MD_ABOVE_LEFT + 1];
     MV indirectMV[MD_ABOVE_LEFT + 1];
     bool validDirect[MD_ABOVE_LEFT + 1];
     bool validIndirect[MD_ABOVE_LEFT + 1];
 
-    // Left candidate.
-    validDirect[MD_BELOW_LEFT]  = getDirectPMV(directMV[MD_BELOW_LEFT], neighbours + MD_BELOW_LEFT, picList, refIdx);
-    validDirect[MD_LEFT]        = getDirectPMV(directMV[MD_LEFT], neighbours + MD_LEFT, picList, refIdx);
-    // Top candidate.
-    validDirect[MD_ABOVE_RIGHT] = getDirectPMV(directMV[MD_ABOVE_RIGHT], neighbours + MD_ABOVE_RIGHT, picList, refIdx);
-    validDirect[MD_ABOVE]       = getDirectPMV(directMV[MD_ABOVE], neighbours + MD_ABOVE, picList, refIdx);
-    validDirect[MD_ABOVE_LEFT]  = getDirectPMV(directMV[MD_ABOVE_LEFT], neighbours + MD_ABOVE_LEFT, picList, refIdx);
+#if (ENABLE_MULTIVIEW || ENABLE_SCC_EXT)
+    if (m_slice->m_param->numViews > 1 || m_slice->m_param->bEnableSCC)
+    {
+        // Left candidate.
+        if ((neighbours + MD_BELOW_LEFT)->isAvailable || (neighbours + MD_LEFT)->isAvailable)
+        {
+            validIndirect[MD_ABOVE_RIGHT] = validIndirect[MD_ABOVE] = validIndirect[MD_ABOVE_LEFT] = false;
 
-    // Left candidate.
-    validIndirect[MD_BELOW_LEFT]  = getIndirectPMV(indirectMV[MD_BELOW_LEFT], neighbours + MD_BELOW_LEFT, picList, refIdx);
-    validIndirect[MD_LEFT]        = getIndirectPMV(indirectMV[MD_LEFT], neighbours + MD_LEFT, picList, refIdx);
-    // Top candidate.
-    validIndirect[MD_ABOVE_RIGHT] = getIndirectPMV(indirectMV[MD_ABOVE_RIGHT], neighbours + MD_ABOVE_RIGHT, picList, refIdx);
-    validIndirect[MD_ABOVE]       = getIndirectPMV(indirectMV[MD_ABOVE], neighbours + MD_ABOVE, picList, refIdx);
-    validIndirect[MD_ABOVE_LEFT]  = getIndirectPMV(indirectMV[MD_ABOVE_LEFT], neighbours + MD_ABOVE_LEFT, picList, refIdx);
+            validDirect[MD_BELOW_LEFT] = getDirectPMV(directMV[MD_BELOW_LEFT], neighbours + MD_BELOW_LEFT, picList, refIdx);
+            validDirect[MD_LEFT] = getDirectPMV(directMV[MD_LEFT], neighbours + MD_LEFT, picList, refIdx);
+
+            validIndirect[MD_BELOW_LEFT] = getIndirectPMV(indirectMV[MD_BELOW_LEFT], neighbours + MD_BELOW_LEFT, picList, refIdx);
+            validIndirect[MD_LEFT] = getIndirectPMV(indirectMV[MD_LEFT], neighbours + MD_LEFT, picList, refIdx);
+        }
+
+        // Top candidate.
+        validDirect[MD_ABOVE_RIGHT] = getDirectPMV(directMV[MD_ABOVE_RIGHT], neighbours + MD_ABOVE_RIGHT, picList, refIdx);
+        validDirect[MD_ABOVE] = getDirectPMV(directMV[MD_ABOVE], neighbours + MD_ABOVE, picList, refIdx);
+        validDirect[MD_ABOVE_LEFT] = getDirectPMV(directMV[MD_ABOVE_LEFT], neighbours + MD_ABOVE_LEFT, picList, refIdx);
+
+        // Top candidate.
+        if (!((neighbours + MD_BELOW_LEFT)->isAvailable || (neighbours + MD_LEFT)->isAvailable))
+        {
+            validDirect[MD_BELOW_LEFT] = validDirect[MD_LEFT] = validIndirect[MD_BELOW_LEFT] = validIndirect[MD_LEFT] = false;
+            validIndirect[MD_ABOVE_RIGHT] = getIndirectPMV(indirectMV[MD_ABOVE_RIGHT], neighbours + MD_ABOVE_RIGHT, picList, refIdx);
+            validIndirect[MD_ABOVE] = getIndirectPMV(indirectMV[MD_ABOVE], neighbours + MD_ABOVE, picList, refIdx);
+            validIndirect[MD_ABOVE_LEFT] = getIndirectPMV(indirectMV[MD_ABOVE_LEFT], neighbours + MD_ABOVE_LEFT, picList, refIdx);
+        }
+    }
+    else
+#endif
+    {
+        // Left candidate.
+        validDirect[MD_BELOW_LEFT] = getDirectPMV(directMV[MD_BELOW_LEFT], neighbours + MD_BELOW_LEFT, picList, refIdx);
+        validDirect[MD_LEFT] = getDirectPMV(directMV[MD_LEFT], neighbours + MD_LEFT, picList, refIdx);
+        // Top candidate.
+        validDirect[MD_ABOVE_RIGHT] = getDirectPMV(directMV[MD_ABOVE_RIGHT], neighbours + MD_ABOVE_RIGHT, picList, refIdx);
+        validDirect[MD_ABOVE] = getDirectPMV(directMV[MD_ABOVE], neighbours + MD_ABOVE, picList, refIdx);
+        validDirect[MD_ABOVE_LEFT] = getDirectPMV(directMV[MD_ABOVE_LEFT], neighbours + MD_ABOVE_LEFT, picList, refIdx);
+
+        // Left candidate.
+        validIndirect[MD_BELOW_LEFT] = getIndirectPMV(indirectMV[MD_BELOW_LEFT], neighbours + MD_BELOW_LEFT, picList, refIdx);
+        validIndirect[MD_LEFT] = getIndirectPMV(indirectMV[MD_LEFT], neighbours + MD_LEFT, picList, refIdx);
+        // Top candidate.
+        validIndirect[MD_ABOVE_RIGHT] = getIndirectPMV(indirectMV[MD_ABOVE_RIGHT], neighbours + MD_ABOVE_RIGHT, picList, refIdx);
+        validIndirect[MD_ABOVE] = getIndirectPMV(indirectMV[MD_ABOVE], neighbours + MD_ABOVE, picList, refIdx);
+        validIndirect[MD_ABOVE_LEFT] = getIndirectPMV(indirectMV[MD_ABOVE_LEFT], neighbours + MD_ABOVE_LEFT, picList, refIdx);
+    }
 
     int num = 0;
     // Left predictor search
@@ -1781,27 +1839,80 @@ int CUData::getPMV(InterNeighbourMV *neighbours, uint32_t picList, uint32_t refI
 
     // Get the collocated candidate. At this step, either the first candidate
     // was found or its value is 0.
-    if (m_slice->m_sps->bTemporalMVPEnabled && num < 2)
+#if ENABLE_MULTIVIEW || ENABLE_SCC_EXT
+    if (m_slice->m_param->numViews > 1 || m_slice->m_param->bEnableSCC)
     {
-        int tempRefIdx = neighbours[MD_COLLOCATED].refIdx[picList];
-        if (tempRefIdx != -1)
+        if (m_slice->m_bTemporalMvp && num < 2)
         {
-            uint32_t cuAddr = neighbours[MD_COLLOCATED].cuAddr[picList];
-            const Frame* colPic = m_slice->m_refFrameList[m_slice->isInterB() && !m_slice->m_colFromL0Flag][m_slice->m_colRefIdx];
-            const CUData* colCU = colPic->m_encData->getPicCTU(cuAddr);
+            int refId = refIdx;
+            uint32_t absPartAddr = m_absIdxInCTU + absPartIdx;
+            uint32_t partIdxRB = deriveRightBottomIdx(puIdx);
+            bool isValid;
 
-            // Scale the vector
-            int colRefPOC = colCU->m_slice->m_refPOCList[tempRefIdx >> 4][tempRefIdx & 0xf];
-            int colPOC = colCU->m_slice->m_poc;
+            // co-located RightBottom temporal predictor (H)
+            int ctuIdx = -1;
 
-            int curRefPOC = m_slice->m_refPOCList[picList][refIdx];
-            int curPOC = m_slice->m_poc;
-            pmv[numMvc++] = amvpCand[num++] = scaleMvByPOCDist(neighbours[MD_COLLOCATED].mv[picList], curPOC, curRefPOC, colPOC, colRefPOC);
+            // image boundary check
+            if (m_encData->getPicCTU(m_cuAddr)->m_cuPelX + g_zscanToPelX[partIdxRB] + UNIT_SIZE < m_slice->m_sps->picWidthInLumaSamples &&
+                m_encData->getPicCTU(m_cuAddr)->m_cuPelY + g_zscanToPelY[partIdxRB] + UNIT_SIZE < m_slice->m_sps->picHeightInLumaSamples)
+            {
+                uint32_t absPartIdxRB = g_zscanToRaster[partIdxRB];
+                uint32_t numUnits = s_numPartInCUSize;
+                bool bNotLastCol = lessThanCol(absPartIdxRB, numUnits - 1); // is not at the last column of CTU
+                bool bNotLastRow = lessThanRow(absPartIdxRB, numUnits - 1); // is not at the last row    of CTU
+
+                if (bNotLastCol && bNotLastRow)
+                {
+                    absPartAddr = g_rasterToZscan[absPartIdxRB + RASTER_SIZE + 1];
+                    ctuIdx = m_cuAddr;
+                }
+                else if (bNotLastCol)
+                    absPartAddr = g_rasterToZscan[(absPartIdxRB + 1) & (numUnits - 1)];
+                else if (bNotLastRow)
+                {
+                    absPartAddr = g_rasterToZscan[absPartIdxRB + RASTER_SIZE - numUnits + 1];
+                    ctuIdx = m_cuAddr + 1;
+                }
+                else // is the right bottom corner of CTU
+                    absPartAddr = 0;
+            }
+            if (ctuIdx >= 0 && getColMVP(neighbours[MD_COLLOCATED].mv[picList], refId, picList, ctuIdx, absPartAddr))
+                pmv[numMvc++] = amvpCand[num++] = neighbours[MD_COLLOCATED].mv[picList];
+            else
+            {
+                uint32_t partIdxCenter = deriveCenterIdx(puIdx);
+                uint32_t curCTUIdx = m_cuAddr;
+                if (getColMVP(neighbours[MD_COLLOCATED].mv[picList], refId, picList, curCTUIdx, partIdxCenter))
+                    pmv[numMvc++] = amvpCand[num++] = neighbours[MD_COLLOCATED].mv[picList];
+            }
+        }
+    }
+    else
+#endif
+    {
+        if (m_slice->m_sps->bTemporalMVPEnabled && num < 2)
+        {
+            int tempRefIdx = neighbours[MD_COLLOCATED].refIdx[picList];
+            if (tempRefIdx != -1)
+            {
+                uint32_t cuAddr = neighbours[MD_COLLOCATED].cuAddr[picList];
+                const Frame* colPic = m_slice->m_refFrameList[m_slice->isInterB() && !m_slice->m_colFromL0Flag][m_slice->m_colRefIdx];
+                const CUData* colCU = colPic->m_encData->getPicCTU(cuAddr);
+
+                // Scale the vector
+                int colRefPOC = colCU->m_slice->m_refPOCList[tempRefIdx >> 4][tempRefIdx & 0xf];
+                int colPOC = colCU->m_slice->m_poc;
+
+                int curRefPOC = m_slice->m_refPOCList[picList][refIdx];
+                int curPOC = m_slice->m_poc;
+
+                pmv[numMvc++] = amvpCand[num++] = scaleMvByPOCDist(neighbours[MD_COLLOCATED].mv[picList], curPOC, curRefPOC, colPOC, colRefPOC);
+            }
         }
     }
 
     while (num < AMVP_NUM_CANDS)
-        amvpCand[num++] = 0;
+        amvpCand[num++].set(0, 0);
 
     return numMvc;
 }
@@ -1822,7 +1933,7 @@ void CUData::getNeighbourMV(uint32_t puIdx, uint32_t absPartIdx, InterNeighbourM
     getInterNeighbourMV(neighbours + MD_ABOVE,      partIdxRT, MD_ABOVE);
     getInterNeighbourMV(neighbours + MD_ABOVE_LEFT, partIdxLT, MD_ABOVE_LEFT);
 
-    if (m_slice->m_sps->bTemporalMVPEnabled)
+    if (m_slice->m_bTemporalMvp && !(m_slice->m_param->bEnableSCC || m_slice->m_param->numViews > 1))
     {
         uint32_t absPartAddr = m_absIdxInCTU + absPartIdx;
         uint32_t partIdxRB = deriveRightBottomIdx(puIdx);
@@ -1895,6 +2006,7 @@ void CUData::getInterNeighbourMV(InterNeighbourMV *neighbour, uint32_t partUnitI
         // Mark the PMV as unavailable.
         for (int i = 0; i < 2; i++)
             neighbour->refIdx[i] = -1;
+        neighbour->isAvailable = (tmpCU != NULL) && (tmpCU->isInter(idx));
         return;
     }
 
@@ -1905,6 +2017,7 @@ void CUData::getInterNeighbourMV(InterNeighbourMV *neighbour, uint32_t partUnitI
 
         // Get the reference idx.
         neighbour->refIdx[i] = tmpCU->m_refIdx[i][idx];
+        neighbour->isAvailable = (tmpCU != NULL) && (tmpCU->isInter(idx));
     }
 }
 
@@ -1958,8 +2071,19 @@ bool CUData::getIndirectPMV(MV& outMV, InterNeighbourMV *neighbours, uint32_t pi
             int neibRefPOC = m_slice->m_refPOCList[picList][partRefIdx];
             MV mvp = neighbours->mv[picList];
 
+#if ENABLE_MULTIVIEW || ENABLE_SCC_EXT
+            if ((curRefPOC == curPOC) == (neibRefPOC == curPOC))
+            {
+                if (curRefPOC == curPOC)
+                    outMV = mvp;
+                if (!(curRefPOC == curPOC))
+                    outMV = scaleMvByPOCDist(mvp, curPOC, curRefPOC, neibPOC, neibRefPOC);
+                return true;
+            }
+#else
             outMV = scaleMvByPOCDist(mvp, curPOC, curRefPOC, neibPOC, neibRefPOC);
             return true;
+#endif
         }
     }
     return false;
@@ -1995,7 +2119,16 @@ bool CUData::getColMVP(MV& outMV, int& outRefIdx, int picList, int cuAddr, int p
     int curRefPOC = m_slice->m_refPOCList[picList][outRefIdx];
     int curPOC = m_slice->m_poc;
 
+#if ENABLE_MULTIVIEW || ENABLE_SCC_EXT
+    if ((colPOC == colRefPOC) != (curPOC == curRefPOC))
+        return false;
+    else if (curRefPOC == curPOC)
+        outMV = colmv;
+    else if (!(curRefPOC == curPOC))
+        outMV = scaleMvByPOCDist(colmv, curPOC, curRefPOC, colPOC, colRefPOC);
+#else
     outMV = scaleMvByPOCDist(colmv, curPOC, curRefPOC, colPOC, colRefPOC);
+#endif;
     return true;
 }
 
@@ -2146,3 +2279,301 @@ void CUData::calcCTUGeoms(uint32_t ctuWidth, uint32_t ctuHeight, uint32_t maxCUS
         rangeCUIdx += sbWidth * sbWidth;
     }
 }
+
+#if ENABLE_SCC_EXT
+bool CUData::getDerivedBV(uint32_t absPartIdx, const MV& currentMv, MV& derivedMv, uint32_t width, uint32_t height)
+{
+    const int   ctuWidth = m_slice->m_param->maxCUSize;
+    const int   ctuHeight = m_slice->m_param->maxCUSize;
+    int   cuPelX = m_cuPelX + (absPartIdx ? g_zscanToPelX[absPartIdx] : 0);
+    int   cuPelY = m_cuPelY + (absPartIdx ? g_zscanToPelX[absPartIdx] : 0);
+    int rngX = cuPelX + (currentMv.x >> 2);
+    int rngY = cuPelY + (currentMv.y >> 2);
+    uint32_t m_frameWidthInCtus = (m_slice->m_sps->picWidthInLumaSamples % ctuWidth) ? m_slice->m_sps->picWidthInLumaSamples / ctuWidth + 1 : m_slice->m_sps->picWidthInLumaSamples / ctuWidth;
+
+    if (rngX < 0 || rngY < 0 || (rngX + width) > m_slice->m_sps->picWidthInLumaSamples || (rngY + height) > m_slice->m_sps->picHeightInLumaSamples)
+    {
+        return false;
+    }
+
+    int refCtbAddr = (rngY / ctuHeight) * m_frameWidthInCtus + (rngX / ctuWidth);
+
+    int      relCUPelX = rngX & (ctuWidth - 1);
+    int      relCUPelY = rngY & (ctuHeight - 1);
+    uint32_t absPartIdxDerived = g_rasterToZscan[((relCUPelY >> 2) << 4) + (relCUPelX >> 2)];
+    CUData* refCU = m_encData->getPicCTU(refCtbAddr);
+
+    if (refCU->m_slice == NULL)
+        return false;
+
+    MVField mv1;
+    refCU->getMvField(refCU, absPartIdxDerived, 0, mv1);
+
+    int iCurrCtbAddr = (m_cuPelY / ctuHeight) * m_frameWidthInCtus + (m_cuPelX / ctuWidth);
+    uint32_t currAbsPartIdx = g_rasterToZscan[(((m_cuPelY & (ctuHeight - 1)) >> 2) << 4) + ((m_cuPelX & (ctuWidth - 1)) >> 2)];
+
+    if ((refCtbAddr > iCurrCtbAddr) || ((refCtbAddr == iCurrCtbAddr) && (absPartIdxDerived >= currAbsPartIdx)))
+        return false;
+
+    int refIdx = mv1.refIdx;
+    bool isIBC;
+    if (refCU->isIntra(absPartIdxDerived))
+    {
+        isIBC = false;
+    }
+    else
+    {
+        isIBC = (refIdx >= 0) ? (refCU->m_slice->m_refFrameList[0][refIdx]->m_poc == refCU->m_slice->m_poc) : 0;
+    }
+    derivedMv = mv1.mv;
+    derivedMv += currentMv;
+
+    return isIBC;
+
+}
+
+bool CUData::isIntraBC(const CUData* cu, uint32_t absPartIdx) const
+{
+    if (cu->isIntra(absPartIdx))
+    {
+        return false;
+    }
+    MVField mv;
+    cu->getMvField(cu, absPartIdx, 0, mv);
+    int iRefIdx = mv.refIdx;
+    bool isNeighborIntraBC = (iRefIdx >= 0) ? (m_slice->m_refFrameList[0][iRefIdx]->m_poc == m_slice->m_poc) : false;
+
+    return isNeighborIntraBC;
+}
+
+bool CUData::getColMVPIBC(int ctuRsAddr, int partUnitIdx, MV& rcMv)
+{
+    uint32_t absPartAddr = partUnitIdx;
+
+    // use coldir.
+    Frame* colPic = m_slice->m_lastEncPic;
+    if (!colPic)
+        return false;
+
+    CUData* colCU = m_encData->getPicCTU(ctuRsAddr);
+    MVField tempMv;
+    colCU->getMvField(colCU, absPartAddr, 0, tempMv);
+    if (tempMv.refIdx == REF_NOT_VALID)
+        return false;
+
+    rcMv = tempMv.mv;
+
+    return true;
+}
+
+void CUData::getIntraBCMVPsEncOnly(uint32_t absPartIdx, MV* MvPred, int& nbPred, int puIdx)
+{
+    uint32_t        tempPartIdx;
+    uint32_t        left, above;
+    MVField         tempMvField;
+
+    int width, height;
+    getPartIndexAndSize(puIdx, absPartIdx, width, height);
+    uint32_t            numPartInCUWidth = s_numPartInCUSize;
+    uint32_t            m_numPartitionsInCtu = s_numPartInCUSize * s_numPartInCUSize;
+    uint32_t            m_frameWidthInCtus = (m_slice->m_sps->picWidthInLumaSamples % m_slice->m_param->maxCUSize) ? m_slice->m_sps->picWidthInLumaSamples / m_slice->m_param->maxCUSize + 1 : m_slice->m_sps->picWidthInLumaSamples / m_slice->m_param->maxCUSize;
+
+    uint32_t            partIdxLT = m_absIdxInCTU + absPartIdx;
+    uint32_t            partIdxLB = g_rasterToZscan[g_zscanToRaster[partIdxLT] + (height / 4 - 1) * numPartInCUWidth];
+    uint32_t            partIdxRT = g_rasterToZscan[g_zscanToRaster[partIdxLT] + width / 4 - 1];
+
+    left = above = 0;
+
+    MvPred[0] = m_lastIntraBCMv[0];
+    if (MvPred[0] != MV(0, 0))
+    {
+        nbPred++;
+        if (getDerivedBV(absPartIdx, MvPred[nbPred - 1], MvPred[nbPred], width, height))
+            nbPred++;
+    }
+    MvPred[nbPred] = m_lastIntraBCMv[1];
+    if (MvPred[nbPred] != MV(0, 0))
+    {
+        nbPred++;
+        if (getDerivedBV(absPartIdx, MvPred[nbPred - 1], MvPred[nbPred], width, height))
+            nbPred++;
+    }
+
+    //left
+    const CUData* leftCU = getPULeft(tempPartIdx, partIdxLB);
+    left = leftCU ? isIntraBC(leftCU, tempPartIdx) : 0;
+
+    if (left)
+    {
+        leftCU->getMvField(leftCU, tempPartIdx, 0, tempMvField);
+        MvPred[nbPred++] = tempMvField.mv;
+        if (getDerivedBV(absPartIdx, MvPred[nbPred - 1], MvPred[nbPred], width, height))
+        {
+            nbPred++;
+        }
+    }
+
+    //above
+    const CUData* aboveCU = getPUAbove(tempPartIdx, partIdxRT);
+    above = aboveCU ? isIntraBC(aboveCU, tempPartIdx) : 0;
+
+    if (above)
+    {
+        aboveCU->getMvField(aboveCU, tempPartIdx, 0, tempMvField);
+        MvPred[nbPred++] = tempMvField.mv;
+        if (getDerivedBV(absPartIdx, MvPred[nbPred - 1], MvPred[nbPred], width, height))
+        {
+            nbPred++;
+        }
+    }
+
+    if (m_slice->isOnlyCurrentPictureAsReference())
+    {
+        MV mvCol;
+        bool isColAvail = false;
+        if (m_absIdxInCTU && m_slice->m_lastEncPic && m_slice->m_lastEncPic->m_poc < m_slice->m_poc)
+        {
+            uint32_t partIdxRB;
+            partIdxRB = deriveRightBottomIdx(puIdx);
+
+            uint32_t absPartIdxTmp = g_zscanToRaster[partIdxRB];
+            uint32_t absPartAddr = m_absIdxInCTU + absPartIdx;
+            int      iLCUIdx = -1;
+
+            if (((m_encData->getPicCTU(m_cuAddr)->m_cuPelX + g_zscanToPelX[g_rasterToZscan[absPartIdxTmp]] + 4) < m_slice->m_sps->picWidthInLumaSamples)  // image boundary check
+                && ((m_encData->getPicCTU(m_cuAddr)->m_cuPelY + g_zscanToPelY[g_rasterToZscan[absPartIdxTmp]] + 4) < m_slice->m_sps->picHeightInLumaSamples))
+            {
+                if ((absPartIdxTmp % numPartInCUWidth < numPartInCUWidth - 1) &&           // is not at the last column of LCU
+                    (absPartIdxTmp / numPartInCUWidth < s_numPartInCUSize - 1)) // is not at the last row    of LCU
+                {
+                    absPartAddr = g_rasterToZscan[absPartIdxTmp + numPartInCUWidth + 1];
+                    iLCUIdx = m_cuAddr;
+                }
+                else if (absPartIdxTmp % numPartInCUWidth < numPartInCUWidth - 1)           // is not at the last column of CTU But is last row of CTU
+                {
+                    absPartAddr = g_rasterToZscan[(absPartIdxTmp + numPartInCUWidth + 1) % m_numPartitionsInCtu];
+                    iLCUIdx = m_cuAddr + m_frameWidthInCtus;
+                }
+                else if (absPartIdxTmp / numPartInCUWidth < s_numPartInCUSize - 1)          // is not at the last row of CTU But is last column of CTU
+                {
+                    absPartAddr = g_rasterToZscan[absPartIdxTmp + 1];
+                    iLCUIdx = m_cuAddr + 1;
+                }
+            }
+            if (iLCUIdx >= 0)
+            {
+                isColAvail = getColMVPIBC(iLCUIdx, absPartAddr, mvCol);
+
+                if (!isColAvail)
+                {
+                    uint32_t uiPartIdxCenter;
+                    uiPartIdxCenter = deriveCenterIdx(puIdx);
+                    isColAvail = getColMVPIBC(m_cuAddr, uiPartIdxCenter, mvCol);
+                }
+            }
+        }
+        if (isColAvail)
+        {
+            MvPred[nbPred++] = mvCol;
+            if (getDerivedBV(absPartIdx, MvPred[nbPred - 1], MvPred[nbPred], width, height))
+            {
+                nbPred++;
+            }
+        }
+    }
+
+    // Below Left predictor search
+    const CUData* tempBelowLeftCU = getPUBelowLeft(tempPartIdx, partIdxLB);
+    uint32_t belowLeft = (tempBelowLeftCU) ? tempBelowLeftCU->isIntraBC(tempBelowLeftCU, tempPartIdx) : 0;
+    if (belowLeft)
+    {
+        tempBelowLeftCU->getMvField(tempBelowLeftCU, tempPartIdx, 0, tempMvField);
+        MvPred[nbPred++] = tempMvField.mv;
+        if (getDerivedBV(absPartIdx, MvPred[nbPred - 1], MvPred[nbPred], width, height))
+        {
+            nbPred++;
+        }
+    }
+
+    // Above Right predictor search
+    const CUData* tempAboveRightCU = getPUAboveRight(tempPartIdx, partIdxRT);
+    uint32_t aboveRight = (tempAboveRightCU) ? tempAboveRightCU->isIntraBC(tempAboveRightCU, tempPartIdx) : 0;
+    if (aboveRight)
+    {
+        tempAboveRightCU->getMvField(tempAboveRightCU, tempPartIdx, 0, tempMvField);
+        MvPred[nbPred++] = tempMvField.mv;
+        if (getDerivedBV(absPartIdx, MvPred[nbPred - 1], MvPred[nbPred], width, height))
+        {
+            nbPred++;
+        }
+    }
+
+    // Above Left predictor search
+    const CUData* tempAboveLeftCU = getPUAboveLeft(tempPartIdx, partIdxLT);
+    uint32_t aboveLeft = (tempAboveLeftCU) ? tempAboveLeftCU->isIntraBC(tempAboveLeftCU, tempPartIdx) : 0;
+    if (aboveLeft)
+    {
+        tempAboveLeftCU->getMvField(tempAboveLeftCU, tempPartIdx, 0, tempMvField);
+        MvPred[nbPred++] = tempMvField.mv;
+        if (getDerivedBV(absPartIdx, MvPred[nbPred - 1], MvPred[nbPred], width, height))
+        {
+            nbPred++;
+        }
+    }
+}
+
+void CUData::roundMergeCandidates(MVField(*pcMvFieldNeighbours)[2], int iCount) const
+{
+    if (m_slice->m_useIntegerMv)
+    {
+        for (int i = 0; i < iCount; i++)
+        {
+            pcMvFieldNeighbours[i][0].mv = (pcMvFieldNeighbours[i][0].mv >> 2) << 2;
+            pcMvFieldNeighbours[i][0].refIdx = pcMvFieldNeighbours[i][0].refIdx;
+        }
+    }
+    else
+    {
+        for (int i = 0; i < iCount; i++)
+        {
+            int iCurrRefIdx = pcMvFieldNeighbours[i][0].refIdx;
+            if (iCurrRefIdx >= 0)
+            {
+                if (m_slice->m_refFrameList[0][iCurrRefIdx]->m_poc == m_slice->m_poc)
+                {
+                    pcMvFieldNeighbours[i][0].mv = (pcMvFieldNeighbours[i][0].mv >> 2) << 2;
+                    pcMvFieldNeighbours[i][0].refIdx = pcMvFieldNeighbours[i][0].refIdx;
+                }
+            }
+        }
+    }
+}
+
+bool CUData::is8x8BipredRestriction(MV mvL0, MV mvL1, int iRefIdxL0, int iRefIdxL1) const
+{
+    if (iRefIdxL0 < -1 || iRefIdxL0 >= MAX_NUM_REF)
+    {
+        iRefIdxL0 = -1;
+    }
+    if (iRefIdxL1 < -1 || iRefIdxL1 >= MAX_NUM_REF)
+    {
+        iRefIdxL1 = -1;
+    }
+    bool b8x8BiPredRestricted = false;
+    int RefPOCL0 = -1;
+    int RefPOCL1 = -1;
+    if (iRefIdxL0 >= 0 && iRefIdxL1 >= 0)
+    {
+        RefPOCL0 = m_slice->m_refPOCList[0][iRefIdxL0];
+        RefPOCL1 = m_slice->m_refPOCList[1][iRefIdxL1];
+        bool mvL0Int = (((mvL0.x & 0x3) == 0) && ((mvL0.y & 0x3) == 0));
+        bool mvL1Int = (((mvL1.x & 0x3) == 0) && ((mvL1.y & 0x3) == 0));
+        bool IdenticalMV = ((mvL0 == mvL1) && (RefPOCL0 == RefPOCL1));
+        b8x8BiPredRestricted = (
+            !mvL0Int && !mvL1Int && !IdenticalMV &&
+            (m_slice->m_param->bEnableSCC)
+            && (m_slice->m_bUseSao || !m_slice->m_pps->bPicDisableDeblockingFilter || 0));
+    }
+    return b8x8BiPredRestricted;
+}
+#endif

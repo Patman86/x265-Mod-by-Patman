@@ -81,12 +81,15 @@ public:
     /* These two items will be NULL until the Frame begins to be encoded, at which point
      * it will be assigned a FrameData instance, which comes with a reconstructed image PicYuv */
     FrameData*             m_encData;
-    PicYuv*                m_reconPic;
+    PicYuv*                m_reconPic[NUM_RECON_VERSION];
 
     /* Data associated with x265_picture */
     PicYuv*                m_fencPic;
     PicYuv*                m_fencPicSubsampled2;
     PicYuv*                m_fencPicSubsampled4;
+
+    PicList                refPicSetInterLayer0;
+    PicList                refPicSetInterLayer1;
 
     int                    m_poc;
     int                    m_encodeOrder;
@@ -160,6 +163,13 @@ public:
     uint8_t                m_tempLayer;
     int8_t                 m_gopId;
     bool                   m_sameLayerRefPic;
+
+    int                    m_sLayerId;
+    bool                   m_valid;
+
+    int                    m_viewId;
+    Frame*                 m_nextSubDPB;           // PicList doubly linked list pointers
+    Frame*                 m_prevSubDPB;
 
     Frame();
 

@@ -29,16 +29,82 @@
 
 using namespace X265_NS;
 
-void Slice::setRefPicList(PicList& picList)
+#if ENABLE_MULTIVIEW
+void Slice::createInterLayerReferencePictureSet(PicList& picList, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1)
 {
+
+    for (int i = 0; i < 1; i++)
+    {
+        int layerIdRef = 0;// getRefPicLayerId(i);
+        Frame* refPic = picList.getPOC(m_poc, 0);
+        int viewIdCur = 0;
+        int viewIdZero = 1;
+        int viewIdRef = 1;
+
+        if ((viewIdCur <= viewIdZero && viewIdCur <= viewIdRef) || (viewIdCur >= viewIdZero && viewIdCur >= viewIdRef))
+        {
+            refPicSetInterLayer0.pushBackSubDPB(*refPic);
+        }
+        else
+        {
+            refPicSetInterLayer1.pushBackSubDPB(*refPic);
+        }
+    }
+}
+#endif
+
+void Slice::setRefPicList(PicList& picList, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1, int sLayerId)
+{
+    bool checkNumPocTotalCurr = m_param->bEnableSCC ? false : true;
     if (m_sliceType == I_SLICE)
     {
         memset(m_refFrameList, 0, sizeof(m_refFrameList));
         memset(m_refReconPicList, 0, sizeof(m_refReconPicList));
         memset(m_refPOCList, 0, sizeof(m_refPOCList));
         m_numRefIdx[1] = m_numRefIdx[0] = 0;
+
+#if ENABLE_SCC_EXT
+        if (!checkNumPocTotalCurr)
+        {
+            if (m_rps.numberOfPictures == 0)
+            {
+                Frame* prevPic = picList.getPOC(X265_MAX(0, m_poc - 1));
+                if (prevPic->m_poc != X265_MAX(0, m_poc - 1))
+                {
+                    prevPic = picList.getPOC(m_poc);
+                }
+                m_lastEncPic = prevPic;
+            }
+            return;
+        }
+#endif
+
         return;
     }
+
+#if ENABLE_SCC_EXT || ENABLE_MULTIVIEW || ENABLE_ALPHA
+    /*Reset the number of references for I-slice marked as P-slice*/
+    if ((m_param->bEnableSCC || sLayerId) && m_sliceType != m_origSliceType)
+    {
+        memset(m_refFrameList, 0, sizeof(m_refFrameList));
+        memset(m_refReconPicList, 0, sizeof(m_refReconPicList));
+        memset(m_refPOCList, 0, sizeof(m_refPOCList));
+        m_numRefIdx[0] = 1;
+    }
+#endif
+
+#if ENABLE_SCC_EXT
+    if (!checkNumPocTotalCurr && m_rps.numberOfPictures == 0)
+    {
+        Frame* prevPic = picList.getPOC(X265_MAX(0, m_poc - 1));
+        if (prevPic->m_poc != X265_MAX(0, m_poc - 1))
+        {
+            prevPic = picList.getPOC(m_poc);
+
+        }
+        m_lastEncPic = prevPic;
+    }
+#endif
 
     Frame* refPic = NULL;
     Frame* refPicSetStCurr0[MAX_NUM_REF];
@@ -51,9 +117,9 @@ void Slice::setRefPicList(PicList& picList)
 
     for (i = 0; i < m_rps.numberOfNegativePictures; i++)
     {
-        if (m_rps.bUsed[i])
+        if (m_rps.bUsed[i] && m_origSliceType != I_SLICE)
         {
-            refPic = picList.getPOC(m_poc + m_rps.deltaPOC[i]);
+            refPic = picList.getPOC(m_poc + m_rps.deltaPOC[i], m_rps.deltaPOC[i] ? sLayerId : 0);
             refPicSetStCurr0[numPocStCurr0] = refPic;
             numPocStCurr0++;
         }
@@ -61,9 +127,9 @@ void Slice::setRefPicList(PicList& picList)
 
     for (; i < m_rps.numberOfNegativePictures + m_rps.numberOfPositivePictures; i++)
     {
-        if (m_rps.bUsed[i])
+        if (m_rps.bUsed[i] && m_origSliceType != I_SLICE)
         {
-            refPic = picList.getPOC(m_poc + m_rps.deltaPOC[i]);
+            refPic = picList.getPOC(m_poc + m_rps.deltaPOC[i], m_rps.deltaPOC[i] ? sLayerId : 0);
             refPicSetStCurr1[numPocStCurr1] = refPic;
             numPocStCurr1++;
         }
@@ -75,17 +141,43 @@ void Slice::setRefPicList(PicList& picList)
     // ref_pic_list_init
     Frame* rpsCurrList0[MAX_NUM_REF + 1];
     Frame* rpsCurrList1[MAX_NUM_REF + 1];
+#if ENABLE_MULTIVIEW
+    int numPocTotalCurr = numPocStCurr0 + numPocStCurr1 + numPocLtCurr + refPicSetInterLayer0.size() + refPicSetInterLayer1.size();
+#else
     int numPocTotalCurr = numPocStCurr0 + numPocStCurr1 + numPocLtCurr;
+#endif
+
+#if ENABLE_SCC_EXT
+    if (m_param->bEnableSCC)
+        numPocTotalCurr++;
+#endif
 
     int cIdx = 0;
     for (i = 0; i < numPocStCurr0; i++, cIdx++)
         rpsCurrList0[cIdx] = refPicSetStCurr0[i];
+
+#if ENABLE_MULTIVIEW
+    if (m_param->numViews > 1)
+        for (i = 0; i < refPicSetInterLayer0.size(); i++, cIdx++)
+            rpsCurrList0[cIdx] = refPicSetInterLayer0.getPOC(m_poc, 0);
+#endif
 
     for (i = 0; i < numPocStCurr1; i++, cIdx++)
         rpsCurrList0[cIdx] = refPicSetStCurr1[i];
 
     for (i = 0; i < numPocLtCurr; i++, cIdx++)
         rpsCurrList0[cIdx] = refPicSetLtCurr[i];
+
+#if ENABLE_MULTIVIEW
+    if (m_param->numViews > 1)
+        for (i = 0; i < refPicSetInterLayer1.size(); i++, cIdx++)
+            rpsCurrList0[cIdx] = refPicSetInterLayer1.getPOC(m_poc, 0);
+#endif
+
+#if ENABLE_SCC_EXT
+    if (m_param->bEnableSCC)
+        rpsCurrList0[cIdx++] = picList.getPOC(m_poc);
+#endif
 
     X265_CHECK(cIdx == numPocTotalCurr, "RPS index check fail\n");
 
@@ -95,11 +187,28 @@ void Slice::setRefPicList(PicList& picList)
         for (i = 0; i < numPocStCurr1; i++, cIdx++)
             rpsCurrList1[cIdx] = refPicSetStCurr1[i];
 
+#if ENABLE_MULTIVIEW
+        if (m_param->numViews > 1)
+            for (i = 0; i < refPicSetInterLayer1.size(); i++, cIdx++)
+                rpsCurrList1[cIdx] = refPicSetInterLayer1.getPOC(m_poc, 0);
+#endif
+
         for (i = 0; i < numPocStCurr0; i++, cIdx++)
             rpsCurrList1[cIdx] = refPicSetStCurr0[i];
 
         for (i = 0; i < numPocLtCurr; i++, cIdx++)
             rpsCurrList1[cIdx] = refPicSetLtCurr[i];
+
+#if ENABLE_MULTIVIEW
+        if (m_param->numViews > 1)
+            for (i = 0; i < refPicSetInterLayer0.size(); i++, cIdx++)
+                rpsCurrList1[cIdx] = refPicSetInterLayer0.getPOC(m_poc, 0);
+#endif
+
+#if  ENABLE_SCC_EXT
+        if (m_param->bEnableSCC)
+            rpsCurrList1[cIdx++] = picList.getPOC(m_poc);
+#endif
 
         X265_CHECK(cIdx == numPocTotalCurr, "RPS index check fail\n");
     }
@@ -109,7 +218,17 @@ void Slice::setRefPicList(PicList& picList)
         cIdx = rIdx % numPocTotalCurr;
         X265_CHECK(cIdx >= 0 && cIdx < numPocTotalCurr, "RPS index check fail\n");
         m_refFrameList[0][rIdx] = rpsCurrList0[cIdx];
+#if ENABLE_MULTIVIEW
+        m_refFrameList[0][rIdx] = rpsCurrList0[cIdx];
+#endif
     }
+
+#if  ENABLE_SCC_EXT
+    if (m_param->bEnableSCC && numPocTotalCurr > m_numRefIdx[0])
+    {
+        m_refFrameList[0][m_numRefIdx[0] - 1] = picList.getPOC(m_poc);
+    }
+#endif
 
     if (m_sliceType != B_SLICE)
     {
@@ -123,6 +242,9 @@ void Slice::setRefPicList(PicList& picList)
             cIdx = rIdx % numPocTotalCurr;
             X265_CHECK(cIdx >= 0 && cIdx < numPocTotalCurr, "RPS index check fail\n");
             m_refFrameList[1][rIdx] = rpsCurrList1[cIdx];
+#if ENABLE_MULTIVIEW
+            m_refFrameList[1][rIdx] = rpsCurrList1[cIdx];
+#endif
         }
     }
 
@@ -144,6 +266,34 @@ void Slice::disableWeights()
                 wp.inputOffset = 0;
             }
 }
+
+#if  ENABLE_SCC_EXT
+bool Slice::isOnlyCurrentPictureAsReference() const
+{
+    if (m_sliceType == I_SLICE)
+    {
+        return true;
+    }
+
+    for (int i = 0; i < m_numRefIdx[0]; i++)
+    {
+        if (m_refFrameList[0][i]->m_poc != m_poc)
+        {
+            return false;
+        }
+    }
+
+    for (int i = 0; i < m_numRefIdx[1]; i++)
+    {
+        if (m_refFrameList[1][i]->m_poc != m_poc)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+#endif
 
 /* Sorts the deltaPOC and Used by current values in the RPS based on the
  * deltaPOC values.  deltaPOC values are sorted with -ve values before the +ve

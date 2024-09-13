@@ -1349,6 +1349,10 @@ int RateControl::rateControlStart(Frame* curFrame, RateControlEntry* rce, Encode
     FrameData& curEncData = *curFrame->m_encData;
     m_curSlice = curEncData.m_slice;
     m_sliceType = m_curSlice->m_sliceType;
+#if ENABLE_SCC_EXT
+    if(m_param->bEnableSCC)
+        m_sliceType = m_curSlice->m_origSliceType;
+#endif
     rce->sliceType = m_sliceType;
     if (!m_2pass)
         rce->keptAsRef = IS_REFERENCED(curFrame);
@@ -1466,7 +1470,7 @@ int RateControl::rateControlStart(Frame* curFrame, RateControlEntry* rce, Encode
 
         int mincr = enc->m_vps.ptl.minCrForLevel;
         /* Profiles above Main10 don't require maxAU size check, so just set the maximum to a large value. */
-        if (enc->m_vps.ptl.profileIdc > Profile::MAIN10 || enc->m_vps.ptl.levelIdc == Level::NONE)
+        if (enc->m_vps.ptl.profileIdc[0] > Profile::MAIN10 || enc->m_vps.ptl.levelIdc == Level::NONE)
             rce->frameSizeMaximum = 1e9;
         else
         {

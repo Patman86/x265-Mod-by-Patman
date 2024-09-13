@@ -183,6 +183,7 @@ void x265_param_default(x265_param* param)
     param->bEnableSceneCutAwareQp = 0;
     param->fwdMaxScenecutWindow = 1200;
     param->bwdMaxScenecutWindow = 600;
+    param->mcstfFrameRange = 2;
     for (int i = 0; i < 6; i++)
     {
         int deltas[6] = { 5, 4, 3, 2, 1, 0 };
@@ -391,6 +392,10 @@ void x265_param_default(x265_param* param)
     param->bEnableTemporalFilter = 0;
     param->temporalFilterStrength = 0.95;
 
+    /*Alpha Channel Encoding*/
+    param->bEnableAlpha = 0;
+    param->numScalableLayers = 1;
+
 #ifdef SVT_HEVC
     param->svtHevcParam = svtParam;
     svt_param_default(param);
@@ -398,6 +403,15 @@ void x265_param_default(x265_param* param)
     /* Film grain characteristics model filename */
     param->filmGrain = NULL;
     param->bEnableSBRC = 0;
+
+    /* Multi-View Encoding*/
+    param->numViews = 1;
+    param->format = 0;
+
+    param->numLayers = 1;
+
+    /* SCC */
+    param->bEnableSCC = 0;
 }
 
 int x265_param_default_preset(x265_param* param, const char* preset, const char* tune)
@@ -417,6 +431,7 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
 
         if (!strcmp(preset, "ultrafast"))
         {
+            param->mcstfFrameRange = 1;
             param->maxNumMergeCand = 2;
             param->bIntraInBFrames = 0;
             param->lookaheadDepth = 5;
@@ -441,6 +456,7 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
         }
         else if (!strcmp(preset, "superfast"))
         {
+            param->mcstfFrameRange = 1;
             param->maxNumMergeCand = 2;
             param->bIntraInBFrames = 0;
             param->lookaheadDepth = 10;
@@ -461,6 +477,7 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
         }
         else if (!strcmp(preset, "veryfast"))
         {
+            param->mcstfFrameRange = 1;
             param->maxNumMergeCand = 2;
             param->limitReferences = 3;
             param->bIntraInBFrames = 0;
@@ -474,6 +491,7 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
         }
         else if (!strcmp(preset, "faster"))
         {
+            param->mcstfFrameRange = 1;
             param->maxNumMergeCand = 2;
             param->limitReferences = 3;
             param->bIntraInBFrames = 0;
@@ -485,6 +503,7 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
         }
         else if (!strcmp(preset, "fast"))
         {
+            param->mcstfFrameRange = 1;
             param->maxNumMergeCand = 2;
             param->limitReferences = 3;
             param->bEnableEarlySkip = 0;
@@ -497,6 +516,7 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
         }
         else if (!strcmp(preset, "medium"))
         {
+            param->mcstfFrameRange = 1;
             /* defaults */
         }
         else if (!strcmp(preset, "slow"))
@@ -1437,6 +1457,33 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("film-grain") p->filmGrain = (char* )value;
         OPT("mcstf") p->bEnableTemporalFilter = atobool(value);
         OPT("sbrc") p->bEnableSBRC = atobool(value);
+#if ENABLE_ALPHA
+        OPT("alpha")
+        {
+            if (atobool(value))
+            {
+                p->bEnableAlpha = 1;
+                p->numScalableLayers = 2;
+                p->numLayers = 2;
+            }
+        }
+#endif
+#if ENABLE_MULTIVIEW
+        OPT("format")
+            p->format = atoi(value);
+        OPT("num-views")
+        {
+            p->numViews = atoi(value);
+        }
+#endif
+#if ENABLE_SCC_EXT
+        OPT("scc")
+        {
+            p->bEnableSCC = atoi(value);
+            if (p->bEnableSCC)
+                p->bEnableWeightedPred = false;
+        }
+#endif
         else
             return X265_PARAM_BAD_NAME;
     }
@@ -1674,7 +1721,7 @@ int x265_check_params(x265_param* param)
         CHECK(param->edgeVarThreshold < 0.0f || param->edgeVarThreshold > 1.0f,
               "Minimum edge density percentage for a CU should be an integer between 0 to 100");
     }
-    CHECK(param->bframes && param->bframes >= param->lookaheadDepth && !param->rc.bStatRead,
+    CHECK(param->bframes && (param->bEnableTemporalFilter ? (param->bframes > param->lookaheadDepth) : (param->bframes >= param->lookaheadDepth)) && !param->rc.bStatRead,
           "Lookahead depth must be greater than the max consecutive bframe count");
     CHECK(param->bframes < 0,
           "bframe count should be greater than zero");
@@ -1908,6 +1955,21 @@ int x265_check_params(x265_param* param)
         }
     }
     CHECK(param->rc.dataShareMode != X265_SHARE_MODE_FILE && param->rc.dataShareMode != X265_SHARE_MODE_SHAREDMEM, "Invalid data share mode. It must be one of the X265_DATA_SHARE_MODES enum values\n" );
+#if ENABLE_ALPHA
+    if (param->bEnableAlpha)
+    {
+        CHECK((param->internalCsp != X265_CSP_I420), "Alpha encode supported only with i420a colorspace");
+        CHECK((param->analysisMultiPassDistortion || param->analysisMultiPassRefine), "Alpha encode doesnot support multipass feature");
+    }
+#endif
+#if ENABLE_MULTIVIEW
+    CHECK((param->numViews > 2), "Multi-View Encoding currently support only 2 views");
+    CHECK((param->numViews > 1) && (param->internalBitDepth != 8), "BitDepthConstraint must be 8 for Multiview main profile");
+    CHECK((param->numViews > 1) && (param->analysisMultiPassDistortion || param->analysisMultiPassRefine), "Multiview encode doesnot support multipass feature");
+#endif
+#if ENABLE_SCC_EXT
+    CHECK(!!param->bEnableSCC&& param->rdLevel != 6, "Enabling scc extension in x265 requires rdlevel of 6 ");
+#endif
     return check_failed;
 }
 
@@ -2072,6 +2134,12 @@ void x265_print_params(x265_param* param)
     TOOLOPT(param->rc.bStatWrite, "stats-write");
     TOOLOPT(param->rc.bStatRead,  "stats-read");
     TOOLOPT(param->bSingleSeiNal, "single-sei");
+#if ENABLE_ALPHA
+    TOOLOPT(param->numScalableLayers > 1, "alpha");
+#endif
+#if ENABLE_MULTIVIEW
+    TOOLOPT(param->numViews > 1, "multi-view");
+#endif
 #if ENABLE_HDR10_PLUS
     TOOLOPT(param->toneMapFile != NULL, "dhdr10-info");
 #endif
@@ -2336,6 +2404,16 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     if (p->filmGrain)
         s += sprintf(s, " film-grain=%s", p->filmGrain); // Film grain characteristics model filename
     BOOL(p->bEnableTemporalFilter, "mcstf");
+#if ENABLE_ALPHA
+    BOOL(p->bEnableAlpha, "alpha");
+#endif
+#if ENABLE_MULTIVIEW
+    s += sprintf(s, " num-views=%d", p->numViews);
+    s += sprintf(s, " format=%d", p->format);
+#endif
+#if ENABLE_SCC_EXT
+    s += sprintf(s, "scc=%d", p->bEnableSCC);
+#endif
     BOOL(p->bEnableSBRC, "sbrc");
 #undef BOOL
     return buf;
@@ -2558,6 +2636,7 @@ bool parseMaskingStrength(x265_param* p, const char* value)
 
 void x265_copy_params(x265_param* dst, x265_param* src)
 {
+    dst->mcstfFrameRange = src->mcstfFrameRange;
     dst->cpuid = src->cpuid;
     dst->frameNumThreads = src->frameNumThreads;
     if (src->numaPools) dst->numaPools = strdup(src->numaPools);
@@ -2856,6 +2935,18 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->confWinRightOffset = src->confWinRightOffset;
     dst->confWinBottomOffset = src->confWinBottomOffset;
     dst->bliveVBV2pass = src->bliveVBV2pass;
+#if ENABLE_ALPHA
+    dst->bEnableAlpha = src->bEnableAlpha;
+    dst->numScalableLayers = src->numScalableLayers;
+#endif
+#if ENABLE_MULTIVIEW
+    dst->numViews = src->numViews;
+    dst->format = src->format;
+#endif
+    dst->numLayers = src->numLayers;
+#if ENABLE_SCC_EXT
+    dst->bEnableSCC = src->bEnableSCC;
+#endif
 
     if (src->videoSignalTypePreset) dst->videoSignalTypePreset = strdup(src->videoSignalTypePreset);
     else dst->videoSignalTypePreset = NULL;

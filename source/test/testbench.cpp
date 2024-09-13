@@ -159,10 +159,11 @@ int main(int argc, char *argv[])
 
     struct test_arch_t
     {
-        char name[12];
+        char name[13];
         int flag;
     } test_arch[] =
     {
+#if X265_ARCH_X86
         { "SSE2", X265_CPU_SSE2 },
         { "SSE3", X265_CPU_SSE3 },
         { "SSSE3", X265_CPU_SSSE3 },
@@ -172,11 +173,15 @@ int main(int argc, char *argv[])
         { "AVX2", X265_CPU_AVX2 },
         { "BMI2", X265_CPU_AVX2 | X265_CPU_BMI1 | X265_CPU_BMI2 },
         { "AVX512", X265_CPU_AVX512 },
+#else
         { "ARMv6", X265_CPU_ARMV6 },
         { "NEON", X265_CPU_NEON },
         { "SVE2", X265_CPU_SVE2 },
         { "SVE", X265_CPU_SVE },
+        { "Neon_DotProd", X265_CPU_NEON_DOTPROD },
+        { "Neon_I8MM", X265_CPU_NEON_I8MM },
         { "FastNeonMRC", X265_CPU_FAST_NEON_MRC },
+#endif
         { "", 0 },
     };
 
@@ -190,10 +195,10 @@ int main(int argc, char *argv[])
         else
             continue;
 
-#if X265_ARCH_X86
+#if defined(X265_ARCH_X86) || defined(X265_ARCH_ARM64)
         EncoderPrimitives vecprim;
         memset(&vecprim, 0, sizeof(vecprim));
-        setupInstrinsicPrimitives(vecprim, test_arch[i].flag);
+        setupIntrinsicPrimitives(vecprim, test_arch[i].flag);
         setupAliasPrimitives(vecprim);
         for (size_t h = 0; h < sizeof(harness) / sizeof(TestHarness*); h++)
         {
@@ -231,8 +236,8 @@ int main(int argc, char *argv[])
 
     EncoderPrimitives optprim;
     memset(&optprim, 0, sizeof(optprim));
-#if X265_ARCH_X86
-    setupInstrinsicPrimitives(optprim, cpuid);
+#if defined(X265_ARCH_X86) || defined(X265_ARCH_ARM64)
+    setupIntrinsicPrimitives(optprim, cpuid);
 #endif
 
     setupAssemblyPrimitives(optprim, cpuid);

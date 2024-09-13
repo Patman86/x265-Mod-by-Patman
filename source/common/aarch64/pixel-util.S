@@ -60,11 +60,11 @@ endfunc
 function PFX(pixel_var_16x16_neon)
     pixel_var_start
     mov             w12, #16
-.loop_var_16:
+.Loop_var_16:
     sub             w12, w12, #1
     ld1             {v4.16b}, [x0], x1
     pixel_var_1 v4
-    cbnz            w12, .loop_var_16
+    cbnz            w12, .Loop_var_16
     pixel_var_end
     ret
 endfunc
@@ -72,12 +72,12 @@ endfunc
 function PFX(pixel_var_32x32_neon)
     pixel_var_start
     mov             w12, #32
-.loop_var_32:
+.Loop_var_32:
     sub             w12, w12, #1
     ld1             {v4.16b-v5.16b}, [x0], x1
     pixel_var_1 v4
     pixel_var_1 v5
-    cbnz            w12, .loop_var_32
+    cbnz            w12, .Loop_var_32
     pixel_var_end
     ret
 endfunc
@@ -85,14 +85,14 @@ endfunc
 function PFX(pixel_var_64x64_neon)
     pixel_var_start
     mov             w12, #64
-.loop_var_64:
+.Loop_var_64:
     sub             w12, w12, #1
     ld1             {v4.16b-v7.16b}, [x0], x1
     pixel_var_1 v4
     pixel_var_1 v5
     pixel_var_1 v6
     pixel_var_1 v7
-    cbnz            w12, .loop_var_64
+    cbnz            w12, .Loop_var_64
     pixel_var_end
     ret
 endfunc
@@ -148,7 +148,7 @@ endfunc
 function PFX(getResidual32_neon)
     lsl             x4, x3, #1
     mov             w12, #4
-.loop_residual_32:
+.Loop_residual_32:
     sub             w12, w12, #1
 .rept 4
     ld1             {v0.16b-v1.16b}, [x0], x3
@@ -166,7 +166,7 @@ function PFX(getResidual32_neon)
     st1             {v16.8h-v19.8h}, [x2], x4
     st1             {v20.8h-v23.8h}, [x2], x4
 .endr
-    cbnz            w12, .loop_residual_32
+    cbnz            w12, .Loop_residual_32
     ret
 endfunc
 
@@ -221,7 +221,7 @@ endfunc
 function PFX(pixel_sub_ps_32x32_neon)
     lsl             x1, x1, #1
     mov             w12, #4
-.loop_sub_ps_32:
+.Loop_sub_ps_32:
     sub             w12, w12, #1
 .rept 4
     ld1             {v0.16b-v1.16b}, [x2], x4
@@ -239,7 +239,7 @@ function PFX(pixel_sub_ps_32x32_neon)
     st1             {v16.8h-v19.8h}, [x0], x1
     st1             {v20.8h-v23.8h}, [x0], x1
 .endr
-    cbnz            w12, .loop_sub_ps_32
+    cbnz            w12, .Loop_sub_ps_32
     ret
 endfunc
 
@@ -247,7 +247,7 @@ function PFX(pixel_sub_ps_64x64_neon)
     lsl             x1, x1, #1
     sub             x1, x1, #64
     mov             w12, #16
-.loop_sub_ps_64:
+.Loop_sub_ps_64:
     sub             w12, w12, #1
 .rept 4
     ld1             {v0.16b-v3.16b}, [x2], x4
@@ -263,7 +263,7 @@ function PFX(pixel_sub_ps_64x64_neon)
     st1             {v16.8h-v19.8h}, [x0], #64
     st1             {v20.8h-v23.8h}, [x0], x1
 .endr
-    cbnz            w12, .loop_sub_ps_64
+    cbnz            w12, .Loop_sub_ps_64
     ret
 endfunc
 
@@ -318,7 +318,7 @@ endfunc
 function PFX(pixel_sub_ps_32x64_neon)
     lsl             x1, x1, #1
     mov             w12, #8
-.loop_sub_ps_32x64:
+.Loop_sub_ps_32x64:
     sub             w12, w12, #1
 .rept 4
     ld1             {v0.16b-v1.16b}, [x2], x4
@@ -336,7 +336,7 @@ function PFX(pixel_sub_ps_32x64_neon)
     st1             {v16.8h-v19.8h}, [x0], x1
     st1             {v20.8h-v23.8h}, [x0], x1
 .endr
-    cbnz            w12, .loop_sub_ps_32x64
+    cbnz            w12, .Loop_sub_ps_32x64
     ret
 endfunc
 
@@ -383,7 +383,7 @@ endfunc
 function PFX(pixel_add_ps_16x\h\()_neon)
     lsl             x5, x5, #1
     mov             w12, #\h / 8
-.loop_add_ps_16x\h\():
+.Loop_add_ps_16x\h\():
     sub             w12, w12, #1
 .rept 4
     ld1             {v0.16b}, [x2], x4
@@ -405,7 +405,7 @@ function PFX(pixel_add_ps_16x\h\()_neon)
     st1             {v4.16b}, [x0], x1
     st1             {v5.16b}, [x0], x1
 .endr
-    cbnz            w12, .loop_add_ps_16x\h
+    cbnz            w12, .Loop_add_ps_16x\h
     ret
 endfunc
 .endm
@@ -417,7 +417,7 @@ pixel_add_ps_16xN_neon 32
  function PFX(pixel_add_ps_32x\h\()_neon)
     lsl             x5, x5, #1
     mov             w12, #\h / 4
-.loop_add_ps_32x\h\():
+.Loop_add_ps_32x\h\():
     sub             w12, w12, #1
 .rept 4
     ld1             {v0.16b-v1.16b}, [x2], x4
@@ -436,7 +436,7 @@ pixel_add_ps_16xN_neon 32
     sqxtun2         v5.16b, v27.8h
     st1             {v4.16b-v5.16b}, [x0], x1
 .endr
-    cbnz            w12, .loop_add_ps_32x\h
+    cbnz            w12, .Loop_add_ps_32x\h
     ret
 endfunc
 .endm
@@ -448,7 +448,7 @@ function PFX(pixel_add_ps_64x64_neon)
     lsl             x5, x5, #1
     sub             x5, x5, #64
     mov             w12, #32
-.loop_add_ps_64x64:
+.Loop_add_ps_64x64:
     sub             w12, w12, #1
 .rept 2
     ld1             {v0.16b-v3.16b}, [x2], x4
@@ -480,7 +480,7 @@ function PFX(pixel_add_ps_64x64_neon)
     sqxtun2         v3.16b, v7.8h
     st1             {v0.16b-v3.16b}, [x0], x1
 .endr
-    cbnz            w12, .loop_add_ps_64x64
+    cbnz            w12, .Loop_add_ps_64x64
     ret
 endfunc
 
@@ -548,7 +548,7 @@ endfunc
 // void scale2D_64to32(pixel* dst, const pixel* src, intptr_t stride)
 function PFX(scale2D_64to32_neon)
     mov             w12, #32
-.loop_scale2D:
+.Loop_scale2D:
     ld1             {v0.16b-v3.16b}, [x1], x2
     sub             w12, w12, #1
     ld1             {v4.16b-v7.16b}, [x1], x2
@@ -561,7 +561,7 @@ function PFX(scale2D_64to32_neon)
     uqrshrn         v1.8b, v2.8h, #2
     uqrshrn2        v1.16b, v3.8h, #2
     st1             {v0.16b-v1.16b}, [x0], #32
-    cbnz            w12, .loop_scale2D
+    cbnz            w12, .Loop_scale2D
     ret
 endfunc
 
@@ -569,33 +569,33 @@ endfunc
 function PFX(pixel_planecopy_cp_neon)
     dup             v2.16b, w6
     sub             x5, x5, #1
-.loop_h:
+.Loop_h:
     mov             x6, x0
     mov             x12, x2
     mov             x7, #0
-.loop_w:
+.Loop_w:
     ldr             q0, [x6], #16
     ushl            v0.16b, v0.16b, v2.16b
     str             q0, [x12], #16
     add             x7, x7, #16
     cmp             x7, x4
-    blt             .loop_w
+    blt             .Loop_w
 
     add             x0, x0, x1
     add             x2, x2, x3
     sub             x5, x5, #1
-    cbnz            x5, .loop_h
+    cbnz            x5, .Loop_h
 
 // handle last row
     mov             x5, x4
     lsr             x5, x5, #3
-.loopW8:
+.LoopW8:
     ldr             d0, [x0], #8
     ushl            v0.8b, v0.8b, v2.8b
     str             d0, [x2], #8
     sub             x4, x4, #8
     sub             x5, x5, #1
-    cbnz            x5, .loopW8
+    cbnz            x5, .LoopW8
 
     mov             x5, #8
     sub             x5, x5, x4
@@ -1508,7 +1508,7 @@ function PFX(pixel_sa8d_32x64_neon)
     mov             x10, x30
     mov             w11, #4
     mov             w9, #0
-.loop_sa8d_32:
+.Loop_sa8d_32:
     sub             w11, w11, #1
     sa8d_16x16      w4
     sub             x0, x0, x1, lsl #4
@@ -1520,7 +1520,7 @@ function PFX(pixel_sa8d_32x64_neon)
     add             w9, w9, w4
     sub             x0, x0, #24
     sub             x2, x2, #24
-    cbnz            w11, .loop_sa8d_32
+    cbnz            w11, .Loop_sa8d_32
     mov             w0, w9
     ret             x10
 endfunc
@@ -1529,7 +1529,7 @@ function PFX(pixel_sa8d_64x64_neon)
     mov             x10, x30
     mov             w11, #4
     mov             w9, #0
-.loop_sa8d_64:
+.Loop_sa8d_64:
     sub             w11, w11, #1
     sa8d_16x16      w4
     sub             x0, x0, x1, lsl #4
@@ -1554,7 +1554,7 @@ function PFX(pixel_sa8d_64x64_neon)
 
     sub             x0, x0, #56
     sub             x2, x2, #56
-    cbnz            w11, .loop_sa8d_64
+    cbnz            w11, .Loop_sa8d_64
     mov             w0, w9
     ret             x10
 endfunc
@@ -1795,55 +1795,56 @@ endfunc
 function PFX(quant_neon)
     mov             w9, #1
     lsl             w9, w9, w4
-    dup             v0.2s, w9
+    dup             v0.4s, w9
     neg             w9, w4
     dup             v1.4s, w9
     add             w9, w9, #8
     dup             v2.4s, w9
     dup             v3.4s, w5
+    movi            v31.2d, #0
 
-    lsr             w6, w6, #2
-    eor             v4.16b, v4.16b, v4.16b
-    eor             w10, w10, w10
-    eor             v17.16b, v17.16b, v17.16b
+    lsr             w7, w6, #3
+    movi            v4.2d, #0
 
-.loop_quant:
+.Loop_quant:
 
-    ld1             {v18.4h}, [x0], #8
-    ld1             {v7.4s}, [x1], #16
-    sxtl            v6.4s, v18.4h
+    ld1             {v18.8h}, [x0], #16
+    ld1             {v20.4s, v21.4s}, [x1], #32
 
-    cmlt            v5.4s, v6.4s, #0
+    sabdl           v6.4s, v18.4h, v31.4h
+    sabdl2          v26.4s, v18.8h, v31.8h
 
-    abs             v6.4s, v6.4s
-
-
-    mul             v6.4s, v6.4s, v7.4s
+    mul             v6.4s, v6.4s, v20.4s
+    mul             v26.4s, v26.4s, v21.4s
 
     add             v7.4s, v6.4s, v3.4s
+    add             v27.4s, v26.4s, v3.4s
     sshl            v7.4s, v7.4s, v1.4s
+    sshl            v27.4s, v27.4s, v1.4s
 
-    mls             v6.4s, v7.4s, v0.s[0]
+    mls             v6.4s, v7.4s, v0.4s
+    mls             v26.4s, v27.4s, v0.4s
     sshl            v16.4s, v6.4s, v2.4s
-    st1             {v16.4s}, [x2], #16
+    sshl            v17.4s, v26.4s, v2.4s
+    st1             {v16.4s, v17.4s}, [x2], #32
 
     // numsig
-    cmeq            v16.4s, v7.4s, v17.4s
-    add             v4.4s, v4.4s, v16.4s
-    add             w10, w10, #4
+    uzp1            v7.8h, v7.8h, v27.8h
+    cmeq            v16.8h, v7.8h, #0
+    add             v4.8h, v4.8h, v16.8h
 
     // level *= sign
+    cmlt            v5.8h, v18.8h, #0
     eor             v16.16b, v7.16b, v5.16b
-    sub             v16.4s, v16.4s, v5.4s
-    sqxtn           v5.4h, v16.4s
-    st1             {v5.4h}, [x3], #8
+    sub             v5.8h, v16.8h, v5.8h
+    st1             {v5.8h}, [x3], #16
 
-    subs            w6, w6, #1
-    b.ne             .loop_quant
+    subs            w7, w7, #1
+    b.ne            .Loop_quant
 
-    addv            s4, v4.4s
-    mov             w9, v4.s[0]
-    add             w0, w10, w9
+    saddlv          s4, v4.8h
+    fmov            w9, s4
+    add             w0, w6, w9
     ret
 endfunc
 
@@ -1853,41 +1854,43 @@ function PFX(nquant_neon)
     dup             v0.4s, w12             // q0= -qbits
     dup             v1.4s, w4              // add
 
-    lsr             w5, w5, #2
+    lsr             w6, w5, #3
     movi            v4.4s, #0              // v4= accumulate numsig
-    mov             x4, #0
-    movi            v22.4s, #0
+    movi            v5.2d, #0              // v5= zero-vector for SABDL(2)
 
-.loop_nquant:
-    ld1             {v16.4h}, [x0], #8
-    sub             w5, w5, #1
-    sxtl            v19.4s, v16.4h         // v19 = coef[blockpos]
+.Loop_nquant:
+    ld1             {v16.8h}, [x0], #16
+    sub             w6, w6, #1
 
-    cmlt            v18.4s, v19.4s, #0     // v18 = sign
+    sabdl           v17.4s, v16.4h, v5.4h  // v17 = level=abs(coef[blockpos])
+    sabdl2          v18.4s, v16.8h, v5.8h  // v18 = level=abs(coef[blockpos])
 
-    abs             v19.4s, v19.4s         // v19 = level=abs(coef[blockpos])
-    ld1             {v20.4s}, [x1], #16    // v20 = quantCoeff[blockpos]
-    mul             v19.4s, v19.4s, v20.4s // v19 = tmplevel = abs(level) * quantCoeff[blockpos];
+    ld1             {v19.4s, v20.4s}, [x1], #32   // v19, v20 = quantCoeff[blockpos]
+    mul             v17.4s, v17.4s, v19.4s // v17 = tmplevel = abs(level) * quantCoeff[blockpos];
+    mul             v18.4s, v18.4s, v20.4s // v18 = tmplevel = abs(level) * quantCoeff[blockpos];
 
-    add             v20.4s, v19.4s, v1.4s  // v20 = tmplevel+add
-    sshl            v20.4s, v20.4s, v0.4s  // v20 = level =(tmplevel+add) >> qbits
+    add             v19.4s, v17.4s, v1.4s  // v20 = tmplevel+add
+    add             v20.4s, v18.4s, v1.4s  // v21 = tmplevel+add
+    sshl            v19.4s, v19.4s, v0.4s  // v20 = level =(tmplevel+add) >> qbits
+    sshl            v20.4s, v20.4s, v0.4s  // v21 = level =(tmplevel+add) >> qbits
 
     // numsig
-    cmeq            v21.4s, v20.4s, v22.4s
-    add             v4.4s, v4.4s, v21.4s
-    add             x4, x4, #4
+    uzp1            v19.8h, v19.8h, v20.8h
+    cmeq            v20.8h, v19.8h, #0
+    add             v4.8h, v4.8h, v20.8h
 
-    eor             v21.16b, v20.16b, v18.16b
-    sub             v21.4s, v21.4s, v18.4s
-    sqxtn           v16.4h, v21.4s
-    abs             v17.4h, v16.4h
-    st1             {v17.4h}, [x2], #8
+    // level *= sign
+    cmlt            v16.8h, v16.8h, #0
+    eor             v19.16b, v19.16b, v16.16b
+    sub             v19.8h, v19.8h, v16.8h
+    abs             v19.8h, v19.8h
+    st1             {v19.8h}, [x2], #16
 
-    cbnz            w5, .loop_nquant
+    cbnz            w6, .Loop_nquant
 
-    uaddlv          d4, v4.4s
-    fmov            x12, d4
-    add             x0, x4, x12
+    saddlv          s4, v4.8h
+    fmov            w9, s4
+    add             w0, w5, w9
     ret
 endfunc
 
@@ -1937,7 +1940,7 @@ endfunc
 function PFX(ssimDist16_neon)
     mov w12, #16
     ssimDist_start
-.loop_ssimDist16:
+.Loop_ssimDist16:
     sub             w12, w12, #1
     ld1             {v4.16b}, [x0], x1
     ld1             {v5.16b}, [x2], x3
@@ -1947,7 +1950,7 @@ function PFX(ssimDist16_neon)
     uxtl2           v5.8h, v5.16b
     ssimDist_1      v6, v7
     ssimDist_1      v4, v5
-    cbnz            w12, .loop_ssimDist16
+    cbnz            w12, .Loop_ssimDist16
     ssimDist_end
     ret
 endfunc
@@ -1955,7 +1958,7 @@ endfunc
 function PFX(ssimDist32_neon)
     mov w12, #32
     ssimDist_start
-.loop_ssimDist32:
+.Loop_ssimDist32:
     sub             w12, w12, #1
     ld1             {v4.16b-v5.16b}, [x0], x1
     ld1             {v6.16b-v7.16b}, [x2], x3
@@ -1971,7 +1974,7 @@ function PFX(ssimDist32_neon)
     ssimDist_1      v23, v24
     ssimDist_1      v25, v26
     ssimDist_1      v27, v28
-    cbnz            w12, .loop_ssimDist32
+    cbnz            w12, .Loop_ssimDist32
     ssimDist_end
     ret
 endfunc
@@ -1979,7 +1982,7 @@ endfunc
 function PFX(ssimDist64_neon)
     mov w12, #64
     ssimDist_start
-.loop_ssimDist64:
+.Loop_ssimDist64:
     sub             w12, w12, #1
     ld1             {v4.16b-v7.16b}, [x0], x1
     ld1             {v16.16b-v19.16b}, [x2], x3
@@ -2007,7 +2010,7 @@ function PFX(ssimDist64_neon)
     ssimDist_1      v23, v24
     ssimDist_1      v25, v26
     ssimDist_1      v27, v28
-    cbnz            w12, .loop_ssimDist64
+    cbnz            w12, .Loop_ssimDist64
     ssimDist_end
     ret
 endfunc
@@ -2035,14 +2038,14 @@ endfunc
 function PFX(normFact16_neon)
     mov w12, #16
     normFact_start
-.loop_normFact16:
+.Loop_normFact16:
     sub             w12, w12, #1
     ld1             {v4.16b}, [x0], x1
     uxtl            v5.8h, v4.8b
     uxtl2           v4.8h, v4.16b
     normFact_1      v5
     normFact_1      v4
-    cbnz            w12, .loop_normFact16
+    cbnz            w12, .Loop_normFact16
     normFact_end
     ret
 endfunc
@@ -2050,7 +2053,7 @@ endfunc
 function PFX(normFact32_neon)
     mov w12, #32
     normFact_start
-.loop_normFact32:
+.Loop_normFact32:
     sub             w12, w12, #1
     ld1             {v4.16b-v5.16b}, [x0], x1
     uxtl            v6.8h, v4.8b
@@ -2061,7 +2064,7 @@ function PFX(normFact32_neon)
     normFact_1      v5
     normFact_1      v6
     normFact_1      v7
-    cbnz            w12, .loop_normFact32
+    cbnz            w12, .Loop_normFact32
     normFact_end
     ret
 endfunc
@@ -2069,7 +2072,7 @@ endfunc
 function PFX(normFact64_neon)
     mov w12, #64
     normFact_start
-.loop_normFact64:
+.Loop_normFact64:
     sub             w12, w12, #1
     ld1             {v4.16b-v7.16b}, [x0], x1
     uxtl            v26.8h, v4.8b
@@ -2088,7 +2091,7 @@ function PFX(normFact64_neon)
     normFact_1      v25
     normFact_1      v26
     normFact_1      v27
-    cbnz            w12, .loop_normFact64
+    cbnz            w12, .Loop_normFact64
     normFact_end
     ret
 endfunc
@@ -2120,9 +2123,9 @@ function PFX(weight_pp_neon)
     cbnz            w11, .widenTo32Bit
 
     // 16-bit arithmetic is enough.
-.loopHpp:
+.LoopHpp:
     mov             x12, x3
-.loopWpp:
+.LoopWpp:
     ldr             q0, [x0], #16
     sub             x12, x12, #16
     umull           v1.8h, v0.8b, v25.8b  // val *= w0 << correction >> shift
@@ -2132,18 +2135,18 @@ function PFX(weight_pp_neon)
     sqxtun          v0.8b, v1.8h          // val = x265_clip(val)
     sqxtun2         v0.16b, v2.8h
     str             q0, [x1], #16
-    cbnz            x12, .loopWpp
+    cbnz            x12, .LoopWpp
     add             x1, x1, x2
     add             x0, x0, x2
     sub             x4, x4, #1
-    cbnz            x4, .loopHpp
+    cbnz            x4, .LoopHpp
     ret
 
     // 32-bit arithmetic is needed.
 .widenTo32Bit:
-.loopHpp32:
+.LoopHpp32:
     mov             x12, x3
-.loopWpp32:
+.LoopWpp32:
     ldr             d0, [x0], #8
     sub             x12, x12, #8
     uxtl            v0.8h, v0.8b
@@ -2155,11 +2158,11 @@ function PFX(weight_pp_neon)
     sqxtn2          v0.8h, v2.4s
     sqxtun          v0.8b, v0.8h
     str             d0, [x1], #8
-    cbnz            x12, .loopWpp32
+    cbnz            x12, .LoopWpp32
     add             x1, x1, x2
     add             x0, x0, x2
     sub             x4, x4, #1
-    cbnz            x4, .loopHpp32
+    cbnz            x4, .LoopHpp32
     ret
 
     // The shift right cannot be moved out of the loop.
@@ -2169,9 +2172,9 @@ function PFX(weight_pp_neon)
     neg             w7, w7                // -shift
     dup             v27.4s, w7
     dup             v29.4s, w9            // offset
-.loopHppUS:
+.LoopHppUS:
     mov             x12, x3
-.loopWppUS:
+.LoopWppUS:
     ldr             d0, [x0], #8
     sub             x12, x12, #8
     uxtl            v0.8h, v0.8b
@@ -2187,11 +2190,11 @@ function PFX(weight_pp_neon)
     sqxtn2          v0.8h, v2.4s
     sqxtun          v0.8b, v0.8h
     str             d0, [x1], #8
-    cbnz            x12, .loopWppUS
+    cbnz            x12, .LoopWppUS
     add             x1, x1, x2
     add             x0, x0, x2
     sub             x4, x4, #1
-    cbnz            x4, .loopHppUS
+    cbnz            x4, .LoopHppUS
     ret
 endfunc
 
@@ -2220,7 +2223,7 @@ function PFX(scanPosLast_neon)
     add             x11, x10, x7    // 3*x7
     add             x9, x4, #1      // CG count
 
-.loop_spl:
+.Loop_spl:
     // position of current CG
     ldrh            w6, [x0], #32
     add             x6, x1, x6, lsl #1
@@ -2267,14 +2270,14 @@ function PFX(scanPosLast_neon)
     // accelerate by preparing w13 = w13 & w15
     and             w13, w13, w15
     mov             x14, xzr
-.loop_spl_1:
+.Loop_spl_1:
     cbz             w15, .pext_end
     clz             w6, w15
     lsl             w13, w13, w6
     lsl             w15, w15, w6
     extr            w14, w14, w13, #31
     bfm             w15, wzr, #1, #0
-    b               .loop_spl_1
+    b               .Loop_spl_1
 .pext_end:
     strh            w14, [x2], #2
 
@@ -2285,7 +2288,7 @@ function PFX(scanPosLast_neon)
     sub             x5, x5, x6
     strb            w6, [x4], #1
 
-    cbnz            x5, .loop_spl
+    cbnz            x5, .Loop_spl
 
     // count trailing zeros
     rbit            w13, w12
@@ -2311,7 +2314,7 @@ endfunc
 //    uint8_t *baseCtx,      // x6
 //    int offset,            // x7
 //    int scanPosSigOff,     // sp
-//    int subPosBase)        // sp + 8
+//    int subPosBase)        // sp + 8, or sp + 4 on APPLE
 function PFX(costCoeffNxN_neon)
     // abs(coeff)
     add             x2, x2, x2
@@ -2364,7 +2367,7 @@ function PFX(costCoeffNxN_neon)
     mov             x11, #0
     movi            v31.16b, #0
     cbz             x2, .idx_zero
-.loop_ccnn:
+.Loop_ccnn:
 //   {
 //        const uint32_t cnt = tabSigCtx[blkPos] + offset + posOffset;
 //        ctxSig = cnt & posZeroMask;
@@ -2403,14 +2406,14 @@ function PFX(costCoeffNxN_neon)
     cmp             w9, #1
     csel            w10, w11, w10, eq
     strb            w10, [x6, x14]
-    cbnz            x2, .loop_ccnn
+    cbnz            x2, .Loop_ccnn
 .idx_zero:
 
     add             x13, x3, x4, lsl #1
     add             x4, x4, x15
     str             h2, [x13]              // absCoeff[numNonZero] = tmpCoeff[blkPos]
 
-    ldr             x9, [sp, #8]           // subPosBase
+    ldr             x9, [sp, #STACK_ARG_OFFSET(1)]           // subPosBase
     uxth            w9, w9
     cmp             w9, #0
     cset            x2, eq

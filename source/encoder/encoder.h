@@ -202,7 +202,7 @@ public:
     ThreadPool*        m_threadPool;
     FrameEncoder*      m_frameEncoder[X265_MAX_FRAME_THREADS];
     DPB*               m_dpb;
-    Frame*             m_exportedPic;
+    Frame*             m_exportedPic[MAX_LAYERS];
     FILE*              m_analysisFileIn;
     FILE*              m_analysisFileOut;
     FILE*              m_naluFile;
@@ -217,10 +217,10 @@ public:
 
     bool               m_externalFlush;
     /* Collect statistics globally */
-    EncStats           m_analyzeAll;
-    EncStats           m_analyzeI;
-    EncStats           m_analyzeP;
-    EncStats           m_analyzeB;
+    EncStats           m_analyzeAll[MAX_LAYERS];
+    EncStats           m_analyzeI[MAX_LAYERS];
+    EncStats           m_analyzeP[MAX_LAYERS];
+    EncStats           m_analyzeB[MAX_LAYERS];
     VPS                m_vps;
     SPS                m_sps;
     PPS                m_pps;
@@ -300,7 +300,7 @@ public:
     void stopJobs();
     void destroy();
 
-    int encode(const x265_picture* pic, x265_picture *pic_out);
+    int encode(const x265_picture* pic, x265_picture **pic_out);
 
     int reconfigureParam(x265_param* encParam, x265_param* param);
 
@@ -308,7 +308,7 @@ public:
 
     void copyCtuInfo(x265_ctu_info_t** frameCtuInfo, int poc);
 
-    int copySlicetypePocAndSceneCut(int *slicetype, int *poc, int *sceneCut);
+    int copySlicetypePocAndSceneCut(int *slicetype, int *poc, int *sceneCut, int sLayer);
 
     int getRefFrameList(PicYuv** l0, PicYuv** l1, int sliceType, int poc, int* pocL0, int* pocL1);
 
@@ -320,7 +320,7 @@ public:
 
     void getEndNalUnits(NALList& list, Bitstream& bs);
 
-    void fetchStats(x265_stats* stats, size_t statsSizeBytes);
+    void fetchStats(x265_stats* stats, size_t statsSizeBytes, int layer = 0);
 
     void printSummary();
 
@@ -352,7 +352,7 @@ public:
 
     void copyDistortionData(x265_analysis_data* analysis, FrameData &curEncData);
 
-    void finishFrameStats(Frame* pic, FrameEncoder *curEncoder, x265_frame_stats* frameStats, int inPoc);
+    void finishFrameStats(Frame* pic, FrameEncoder *curEncoder, x265_frame_stats* frameStats, int inPoc, int layer);
 
     int validateAnalysisData(x265_analysis_validate* param, int readWriteFlag);
 

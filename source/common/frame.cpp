@@ -37,7 +37,8 @@ Frame::Frame()
     m_reconColCount = NULL;
     m_countRefEncoders = 0;
     m_encData = NULL;
-    m_reconPic = NULL;
+    for (int i = 0; i < NUM_RECON_VERSION; i++)
+        m_reconPic[i] = NULL;
     m_quantOffsets = NULL;
     m_next = NULL;
     m_prev = NULL;
@@ -75,6 +76,11 @@ Frame::Frame()
 
     m_tempLayer = 0;
     m_sameLayerRefPic = false;
+
+    m_viewId = 0;
+    m_valid = 0;
+    m_nextSubDPB = NULL;
+    m_prevSubDPB = NULL;
 }
 
 bool Frame::create(x265_param *param, float* quantOffsets)
@@ -85,6 +91,7 @@ bool Frame::create(x265_param *param, float* quantOffsets)
     if (m_param->bEnableTemporalFilter)
     {
         m_mcstf = new TemporalFilter;
+        m_mcstf->m_range = param->mcstfFrameRange;
         m_mcstf->init(param);
 
         m_fencPicSubsampled2 = new PicYuv;
@@ -198,29 +205,35 @@ fail:
 bool Frame::allocEncodeData(x265_param *param, const SPS& sps)
 {
     m_encData = new FrameData;
-    m_reconPic = new PicYuv;
     m_param = param;
-    m_encData->m_reconPic = m_reconPic;
-    bool ok = m_encData->create(*param, sps, m_fencPic->m_picCsp) && m_reconPic->create(param);
+    for (int i = 0; i < !!m_param->bEnableSCC + 1; i++)
+    {
+        m_reconPic[i] = new PicYuv;
+        m_encData->m_reconPic[i] = m_reconPic[i];
+    }
+    bool ok = m_encData->create(*param, sps, m_fencPic->m_picCsp) && m_reconPic[0]->create(param) && (param->bEnableSCC ? (param->bEnableSCC && m_reconPic[1]->create(param)) : 1);
     if (ok)
     {
-        /* initialize right border of m_reconpicYuv as SAO may read beyond the
+        /* initialize right border of m_reconPicYuv as SAO may read beyond the
          * end of the picture accessing uninitialized pixels */
         int maxHeight = sps.numCuInHeight * param->maxCUSize;
-        memset(m_reconPic->m_picOrg[0], 0, sizeof(pixel)* m_reconPic->m_stride * maxHeight);
+        memset(m_reconPic[0]->m_picOrg[0], 0, sizeof(pixel)* m_reconPic[0]->m_stride * maxHeight);
 
-        /* use pre-calculated cu/pu offsets cached in the SPS structure */
-        m_reconPic->m_cuOffsetY = sps.cuOffsetY;
-        m_reconPic->m_buOffsetY = sps.buOffsetY;
-
-        if (param->internalCsp != X265_CSP_I400)
+        for (int i = 0; i < !!m_param->bEnableSCC + 1; i++)
         {
-            memset(m_reconPic->m_picOrg[1], 0, sizeof(pixel) * m_reconPic->m_strideC * (maxHeight >> m_reconPic->m_vChromaShift));
-            memset(m_reconPic->m_picOrg[2], 0, sizeof(pixel) * m_reconPic->m_strideC * (maxHeight >> m_reconPic->m_vChromaShift));
-
             /* use pre-calculated cu/pu offsets cached in the SPS structure */
-            m_reconPic->m_cuOffsetC = sps.cuOffsetC;
-            m_reconPic->m_buOffsetC = sps.buOffsetC;
+            m_reconPic[i]->m_cuOffsetY = sps.cuOffsetY;
+            m_reconPic[i]->m_buOffsetY = sps.buOffsetY;
+
+            if (param->internalCsp != X265_CSP_I400)
+            {
+                memset(m_reconPic[i]->m_picOrg[1], 0, sizeof(pixel) * m_reconPic[i]->m_strideC * (maxHeight >> m_reconPic[i]->m_vChromaShift));
+                memset(m_reconPic[i]->m_picOrg[2], 0, sizeof(pixel) * m_reconPic[i]->m_strideC * (maxHeight >> m_reconPic[i]->m_vChromaShift));
+
+                /* use pre-calculated cu/pu offsets cached in the SPS structure */
+                m_reconPic[i]->m_cuOffsetC = sps.cuOffsetC;
+                m_reconPic[i]->m_buOffsetC = sps.buOffsetC;
+            }
         }
     }
     return ok;
@@ -230,7 +243,8 @@ bool Frame::allocEncodeData(x265_param *param, const SPS& sps)
 void Frame::reinit(const SPS& sps)
 {
     m_bChromaExtended = false;
-    m_reconPic = m_encData->m_reconPic;
+    for (int i = 0; i < !!m_param->bEnableSCC + 1; i++)
+        m_reconPic[i] = m_encData->m_reconPic[i];
     m_encData->reinit(sps);
 }
 
@@ -242,6 +256,35 @@ void Frame::destroy()
         delete m_encData;
         m_encData = NULL;
     }
+
+#if ENABLE_MULTIVIEW
+    //Destroy interlayer References
+    if (refPicSetInterLayer0.size())
+    {
+        Frame* iterFrame = refPicSetInterLayer0.first();
+
+        while (iterFrame)
+        {
+            Frame* curFrame = iterFrame;
+            iterFrame = iterFrame->m_nextSubDPB;
+            refPicSetInterLayer0.removeSubDPB(*curFrame);
+            iterFrame = refPicSetInterLayer0.first();
+        }
+    }
+
+    if (refPicSetInterLayer1.size())
+    {
+        Frame* iterFrame = refPicSetInterLayer1.first();
+
+        while (iterFrame)
+        {
+            Frame* curFrame = iterFrame;
+            iterFrame = iterFrame->m_nextSubDPB;
+            refPicSetInterLayer1.removeSubDPB(*curFrame);
+            iterFrame = refPicSetInterLayer1.first();
+        }
+    }
+#endif
 
     if (m_fencPic)
     {
@@ -271,11 +314,14 @@ void Frame::destroy()
         X265_FREE(m_isSubSampled);
     }
 
-    if (m_reconPic)
+    for (int i = 0; i < !!m_param->bEnableSCC + 1; i++)
     {
-        m_reconPic->destroy();
-        delete m_reconPic;
-        m_reconPic = NULL;
+        if (m_reconPic[i])
+        {
+            m_reconPic[i]->destroy();
+            delete m_reconPic[i];
+            m_reconPic[i] = NULL;
+        }
     }
 
     if (m_reconRowFlag)

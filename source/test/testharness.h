@@ -88,6 +88,7 @@ static inline uint32_t __rdtsc(void)
     // TO-DO: replace clock() function with appropriate ARM cpu instructions
     a = clock();
 #elif  X265_ARCH_ARM64
+    asm volatile("isb" : : : "memory");
     asm volatile("mrs %0, cntvct_el0" : "=r"(a));
 #endif
     return a;

@@ -190,27 +190,27 @@ endfunc
     ld1b            {z7.h}, p0/z, [x2, x11]
     add             x0, x0, x1
     add             x2, x2, x3
-    ld1b            {z29.h}, p0/z, [x0]
-    ld1b            {z9.h}, p0/z, [x0, x11]
-    ld1b            {z10.h}, p0/z, [x2]
-    ld1b            {z11.h}, p0/z, [x2, x11]
-    add             x0, x0, x1
-    add             x2, x2, x3
-    ld1b            {z12.h}, p0/z, [x0]
-    ld1b            {z13.h}, p0/z, [x0, x11]
-    ld1b            {z14.h}, p0/z, [x2]
-    ld1b            {z15.h}, p0/z, [x2, x11]
-    add             x0, x0, x1
-    add             x2, x2, x3
-
     sub             \v0\().h, z0.h, z2.h
     sub             \v4\().h, z1.h, z3.h
     sub             \v1\().h, z4.h, z6.h
     sub             \v5\().h, z5.h, z7.h
-    sub             \v2\().h, z29.h, z10.h
-    sub             \v6\().h, z9.h, z11.h
-    sub             \v3\().h, z12.h, z14.h
-    sub             \v7\().h, z13.h, z15.h
+
+    ld1b            {z0.h}, p0/z, [x0]
+    ld1b            {z1.h}, p0/z, [x0, x11]
+    ld1b            {z2.h}, p0/z, [x2]
+    ld1b            {z3.h}, p0/z, [x2, x11]
+    add             x0, x0, x1
+    add             x2, x2, x3
+    ld1b            {z4.h}, p0/z, [x0]
+    ld1b            {z5.h}, p0/z, [x0, x11]
+    ld1b            {z6.h}, p0/z, [x2]
+    ld1b            {z7.h}, p0/z, [x2, x11]
+    add             x0, x0, x1
+    add             x2, x2, x3
+    sub             \v2\().h, z0.h, z2.h
+    sub             \v6\().h, z1.h, z3.h
+    sub             \v3\().h, z4.h, z6.h
+    sub             \v7\().h, z5.h, z7.h
 .endm
 
 // one vertical hadamard pass and two horizontal
@@ -313,61 +313,4 @@ function PFX(pixel_satd_64x48_sve)
     satd_64x16_sve
     mov             x0, x7
     ret             x10
-endfunc
-
-/********* ssim ***********/
-// uint32_t quant_c(const int16_t* coef, const int32_t* quantCoeff, int32_t* deltaU, int16_t* qCoef, int qBits, int add, int numCoeff)
-// No need to fully use sve instructions for this function
-function PFX(quant_sve)
-    mov             w9, #1
-    lsl             w9, w9, w4
-    mov             z0.s, w9
-    neg             w9, w4
-    mov             z1.s, w9
-    add             w9, w9, #8
-    mov             z2.s, w9
-    mov             z3.s, w5
-
-    lsr             w6, w6, #2
-    eor             z4.d, z4.d, z4.d
-    eor             w10, w10, w10
-    eor             z17.d, z17.d, z17.d
-
-.loop_quant_sve:
-    ld1             {v18.4h}, [x0], #8
-    ld1             {v7.4s}, [x1], #16
-    sxtl            v6.4s, v18.4h
-
-    cmlt            v5.4s, v6.4s, #0
-
-    abs             v6.4s, v6.4s
-
-
-    mul             v6.4s, v6.4s, v7.4s
-
-    add             v7.4s, v6.4s, v3.4s
-    sshl            v7.4s, v7.4s, v1.4s
-
-    mls             v6.4s, v7.4s, v0.s[0]
-    sshl            v16.4s, v6.4s, v2.4s
-    st1             {v16.4s}, [x2], #16
-
-    // numsig
-    cmeq            v16.4s, v7.4s, v17.4s
-    add             v4.4s, v4.4s, v16.4s
-    add             w10, w10, #4
-
-    // level *= sign
-    eor             z16.d, z7.d, z5.d
-    sub             v16.4s, v16.4s, v5.4s
-    sqxtn           v5.4h, v16.4s
-    st1             {v5.4h}, [x3], #8
-
-    subs            w6, w6, #1
-    b.ne             .loop_quant_sve
-
-    addv            s4, v4.4s
-    mov             w9, v4.s[0]
-    add             w0, w10, w9
-    ret
 endfunc
