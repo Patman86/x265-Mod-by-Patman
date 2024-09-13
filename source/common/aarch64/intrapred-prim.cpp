@@ -2,7 +2,7 @@
 #include "primitives.h"
 
 
-#if 1
+#if HAVE_NEON
 #include "arm64-utils.h"
 #include <arm_neon.h>
 
@@ -12,6 +12,52 @@ namespace
 {
 
 
+template<int tuSize>
+void intraFilter_neon(const pixel* samples, pixel* filtered) /* 1:2:1 filtering of left and top reference samples */
+{
+    const int tuSize2 = tuSize << 1;
+    pixel topLeft = samples[0], topLast = samples[tuSize2], leftLast = samples[tuSize2 + tuSize2];
+
+    uint16x8_t two_vec = vdupq_n_u16(2);
+#if !HIGH_BIT_DEPTH
+    {
+        for(int i = 0; i < tuSize2 + tuSize2; i+=8)
+         {
+            uint16x8_t sample1 = vmovl_u8(vld1_u8(&samples[i]));
+            uint16x8_t sample2 = vmovl_u8(vld1_u8(&samples[i-1]));
+            uint16x8_t sample3 = vmovl_u8(vld1_u8(&samples[i+1]));
+
+            uint16x8_t result1 = vaddq_u16(vshlq_n_u16(sample1,1), sample2 );
+            uint16x8_t result2 = vaddq_u16(sample3, two_vec);
+            uint16x8_t result3 = vaddq_u16(result1,result2);
+            vst1_u8(&filtered[i] , vmovn_u16(vshrq_n_u16(result3, 2)));
+        }
+    }
+#else
+    {
+        for(int i = 0; i < tuSize2 + tuSize2; i+=8)
+        {
+            uint16x8_t sample1 = vld1q_u16(&samples[i]);
+            uint16x8_t sample2 = vld1q_u16(&samples[i-1]);
+            uint16x8_t sample3 = vld1q_u16(&samples[i+1]);
+
+            uint16x8_t result1 = vaddq_u16(vshlq_n_u16(sample1,1), sample2 );
+            uint16x8_t result2 = vaddq_u16(sample3, two_vec);
+            uint16x8_t result3 = vaddq_u16(result1,result2);
+            vst1q_u16(&filtered[i] , vshrq_n_u16(result3, 2));
+        }
+    }
+#endif
+    // filtering top
+    filtered[tuSize2] = topLast;
+
+    // filtering top-left
+    filtered[0] = ((topLeft << 1) + samples[1] + samples[tuSize2 + 1] + 2) >> 2;
+
+    // filtering left
+    filtered[tuSize2 + 1] = ((samples[tuSize2 + 1] << 1) + topLeft + samples[tuSize2 + 2] + 2) >> 2;
+    filtered[tuSize2 + tuSize2] = leftLast;
+}
 
 template<int width>
 void intra_pred_ang_neon(pixel *dst, intptr_t dstStride, const pixel *srcPix0, int dirMode, int bFilter)
@@ -188,6 +234,7 @@ void intra_pred_ang_neon(pixel *dst, intptr_t dstStride, const pixel *srcPix0, i
     }
 }
 
+#endif
 template<int log2Size>
 void all_angs_pred_neon(pixel *dest, pixel *refPix, pixel *filtPix, int bLuma)
 {
@@ -232,6 +279,270 @@ void all_angs_pred_neon(pixel *dest, pixel *refPix, pixel *filtPix, int bLuma)
         }
     }
 }
+
+template<int log2Size>
+void planar_pred_neon(pixel * dst, intptr_t dstStride, const pixel * srcPix, int /*dirMode*/, int /*bFilter*/)
+{
+    const int blkSize = 1 << log2Size;
+
+    const pixel* above = srcPix + 1;
+    const pixel* left = srcPix + (2 * blkSize + 1);
+
+    switch (blkSize) {
+    case 8:
+    {
+        const uint16_t log2SizePlusOne = log2Size + 1;
+        uint16x8_t blkSizeVec = vdupq_n_u16(blkSize);
+        uint16x8_t topRight = vdupq_n_u16(above[blkSize]);
+        uint16_t bottomLeft = left[blkSize];
+        uint16x8_t oneVec = vdupq_n_u16(1);
+        uint16x8_t blkSizeSubOneVec = vdupq_n_u16(blkSize - 1);
+
+        for (int y = 0; y < blkSize; y++) {
+            // (blkSize - 1 - y)
+            uint16x8_t vlkSizeYVec = vdupq_n_u16(blkSize - 1 - y);
+            // (y + 1) * bottomLeft
+            uint16x8_t bottomLeftYVec = vdupq_n_u16((y + 1) * bottomLeft);
+            // left[y]
+            uint16x8_t leftYVec = vdupq_n_u16(left[y]);
+
+            for (int x = 0; x < blkSize; x += 8) {
+                int idx = y * dstStride + x;
+                uint16x8_t xvec = { (uint16_t)(x + 0), (uint16_t)(x + 1),
+                                    (uint16_t)(x + 2), (uint16_t)(x + 3),
+                                    (uint16_t)(x + 4), (uint16_t)(x + 5),
+                                    (uint16_t)(x + 6), (uint16_t)(x + 7) };
+
+                // (blkSize - 1 - y) * above[x]
+                uint16x8_t aboveVec = { (uint16_t)(above[x + 0]),
+                                        (uint16_t)(above[x + 1]),
+                                        (uint16_t)(above[x + 2]),
+                                        (uint16_t)(above[x + 3]),
+                                        (uint16_t)(above[x + 4]),
+                                        (uint16_t)(above[x + 5]),
+                                        (uint16_t)(above[x + 6]),
+                                        (uint16_t)(above[x + 7]) };
+
+                aboveVec = vmulq_u16(aboveVec, vlkSizeYVec);
+
+                // (blkSize - 1 - x) * left[y]
+                uint16x8_t first = vsubq_u16(blkSizeSubOneVec, xvec);
+                first = vmulq_u16(first, leftYVec);
+
+                // (x + 1) * topRight
+                uint16x8_t second = vaddq_u16(xvec, oneVec);
+                second = vmulq_u16(second, topRight);
+
+                uint16x8_t resVec = vaddq_u16(first, second);
+                resVec = vaddq_u16(resVec, aboveVec);
+                resVec = vaddq_u16(resVec, bottomLeftYVec);
+                resVec = vaddq_u16(resVec, blkSizeVec);
+                resVec = vshrq_n_u16(resVec, log2SizePlusOne);
+
+                for (int i = 0; i < 8; i++)
+                    dst[idx + i] = (pixel)resVec[i];
+    }
+}
+        }
+    break;
+    case 4:
+    case 32:
+    case 16:
+    {
+        const uint32_t log2SizePlusOne = log2Size + 1;
+        uint32x4_t blkSizeVec = vdupq_n_u32(blkSize);
+        uint32x4_t topRight = vdupq_n_u32(above[blkSize]);
+        uint32_t bottomLeft = left[blkSize];
+        uint32x4_t oneVec = vdupq_n_u32(1);
+        uint32x4_t blkSizeSubOneVec = vdupq_n_u32(blkSize - 1);
+
+        for (int y = 0; y < blkSize; y++) {
+            // (blkSize - 1 - y)
+            uint32x4_t vlkSizeYVec = vdupq_n_u32(blkSize - 1 - y);
+            // (y + 1) * bottomLeft
+            uint32x4_t bottomLeftYVec = vdupq_n_u32((y + 1) * bottomLeft);
+            // left[y]
+            uint32x4_t leftYVec = vdupq_n_u32(left[y]);
+
+            for (int x = 0; x < blkSize; x += 4) {
+                int idx = y * dstStride + x;
+                uint32x4_t xvec = { (uint32_t)(x + 0), (uint32_t)(x + 1),
+                                    (uint32_t)(x + 2), (uint32_t)(x + 3) };
+
+                // (blkSize - 1 - y) * above[x]
+                uint32x4_t aboveVec = { (uint32_t)(above[x + 0]),
+                                        (uint32_t)(above[x + 1]),
+                                        (uint32_t)(above[x + 2]),
+                                        (uint32_t)(above[x + 3]) };
+                aboveVec = vmulq_u32(aboveVec, vlkSizeYVec);
+
+                // (blkSize - 1 - x) * left[y]
+                uint32x4_t first = vsubq_u32(blkSizeSubOneVec, xvec);
+                first = vmulq_u32(first, leftYVec);
+
+                // (x + 1) * topRight
+                uint32x4_t second = vaddq_u32(xvec, oneVec);
+                second = vmulq_u32(second, topRight);
+
+                uint32x4_t resVec = vaddq_u32(first, second);
+                resVec = vaddq_u32(resVec, aboveVec);
+                resVec = vaddq_u32(resVec, bottomLeftYVec);
+                resVec = vaddq_u32(resVec, blkSizeVec);
+                resVec = vshrq_n_u32(resVec, log2SizePlusOne);
+
+                for (int i = 0; i < 4; i++)
+                    dst[idx + i] = (pixel)resVec[i];
+            }
+        }
+    }
+    break;
+        }
+}
+
+static void dcPredFilter(const pixel* above, const pixel* left, pixel* dst, intptr_t dststride, int size)
+{
+    // boundary pixels processing
+    pixel topLeft = (pixel)((above[0] + left[0] + 2 * dst[0] + 2) >> 2);
+    pixel * pdst = dst;
+
+    switch (size) {
+    case 32:
+    case 16:
+    case 8:
+    {
+        uint16x8_t vconst_3 = vdupq_n_u16(3);
+        uint16x8_t vconst_2 = vdupq_n_u16(2);
+        for (int x = 0; x < size; x += 8) {
+            uint16x8_t vabo = { (uint16_t)(above[x + 0]),
+                                (uint16_t)(above[x + 1]),
+                                (uint16_t)(above[x + 2]),
+                                (uint16_t)(above[x + 3]),
+                                (uint16_t)(above[x + 4]),
+                                (uint16_t)(above[x + 5]),
+                                (uint16_t)(above[x + 6]),
+                                (uint16_t)(above[x + 7]) };
+
+            uint16x8_t vdst = { (uint16_t)(dst[x + 0]),
+                                (uint16_t)(dst[x + 1]),
+                                (uint16_t)(dst[x + 2]),
+                                (uint16_t)(dst[x + 3]),
+                                (uint16_t)(dst[x + 4]),
+                                (uint16_t)(dst[x + 5]),
+                                (uint16_t)(dst[x + 6]),
+                                (uint16_t)(dst[x + 7]) };
+            //  dst[x] = (pixel)((above[x] +  3 * dst[x] + 2) >> 2);
+            vdst = vmulq_u16(vdst, vconst_3);
+            vdst = vaddq_u16(vdst, vabo);
+            vdst = vaddq_u16(vdst, vconst_2);
+            vdst = vshrq_n_u16(vdst, 2);
+            for (int i = 0; i < 8; i++)
+                dst[x + i] = (pixel)(vdst[i]);
+        }
+        dst += dststride;
+        for (int y = 1; y < size; y++)
+        {
+            *dst = (pixel)((left[y] + 3 * *dst + 2) >> 2);
+            dst += dststride;
+        }
+    }
+    break;
+    case 4:
+    {
+        uint16x4_t vconst_3 = vdup_n_u16(3);
+        uint16x4_t vconst_2 = vdup_n_u16(2);
+        uint16x4_t vabo = { (uint16_t)(above[0]),
+                            (uint16_t)(above[1]),
+                            (uint16_t)(above[2]),
+                            (uint16_t)(above[3]) };
+        uint16x4_t vdstx = { (uint16_t)(dst[0]),
+                             (uint16_t)(dst[1]),
+                             (uint16_t)(dst[2]),
+                             (uint16_t)(dst[3]) };
+        vdstx = vmul_u16(vdstx, vconst_3);
+        vdstx = vadd_u16(vdstx, vabo);
+        vdstx = vadd_u16(vdstx, vconst_2);
+        vdstx = vshr_n_u16(vdstx, 2);
+        for (int i = 0; i < 4; i++)
+            dst[i] = (pixel)(vdstx[i]);
+
+        dst += dststride;
+        for (int y = 1; y < size; y++)
+        {
+            *dst = (pixel)((left[y] + 3 * *dst + 2) >> 2);
+            dst += dststride;
+        }
+    }
+    break;
+    }
+
+    *pdst = topLeft;
+}
+
+template<int width>
+void intra_pred_dc_neon(pixel* dst, intptr_t dstStride, const pixel* srcPix, int /*dirMode*/, int bFilter)
+{
+    int k, l;
+    int dcVal = width;
+
+    switch (width) {
+    case 32:
+    case 16:
+    case 8:
+    {
+        for (int i = 0; i < width; i += 8) {
+            uint16x8_t spa = { (uint16_t)(srcPix[i + 1]),
+                               (uint16_t)(srcPix[i + 2]),
+                               (uint16_t)(srcPix[i + 3]),
+                               (uint16_t)(srcPix[i + 4]),
+                               (uint16_t)(srcPix[i + 5]),
+                               (uint16_t)(srcPix[i + 6]),
+                               (uint16_t)(srcPix[i + 7]),
+                               (uint16_t)(srcPix[i + 8]) };
+            uint16x8_t spb = { (uint16_t)(srcPix[2 * width + i + 1]),
+                               (uint16_t)(srcPix[2 * width + i + 2]),
+                               (uint16_t)(srcPix[2 * width + i + 3]),
+                               (uint16_t)(srcPix[2 * width + i + 4]),
+                               (uint16_t)(srcPix[2 * width + i + 5]),
+                               (uint16_t)(srcPix[2 * width + i + 6]),
+                               (uint16_t)(srcPix[2 * width + i + 7]),
+                               (uint16_t)(srcPix[2 * width + i + 8]) };
+            uint16x8_t vsp = vaddq_u16(spa, spb);
+            dcVal += vaddlvq_u16(vsp);
+        }
+
+        dcVal = dcVal / (width + width);
+        for (k = 0; k < width; k++)
+            for (l = 0; l < width; l += 8) {
+                uint16x8_t vdv = vdupq_n_u16((pixel)dcVal);
+                for (int n = 0; n < 8; n++)
+                    dst[k * dstStride + l + n] = (pixel)(vdv[n]);
+            }
+    }
+    break;
+    case 4:
+    {
+        uint16x4_t spa = { (uint16_t)(srcPix[1]), (uint16_t)(srcPix[2]),
+                           (uint16_t)(srcPix[3]), (uint16_t)(srcPix[4]) };
+        uint16x4_t spb = { (uint16_t)(srcPix[2 * width + 1]),
+                           (uint16_t)(srcPix[2 * width + 2]),
+                           (uint16_t)(srcPix[2 * width + 3]),
+                           (uint16_t)(srcPix[2 * width + 4]) };
+        uint16x4_t vsp = vadd_u16(spa, spb);
+        dcVal += vaddlv_u16(vsp);
+
+        dcVal = dcVal / (width + width);
+        for (k = 0; k < width; k++) {
+            uint16x4_t vdv = vdup_n_u16((pixel)dcVal);
+            for (int n = 0; n < 4; n++)
+                dst[k * dstStride + n] = (pixel)(vdv[n]);
+        }
+    }
+    break;
+    }
+
+    if (bFilter)
+        dcPredFilter(srcPix + 1, srcPix + (2 * width + 1), dst, dstStride, width);
+}
 }
 
 namespace X265_NS
@@ -242,6 +553,11 @@ extern "C" void PFX(intra_pred_planar16_neon)(pixel* dst, intptr_t dstStride, co
 
 void setupIntraPrimitives_neon(EncoderPrimitives &p)
 {
+    p.cu[BLOCK_4x4].intra_filter = intraFilter_neon<4>;
+    p.cu[BLOCK_8x8].intra_filter = intraFilter_neon<8>;
+    p.cu[BLOCK_16x16].intra_filter = intraFilter_neon<16>;
+    p.cu[BLOCK_32x32].intra_filter = intraFilter_neon<32>;
+
     for (int i = 2; i < NUM_INTRA_MODE; i++)
     {
         p.cu[BLOCK_8x8].intra_pred[i] = intra_pred_ang_neon<8>;
@@ -263,22 +579,13 @@ void setupIntraPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_8x8].intra_pred[PLANAR_IDX] = PFX(intra_pred_planar8_neon);
     p.cu[BLOCK_16x16].intra_pred[PLANAR_IDX] = PFX(intra_pred_planar16_neon);
 #endif
+
+    p.cu[BLOCK_4x4].intra_pred[DC_IDX] = intra_pred_dc_neon<4>;
+    p.cu[BLOCK_8x8].intra_pred[DC_IDX] = intra_pred_dc_neon<8>;
+    p.cu[BLOCK_16x16].intra_pred[DC_IDX] = intra_pred_dc_neon<16>;
+    p.cu[BLOCK_32x32].intra_pred[DC_IDX] = intra_pred_dc_neon<32>;
 }
-
 }
-
-
-
-#else
-
-namespace X265_NS
-{
-// x265 private namespace
-void setupIntraPrimitives_neon(EncoderPrimitives &p)
-{}
-}
-
-#endif
 
 
 
