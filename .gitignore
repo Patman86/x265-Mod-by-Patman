@@ -32,5 +32,6 @@
 *.app
 
 # Build directory
-build/
+*.vs
+build*
 

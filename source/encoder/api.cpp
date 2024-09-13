@@ -113,7 +113,7 @@ x265_encoder *x265_encoder_open(x265_param *p)
     x265_copy_params(param, p);
     x265_copy_params(latestParam, p);
     x265_copy_params(zoneParam, p);
-    x265_log(param, X265_LOG_INFO, "HEVC encoder version %s\n", PFX(version_str));
+    x265_log(param, X265_LOG_INFO, "HEVC encoder version %s [Mod by Patman]\n", PFX(version_str));
     x265_log(param, X265_LOG_INFO, "build info %s\n", PFX(build_info_str));
 
     encoder = new Encoder;
@@ -161,6 +161,7 @@ x265_encoder *x265_encoder_open(x265_param *p)
 
         memcpy(param->svtHevcParam, encoder->m_svtAppData->svtHevcParams, sizeof(EB_H265_ENC_CONFIGURATION));
         encoder->m_param = param;
+        PARAM_NS::x265_param_free(zoneParam);
         return encoder;
     }
 #endif

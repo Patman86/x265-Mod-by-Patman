@@ -47,6 +47,7 @@ public:
     x265_param*   m_param;
     Frame*        m_frame;
     int           m_useSao;
+    bool          m_saoCreated;
     FrameEncoder* m_frameEncoder;
     int           m_hChromaShift;
     int           m_vChromaShift;

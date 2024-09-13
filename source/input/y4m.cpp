@@ -40,6 +40,7 @@
 using namespace X265_NS;
 using namespace std;
 static const char header[] = {'F','R','A','M','E'};
+static const char magic_xlength[] = {'L','E','N','G','T','H','='};
 Y4MInput::Y4MInput(InputFileInfo& info, bool alpha, int format)
 {
     for (int i = 0; i < QUEUE_SIZE; i++)
@@ -56,6 +57,7 @@ Y4MInput::Y4MInput(InputFileInfo& info, bool alpha, int format)
     rateDenom = info.fpsDenom;
     depth = info.depth;
     framesize = 0;
+    frameCount = -1;
 
     ifs = NULL;
     if (!strcmp(info.filename, "-"))
@@ -106,7 +108,7 @@ Y4MInput::Y4MInput(InputFileInfo& info, bool alpha, int format)
     info.fpsDenom = rateDenom;
     info.csp = colorSpace;
     info.depth = depth;
-    info.frameCount = -1;
+    info.frameCount = frameCount;
     size_t estFrameSize = framesize + sizeof(header) + 1; /* assume basic FRAME\n headers */
     /* try to estimate frame count, if this is not stdin */
     if (ifs != stdin)
@@ -155,6 +157,7 @@ bool Y4MInput::parseHeader()
     int csp = 0;
     int d = 0;
     int c;
+    uint32_t match_length = 0;
     while ((c = fgetc(ifs)) != EOF)
     {
         // Skip Y4MPEG string
@@ -167,23 +170,11 @@ bool Y4MInput::parseHeader()
             {
             case 'W':
                 width = 0;
-                while ((c = fgetc(ifs)) != EOF)
-                {
-                    if (c == ' ' || c == '\n')
-                        break;
-                    else
-                        width = width * 10 + (c - '0');
-                }
+                c = readNumber(width);
                 break;
             case 'H':
                 height = 0;
-                while ((c = fgetc(ifs)) != EOF)
-                {
-                    if (c == ' ' || c == '\n')
-                        break;
-                    else
-                        height = height * 10 + (c - '0');
-                }
+                c = readNumber(height);
                 break;
 
             case 'F':
@@ -223,24 +214,9 @@ bool Y4MInput::parseHeader()
                 break;
 
             case 'A':
-                sarWidth = 0;
-                sarHeight = 0;
-                while ((c = fgetc(ifs)) != EOF)
-                {
-                    if (c == ':')
-                    {
-                        while ((c = fgetc(ifs)) != EOF)
-                        {
-                            if (c == ' ' || c == '\n')
-                                break;
-                            else
-                                sarHeight = sarHeight * 10 + (c - '0');
-                        }
-                        break;
-                    }
-                    else
-                        sarWidth = sarWidth * 10 + (c - '0');
-                }
+                sarWidth = sarHeight = 0;
+                c = readNumber(sarWidth);
+                c = readNumber(sarHeight);
                 break;
 
             case 'C':
@@ -287,6 +263,34 @@ bool Y4MInput::parseHeader()
                 if (d >= 8 && d <= 16)
                     depth = d;
                 break;
+
+			case 'X':
+                // XLENGTH=xxxxx
+                for (match_length = 0; match_length < sizeof(magic_xlength); match_length++)
+                {
+                    if ((c = fgetc(ifs)) != magic_xlength[match_length])
+                        break;
+                }
+                if (match_length == sizeof(magic_xlength))
+                {
+                    // Yes this is what we want
+                    c = readNumber(frameCount);
+                    if (frameCount <= 0)
+                        frameCount = -1;
+                }
+                else
+                {
+                    // Clean up rest of the string
+                    if (c == ' ' || c == '\n')
+                        break;
+                    while ((c = fgetc(ifs)) != EOF)
+                    {
+                        if (c == ' ' || c == '\n')
+                            break;
+                    }
+                }
+                break;
+
             default:
                 while ((c = fgetc(ifs)) != EOF)
                 {
@@ -413,3 +417,19 @@ bool Y4MInput::readPicture(x265_picture& pic)
         return false;
 }
 
+template <typename T>
+int Y4MInput::readNumber(T &out)
+{
+    int c = -1;
+    out = 0;
+
+    while ((c = fgetc(ifs)) != EOF)
+    {
+        if (c >= '0' && c <= '9')
+            out = out * 10 + (c - '0');
+        else
+            break;
+    }
+
+    return c;
+}
