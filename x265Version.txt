@@ -1,4 +1,4 @@
 #Attribute: 	     Values
-repositorychangeset: aa7f602f7
+repositorychangeset: 6318f22
 releasetagdistance: 1
-releasetag: 3.6
+releasetag: 4.0
