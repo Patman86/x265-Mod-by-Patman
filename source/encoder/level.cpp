@@ -528,6 +528,7 @@ bool enforceLevel(x265_param& param, VPS& vps)
     int savedRefCount = param.maxNumReferences;
     while (vps.maxDecPicBuffering[vps.maxTempSubLayers - 1] > maxDpbSize && param.maxNumReferences > 1)
     {
+        param.maxNumReferences--;
         vps.maxDecPicBuffering[vps.maxTempSubLayers - 1] = X265_MIN(MAX_NUM_REF, X265_MAX(vps.numReorderPics[vps.maxTempSubLayers - 1] + 1, (uint32_t)param.maxNumReferences) + 1 + !!param.bEnableSCC);
     }
     if (param.maxNumReferences != savedRefCount)
