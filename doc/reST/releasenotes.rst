@@ -2,6 +2,44 @@
 Release Notes
 *************
 
+Version 4.0
+===========
+
+Release date - 13th September, 2024.
+
+New feature
+-----------
+1. Alpha Channel feature.
+2. Screen Content Coding (SCC).
+3. MV-HEVC feature.
+
+Enhancements to existing features
+---------------------------------
+1. Added support for the VMAF v3.x.
+
+API changes
+-----------
+1. Add command line parameter for Alpha Channel feature :option:`--alpha`.
+2. Add command line parameter for SCC feature :option:`--scc 1`.
+3. Add command line parameters for the MV-HEVC feature :option:`--multiview-config "multiview_config.txt"`.
+
+Optimizations
+---------------------
+1. Arm SIMD optimizations: Several time-consuming scalar C functions now have SIMD implementations on Arm platforms. Existing Arm SIMD implementations have also been optimized. These optimizations result in up to 57% faster encoding compared to release 3.6.
+2. Arm SIMD optimizations include use of Armv8.4 DotProd, Armv8.6 I8MM, and Armv9 SVE2 instruction set extensions. The following algorithms now have optimized SIMD implementations: SAD, SSE, DCT, SAO, convolution, quantization, intra_planar, intraFilter, intrapred DC and IDCT16x16.
+
+Bug fixes
+---------
+1. Fix for y4m pipe input broken.
+2. Fix SCC crash on multipass encode.
+3. Fix mcstf when :option:`--bframes` value was less than 5.
+4. Fix lowpass DCT for high bit depth.
+5. Added build support for Visual Studio 17.
+6. Fix issue in default code flow and memory leak.
+7. Framethreads tuning for Windows ARM devices.
+8. Fix scc crash on multipass encode.
+
+
 Version 3.6
 ===========
 
