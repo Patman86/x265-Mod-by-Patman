@@ -304,7 +304,7 @@ namespace X265_NS {
         H1("   --ipratio <float>             QP factor between I and P. Default %.2f\n", param->rc.ipFactor);
         H1("   --pbratio <float>             QP factor between P and B. Default %.2f\n", param->rc.pbFactor);
         H1("   --qcomp <float>               Weight given to predicted complexity. Default %.2f\n", param->rc.qCompress);
-        H1("   --cplxblur <float>            Reduce fluctuations in QP (before curve compression) [%.1f]\n", OPT(param->rc.complexityBlur));
+        H1("   --cplxblur <float>            Reduce fluctuations in QP (before curve compression) [%.1f]\n", param->rc.complexityBlur);
         H1("   --qblur <float>               Reduce fluctuations in QP (after curve compression) [%.1f]\n", param->rc.qblur);
         H1("   --qpstep <integer>            The maximum single adjustment in QP allowed to rate control. Default %d\n", param->rc.qpStep);
         H1("   --qpmin <integer>             sets a hard lower limit on QP allowed to ratecontrol. Default %d\n", param->rc.qpMin);
