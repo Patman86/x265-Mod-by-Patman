@@ -804,7 +804,7 @@ typedef struct x265_vmaf_commondata
     int subsample;
 }x265_vmaf_commondata;
 
-static x265_vmaf_commondata vcd[] = { { NULL, (char *)"/usr/local/share/model/vmaf_v0.6.1.json", NULL, NULL, 0, 0, 0, 0, 0, 0, 0, NULL, 0, 1} };
+static const x265_vmaf_commondata vcd[] = { { NULL, (char *)"/usr/local/share/model/vmaf_v0.6.1.json", NULL, NULL, 0, 0, 0, 0, 0, 0, 0, NULL, 0, 1} };
 
 typedef struct x265_temporal_layer {
     int poc_offset;      /* POC offset */

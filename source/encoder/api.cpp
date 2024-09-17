@@ -2138,6 +2138,7 @@ fail_or_end:
 double x265_calculate_vmafscore(x265_param *param, x265_vmaf_data *data)
 {
     double score;
+    const char* pix_format;
 
     data->width = param->sourceWidth;
     data->height = param->sourceHeight;
@@ -2148,22 +2149,22 @@ double x265_calculate_vmafscore(x265_param *param, x265_vmaf_data *data)
         if ((param->sourceWidth * param->sourceHeight) % 2 != 0)
             x265_log(NULL, X265_LOG_ERROR, "Invalid file size\n");
         data->offset = param->sourceWidth * param->sourceHeight / 2;
-        vcd->format = "yuv420p";
+        pix_format = "yuv420p";
     }
     else if (param->internalCsp == X265_CSP_I422)
     {
         data->offset = param->sourceWidth * param->sourceHeight;
-        vcd->format = "yuv422p10le";
+        pix_format = "yuv422p10le";
     }
     else if (param->internalCsp == X265_CSP_I444)
     {
         data->offset = param->sourceWidth * param->sourceHeight * 2;
-		vcd->format = "yuv444p10le";
+        pix_format = "yuv444p10le";
     }
     else
         x265_log(NULL, X265_LOG_ERROR, "Invalid format\n");
 
-    compute_vmaf(&score, vcd->format, data->width, data->height, param->sourceBitDepth, read_frame, data, vcd->model_path, vcd->log_path, vcd->log_fmt, vcd->disable_clip, vcd->disable_avx, vcd->enable_transform, vcd->phone_model, vcd->psnr, vcd->ssim, vcd->ms_ssim, vcd->pool, vcd->thread, vcd->subsample);
+    compute_vmaf(&score, (char*)pix_format, data->width, data->height, param->sourceBitDepth, read_frame, data, vcd->model_path, vcd->log_path, vcd->log_fmt, vcd->disable_clip, vcd->disable_avx, vcd->enable_transform, vcd->phone_model, vcd->psnr, vcd->ssim, vcd->ms_ssim, vcd->pool, vcd->thread, vcd->subsample);
 
     return score;
 }
@@ -2259,21 +2260,22 @@ int read_frame_8bit(float *reference_data, float *distorted_data, float *temp_da
 double x265_calculate_vmaf_framelevelscore(x265_param *param, x265_vmaf_framedata *vmafframedata)
 {
     double score;
+    const char* pix_format;
 
     if (param->internalCsp == X265_CSP_I420)
-        vcd->format = "yuv420p";
+        pix_format = "yuv420p";
     else if (param->internalCsp == X265_CSP_I422)
-        vcd->format = "yuv422p10le";
+        pix_format = "yuv422p10le";
     else
-		vcd->format = "yuv444p10le";
+        pix_format = "yuv444p10le";
 
     int (*read_frame)(float *reference_data, float *distorted_data, float *temp_data,
-                      int stride, void *s);
+        int stride, void *s);
     if (vmafframedata->internalBitDepth == 8)
         read_frame = read_frame_8bit;
     else
         read_frame = read_frame_10bit;
-    compute_vmaf(&score, vcd->format, vmafframedata->width, vmafframedata->height, param->sourceBitDepth, read_frame, vmafframedata, vcd->model_path, vcd->log_path, vcd->log_fmt, vcd->disable_clip, vcd->disable_avx, vcd->enable_transform, vcd->phone_model, vcd->psnr, vcd->ssim, vcd->ms_ssim, vcd->pool, vcd->thread, vcd->subsample);
+    compute_vmaf(&score, (char*)pix_format, vmafframedata->width, vmafframedata->height, param->sourceBitDepth, read_frame, vmafframedata, vcd->model_path, vcd->log_path, vcd->log_fmt, vcd->disable_clip, vcd->disable_avx, vcd->enable_transform, vcd->phone_model, vcd->psnr, vcd->ssim, vcd->ms_ssim, vcd->pool, vcd->thread, vcd->subsample);
 
     return score;
 }
