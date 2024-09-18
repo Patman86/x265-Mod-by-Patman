@@ -47,10 +47,12 @@
 #endif
 #endif
 
-#ifdef __INTEL_COMPILER
-#define COMPILEDBY "[ICC " XSTR(__INTEL_COMPILER) "]"
-#elif  _MSC_VER
+#if defined(_MSC_VER) && !defined(__INTEL_LLVM_COMPILER)
 #define COMPILEDBY "[MSVC " XSTR(_MSC_VER) "]"
+#elif __INTEL_LLVM_COMPILER
+#define COMPILEDBY "[ICC " XSTR(__INTEL_LLVM_COMPILER) "]"
+#elif __INTEL_COMPILER
+#define COMPILEDBY "[ICC " XSTR(__INTEL_COMPILER) "]"
 #endif
 
 #ifndef COMPILEDBY
