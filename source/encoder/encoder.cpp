@@ -2333,22 +2333,26 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture** pic_out)
                     }
                 }
             }
-            if (m_param->searchMethod == X265_SEA && frameEnc[0]->m_lowres.sliceType != X265_TYPE_B)
+
+            for (int layer = 0; layer < m_param->numLayers; layer++)
             {
-                int padX = m_param->maxCUSize + 32;
-                int padY = m_param->maxCUSize + 16;
-                uint32_t numCuInHeight = (frameEnc[0]->m_encData->m_reconPic[0]->m_picHeight + m_param->maxCUSize - 1) / m_param->maxCUSize;
-                int maxHeight = numCuInHeight * m_param->maxCUSize;
-                for (int i = 0; i < INTEGRAL_PLANE_NUM; i++)
+                if (m_param->searchMethod == X265_SEA && (frameEnc[layer]->m_lowres.sliceType != X265_TYPE_B || !layer))
                 {
-                    frameEnc[0]->m_encData->m_meBuffer[i] = X265_MALLOC(uint32_t, frameEnc[0]->m_reconPic[0]->m_stride * (maxHeight + (2 * padY)));
-                    if (frameEnc[0]->m_encData->m_meBuffer[i])
+                    int padX = m_param->maxCUSize + 32;
+                    int padY = m_param->maxCUSize + 16;
+                    uint32_t numCuInHeight = (frameEnc[layer]->m_encData->m_reconPic[0]->m_picHeight + m_param->maxCUSize - 1) / m_param->maxCUSize;
+                    int maxHeight = numCuInHeight * m_param->maxCUSize;
+                    for (int i = 0; i < INTEGRAL_PLANE_NUM; i++)
                     {
-                        memset(frameEnc[0]->m_encData->m_meBuffer[i], 0, sizeof(uint32_t)* frameEnc[0]->m_reconPic[0]->m_stride * (maxHeight + (2 * padY)));
-                        frameEnc[0]->m_encData->m_meIntegral[i] = frameEnc[0]->m_encData->m_meBuffer[i] + frameEnc[0]->m_encData->m_reconPic[0]->m_stride * padY + padX;
+                        frameEnc[layer]->m_encData->m_meBuffer[i] = X265_MALLOC(uint32_t, frameEnc[layer]->m_reconPic[0]->m_stride * (maxHeight + (2 * padY)));
+                        if (frameEnc[layer]->m_encData->m_meBuffer[i])
+                        {
+                            memset(frameEnc[layer]->m_encData->m_meBuffer[i], 0, sizeof(uint32_t) * frameEnc[layer]->m_reconPic[0]->m_stride * (maxHeight + (2 * padY)));
+                            frameEnc[layer]->m_encData->m_meIntegral[i] = frameEnc[layer]->m_encData->m_meBuffer[i] + frameEnc[layer]->m_encData->m_reconPic[0]->m_stride * padY + padX;
+                        }
+                        else
+                            x265_log(m_param, X265_LOG_ERROR, "SEA motion search: POC %d Integral buffer[%d] unallocated\n", frameEnc[0]->m_poc, i);
                     }
-                    else
-                        x265_log(m_param, X265_LOG_ERROR, "SEA motion search: POC %d Integral buffer[%d] unallocated\n", frameEnc[0]->m_poc, i);
                 }
             }
 
