@@ -47,6 +47,10 @@ static void byteReverse(uint8_t_t *buf, unsigned int nSize)
 
 #endif // ifndef ARCH_BIG_ENDIAN
 
+#if __cplusplus > 199711L
+#define register      // Deprecated in C++11.
+#endif  // #if __cplusplus > 199711L
+
 void MD5Transform(uint32_t *buf, uint32_t *in);
 
 /*
