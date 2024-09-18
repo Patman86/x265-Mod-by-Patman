@@ -623,6 +623,7 @@ namespace X265_NS {
         for (int view = 0; view < MAX_VIEWS; view++)
         {
             inputfn[view] = X265_MALLOC(char, sizeof(char) * 1024);
+            memset(inputfn[view], 0, sizeof(char) * 1024);
         }
         const char* reconfn[MAX_LAYERS] = { NULL };
         const char *outputfn = NULL;
@@ -763,7 +764,7 @@ namespace X265_NS {
                 OPT("frames") this->framesToBeEncoded = (uint32_t)x265_atoi(optarg, bError);
                 OPT("no-progress") this->bProgress = false;
                 OPT("output") outputfn = optarg;
-                OPT("input") strcpy(inputfn[0] , optarg);
+                OPT("input") strncpy(inputfn[0] , optarg, 1024);
                 OPT("recon") reconfn[0] = optarg;
                 OPT("input-depth") inputBitDepth = (uint32_t)x265_atoi(optarg, bError);
                 OPT("dither") this->bDither = true;
@@ -830,10 +831,11 @@ namespace X265_NS {
             }
         }
 
-#if !ENABLE_MULTIVIEW
-        if (optind < argc && !inputfn[0])
-            inputfn[0] = argv[optind++];
-#endif
+        if (param->numViews < 2)
+        {
+            if (optind < argc && !(*inputfn[0]))
+                strncpy(inputfn[0], argv[optind++], 1024);
+        }
         if (optind < argc && !outputfn)
             outputfn = argv[optind++];
         if (optind < argc)
@@ -1431,7 +1433,7 @@ namespace X265_NS {
                         if (0);
                         OPT("input")
                         {
-                            strcpy(fn[numInput++], optarg);
+                            strncpy(fn[numInput++], optarg, 1024);
                         }
 
                     }
