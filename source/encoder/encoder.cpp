@@ -4716,6 +4716,12 @@ void Encoder::configure(x265_param *p)
             p->keyframeMin = p->keyframeMax;
         }
     }
+
+    if (!!p->bEnableSCC && p->maxNumReferences == 1)
+    {
+        x265_log(p, X265_LOG_WARNING, "Screen Content Coding requies maximum number of references should be atleast greater than 1.Increamenting by one.\n");
+        p->maxNumReferences++;
+    }
 }
 
 void Encoder::readAnalysisFile(x265_analysis_data* analysis, int curPoc, const x265_picture* picIn, int paramBytes)
