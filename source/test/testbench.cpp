@@ -83,9 +83,10 @@ const char* const* chromaPartStr[X265_CSP_COUNT] =
 void do_help()
 {
     printf("x265 optimized primitive testbench\n\n");
-    printf("usage: TestBench [--cpuid CPU] [--testbench BENCH] [--help]\n\n");
+    printf("usage: TestBench [--cpuid CPU] [--testbench BENCH] [--nobench] [--help]\n\n");
     printf("       CPU is comma separated SIMD arch list, example: SSE4,AVX\n");
     printf("       BENCH is one of (pixel,transforms,interp,intrapred)\n\n");
+    printf("       --nobench disables running benchmarks, only run correctness tests\n\n");
     printf("By default, the test bench will test all benches on detected CPU architectures\n");
     printf("Options and testbench name may be truncated.\n");
 }
@@ -100,13 +101,9 @@ int main(int argc, char *argv[])
     bool enableavx512 = true;
     int cpuid = X265_NS::cpu_detect(enableavx512);
     const char *testname = 0;
+    bool run_benchmarks = true;
 
-    if (!(argc & 1))
-    {
-        do_help();
-        return 0;
-    }
-    for (int i = 1; i < argc - 1; i += 2)
+    for (int i = 1; i < argc; )
     {
         if (strncmp(argv[i], "--", 2))
         {
@@ -115,8 +112,13 @@ int main(int argc, char *argv[])
             return 1;
         }
         const char *name = argv[i] + 2;
-        const char *value = argv[i + 1];
-        if (!strncmp(name, "cpuid", strlen(name)))
+        const char *value = i + 1 < argc ? argv[i + 1] : "";
+        if (!strncmp(name, "help", strlen(name)))
+        {
+          do_help();
+          return 0;
+        }
+        else if (!strncmp(name, "cpuid", strlen(name)))
         {
             bool bError = false;
             cpuid = parseCpuName(value, bError, enableavx512);
@@ -125,11 +127,19 @@ int main(int argc, char *argv[])
                 printf("Invalid CPU name: %s\n", value);
                 return 1;
             }
+            i += 2;
         }
         else if (!strncmp(name, "testbench", strlen(name)))
         {
             testname = value;
             printf("Testing only harnesses that match name <%s>\n", testname);
+            i += 2;
+        }
+        else if (!strncmp(name, "nobench", strlen(name)))
+        {
+            printf("Disabling performance benchmarking\n");
+            run_benchmarks = false;
+            i += 1;
         }
         else
         {
@@ -233,34 +243,36 @@ int main(int argc, char *argv[])
     }
 
     /******************* Cycle count for all primitives **********************/
-
-    EncoderPrimitives optprim;
-    memset(&optprim, 0, sizeof(optprim));
+    if (run_benchmarks)
+    {
+        EncoderPrimitives optprim;
+        memset(&optprim, 0, sizeof(optprim));
 #if defined(X265_ARCH_X86) || defined(X265_ARCH_ARM64)
-    setupIntrinsicPrimitives(optprim, cpuid);
+        setupIntrinsicPrimitives(optprim, cpuid);
 #endif
 
-    setupAssemblyPrimitives(optprim, cpuid);
+        setupAssemblyPrimitives(optprim, cpuid);
 
-    /* Note that we do not setup aliases for performance tests, that would be
-     * redundant. The testbench only verifies they are correctly aliased */
+        /* Note that we do not setup aliases for performance tests, that would be
+         * redundant. The testbench only verifies they are correctly aliased */
 
-    /* some hybrid primitives may rely on other primitives in the
-     * global primitive table, so set up those pointers. This is a
-     * bit ugly, but I don't see a better solution */
-    memcpy(&primitives, &optprim, sizeof(EncoderPrimitives));
+        /* some hybrid primitives may rely on other primitives in the
+         * global primitive table, so set up those pointers. This is a
+         * bit ugly, but I don't see a better solution */
+        memcpy(&primitives, &optprim, sizeof(EncoderPrimitives));
 
-    printf("\nTest performance improvement with full optimizations\n");
-    fflush(stdout);
+        printf("\nTest performance improvement with full optimizations\n");
+        fflush(stdout);
 
-    for (size_t h = 0; h < sizeof(harness) / sizeof(TestHarness*); h++)
-    {
-        if (testname && strncmp(testname, harness[h]->getName(), strlen(testname)))
-            continue;
-        printf("== %s primitives ==\n", harness[h]->getName());
-        harness[h]->measureSpeed(cprim, optprim);
+        for (size_t h = 0; h < sizeof(harness) / sizeof(TestHarness*); h++)
+        {
+            if (testname && strncmp(testname, harness[h]->getName(), strlen(testname)))
+                continue;
+            printf("== %s primitives ==\n", harness[h]->getName());
+            harness[h]->measureSpeed(cprim, optprim);
+        }
+
+        printf("\n");
     }
-
-    printf("\n");
     return 0;
 }
