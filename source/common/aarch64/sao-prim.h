@@ -24,7 +24,6 @@
 #ifndef X265_COMMON_AARCH64_SAO_PRIM_H
 #define X265_COMMON_AARCH64_SAO_PRIM_H
 
-#include "neon-sve-bridge.h"
 #include "primitives.h"
 #include <arm_neon.h>
 
