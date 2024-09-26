@@ -814,7 +814,7 @@ the prediction quad-tree.
 	(within your decoder level limits) if you enable one or
 	both of these flags.
 
-	Default 3.
+	Default 1.
 
 .. option:: --limit-modes, --no-limit-modes
 
@@ -1783,7 +1783,7 @@ Quality, rate control and rate distortion options
 	the minimum CU size at which QP can be adjusted, ie. Quantization Group
 	size. Allowed range of values are 64, 32, 16, 8 provided this falls within 
 	the inclusive range [maxCUSize, minCUSize].
-	Default: same as maxCUSize
+	Default: 32
 
 .. option:: --cutree, --no-cutree
 
