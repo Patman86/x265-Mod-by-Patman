@@ -168,6 +168,137 @@ class FilmGrainCharacteristics : public SEI
     }
 };
 
+class AomFilmGrainCharacteristics : public SEI {
+
+public:
+
+    AomFilmGrainCharacteristics()
+    {
+        m_payloadType = USER_DATA_REGISTERED_ITU_T_T35;
+        m_payloadSize = 0;
+    }
+
+    int32_t     m_apply_grain;
+    int32_t     m_update_grain;
+    int32_t     m_scaling_points_y[14][2];
+    int32_t     m_num_y_points;
+    int32_t     m_scaling_points_cb[10][2];
+    int32_t     m_num_cb_points;
+    int32_t     m_scaling_points_cr[10][2];
+    int32_t     m_num_cr_points;
+    int32_t     m_scaling_shift;
+    int32_t     m_ar_coeff_lag;
+    int32_t     m_ar_coeffs_y[24];
+    int32_t     m_ar_coeffs_cb[25];
+    int32_t     m_ar_coeffs_cr[25];
+    int32_t     m_ar_coeff_shift;
+    int32_t     m_cb_mult;
+    int32_t     m_cb_luma_mult;
+    int32_t     m_cb_offset;
+    int32_t     m_cr_mult;
+    int32_t     m_cr_luma_mult;
+    int32_t     m_cr_offset;
+    int32_t     m_overlap_flag;
+    int32_t     m_clip_to_restricted_range;
+    int32_t     m_bitDepth;
+    int32_t     m_chroma_scaling_from_luma;
+    int32_t     m_grain_scale_shift;
+    uint16_t    m_grain_seed;
+
+    void writeSEI(const SPS&)
+    {
+        WRITE_CODE(0x26, 8, "country_code");
+        WRITE_CODE(0x5890, 16, "provider_code");
+        WRITE_CODE(0x0001, 16, "provider_oriented_code");
+        WRITE_FLAG(m_apply_grain, "afgs1_enable_flag");
+        WRITE_CODE(m_grain_seed, 16, "grain_seed");
+        WRITE_CODE(0, 3, "film_grain_param_set_idx");
+        WRITE_CODE(m_update_grain, 1, "update_grain");
+        WRITE_CODE(m_num_y_points, 4, "num_y_points");
+        if (m_num_y_points)
+        {
+            for (int i = 0; i < m_num_y_points; i++)
+            {
+                for (int j = 0; j < 2; j++)
+                {
+                    WRITE_CODE(m_scaling_points_y[i][j], 8, "scaling_points_y[i][j]");
+                }
+            }
+        }
+        WRITE_FLAG(m_num_cb_points == 0 && m_num_cr_points == 0, "luma_only_flag");
+        WRITE_FLAG(0, "chroma_scaling_from_luma");
+        WRITE_CODE(m_num_cb_points, 4, "num_cb_points");
+        if (m_num_cb_points)
+        {
+            for (int i = 0; i < m_num_cb_points; i++)
+            {
+                for (int j = 0; j < 2; j++)
+                {
+                    WRITE_CODE(m_scaling_points_cb[i][j], 8, "scaling_points_cb[i][j]");
+                }
+            }
+        }
+        WRITE_CODE(m_num_cr_points, 4, "num_cr_points");
+        if (m_num_cr_points)
+        {
+            for (int i = 0; i < m_num_cr_points; i++)
+            {
+                for (int j = 0; j < 2; j++)
+                {
+                    WRITE_CODE(m_scaling_points_cr[i][j], 8, "scaling_points_cr[i][j]");
+                }
+            }
+        }
+        WRITE_CODE(m_scaling_shift - 8, 2, "scaling_shift");
+        WRITE_CODE(m_ar_coeff_lag, 2, "ar_coeff_lag");
+        if (m_num_y_points)
+        {
+            for (int i = 0; i < 24; i++)
+            {
+                WRITE_CODE(m_ar_coeffs_y[i] + 128, 8, "ar_coeff_y[i]");
+            }
+        }
+        if (m_num_cb_points || m_chroma_scaling_from_luma)
+        {
+            for (int i = 0; i < 25; i++)
+            {
+                WRITE_CODE(m_ar_coeffs_cb[i] + 128, 8, "ar_coeff_cb[i]");
+            }
+        }
+        if (m_num_cr_points || m_chroma_scaling_from_luma)
+        {
+            for (int i = 0; i < 25; i++)
+            {
+                WRITE_CODE(m_ar_coeffs_cr[i] + 128, 8, "ar_coeff_cr[i]");
+            }
+        }
+        WRITE_CODE(m_ar_coeff_shift - 6, 2, "ar_coeff_shift");
+        WRITE_CODE(m_grain_scale_shift, 2, "grain_scale_shift");
+        if (m_num_cb_points)
+        {
+            WRITE_CODE(m_cb_mult, 8, "cb_mult");
+            WRITE_CODE(m_cb_luma_mult, 8, "cb_luma_mult");
+            WRITE_CODE(m_cb_offset, 9, "cb_offset");
+        }
+        if (m_num_cr_points)
+        {
+            WRITE_CODE(m_cr_mult, 8, "cr_mult");
+            WRITE_CODE(m_cr_luma_mult, 8, "cr_luma_mult");
+            WRITE_CODE(m_cr_offset, 9, "cr_offset");
+        }
+        WRITE_FLAG(m_overlap_flag, "overlap_flag");
+        WRITE_FLAG(m_clip_to_restricted_range, "clip_to_restricted_range");
+        if (m_bitIf->getNumberOfWrittenBits() % X265_BYTE != 0)
+        {
+            WRITE_FLAG(1, "payload_bit_equal_to_one");
+            while (m_bitIf->getNumberOfWrittenBits() % X265_BYTE != 0)
+            {
+                WRITE_FLAG(0, "payload_bit_equal_to_zero");
+            }
+        }
+    }
+};
+
 static const uint32_t ISO_IEC_11578_LEN = 16;
 
 class SEIuserDataUnregistered : public SEI
