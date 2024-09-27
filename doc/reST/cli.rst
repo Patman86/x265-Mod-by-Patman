@@ -1324,6 +1324,8 @@ Temporal / motion search options
 	combined by using adaptive filtering to produce a final noise-reduced picture.
 	Default: disabled
 
+	Note : MCSTF should be enabled only with frame threads 1
+
 Spatial/intra options
 =====================
 

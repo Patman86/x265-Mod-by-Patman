@@ -1937,7 +1937,7 @@ int x265_check_params(x265_param* param)
         param->bSingleSeiNal = 0;
         x265_log(param, X265_LOG_WARNING, "None of the SEI messages are enabled. Disabling Single SEI NAL\n");
     }
-    if (param->bEnableTemporalFilter && (param->frameNumThreads > 1))
+    if (param->bEnableTemporalFilter && (param->frameNumThreads != 1))
     {
         param->bEnableTemporalFilter = 0;
         x265_log(param, X265_LOG_WARNING, "MCSTF can be enabled with frame thread = 1 only. Disabling MCSTF\n");
