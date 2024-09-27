@@ -1475,7 +1475,7 @@ void FrameEncoder::encodeSlice(uint32_t sliceAddr, int layer)
 void FrameEncoder::processRow(int row, int threadId, int layer)
 {
     int64_t startTime = x265_mdate();
-    if (ATOMIC_INC(&m_activeWorkerCount) == 1 && m_stallStartTime)
+    if (ATOMIC_INC(&m_activeWorkerCount) == 1 && m_stallStartTime[layer])
         m_totalNoWorkerTime[layer] += x265_mdate() - m_stallStartTime[layer];
 
     const uint32_t realRow = m_idx_to_row[row >> 1];

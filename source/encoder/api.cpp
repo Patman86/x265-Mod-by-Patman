@@ -412,7 +412,7 @@ void x265_configure_vbv_end(x265_encoder* enc, x265_picture* picture, double tot
          picture->vbvEndFlag = 1;
     }
 }
-int x265_encoder_encode(x265_encoder *enc, x265_nal **pp_nal, uint32_t *pi_nal, x265_picture *pic_in, x265_picture **pic_out)
+int x265_encoder_encode(x265_encoder* enc, x265_nal** pp_nal, uint32_t* pi_nal, x265_picture* pic_in, x265_picture* pic_out)
 {
     if (!enc)
         return -1;
@@ -610,7 +610,7 @@ fail:
     if (numEncoded && encoder->m_param->csvLogLevel && encoder->m_outputCount >= encoder->m_latestParam->chunkStart)
     {
         for (int layer = 0; layer < encoder->m_param->numLayers; layer++)
-            x265_csvlog_frame(encoder->m_param, pic_out[layer]);
+            x265_csvlog_frame(encoder->m_param, pic_out + layer);
     }
 
     if (numEncoded < 0)
