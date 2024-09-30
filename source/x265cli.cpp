@@ -832,11 +832,16 @@ namespace X265_NS {
             }
         }
 
-        if (param->numViews < 2)
+#if !ENABLE_MULTIVIEW
+            if (optind < argc && !(*inputfn[0]))
+                strncpy(inputfn[0], argv[optind++], 1024);
+#else
+        if (!this->multiViewConfig)
         {
             if (optind < argc && !(*inputfn[0]))
                 strncpy(inputfn[0], argv[optind++], 1024);
         }
+#endif
         if (optind < argc && !outputfn)
             outputfn = argv[optind++];
         if (optind < argc)
