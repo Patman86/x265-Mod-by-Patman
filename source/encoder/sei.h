@@ -360,14 +360,17 @@ class SEIThreeDimensionalReferenceDisplaysInfo : public SEI
 {
 public:
     SEIThreeDimensionalReferenceDisplaysInfo()
+        : m_numRefDisplaysMinus1(0),
+        m_refViewingDistanceFlag(false),
+        m_additionalShiftPresentFlag(false)
     {
         m_payloadType = THREE_DIMENSIONAL_REFERENCE_DISPLAYS_INFO;
         m_payloadSize = 0;
     }
 
-    int  m_numRefDisplaysMinus1 = 0;
-    bool m_refViewingDistanceFlag = false;
-    bool m_additionalShiftPresentFlag = false;
+    int m_numRefDisplaysMinus1;
+    bool m_refViewingDistanceFlag;
+    bool m_additionalShiftPresentFlag;
     void writeSEI(const SPS&)
     {
         WRITE_UVLC(31, "prec_ref_display_width");
@@ -432,26 +435,66 @@ public:
     }
 };
 
+static int temp_sign_r[3][3] = { {0,1,0},{1,0,0},{0,1,1} };
+static int temp_exponent_r[3][3] = { {10,20,11},{10,5,11},{2,20,11} };
+static int temp_mantissa_r[3][3] = { {4,9,1},{0,3,4},{3,3,7} };
+static int temp_sign_t[1][3] = { { 0,1,0  } };
+static int temp_exponent_t[1][3] = { { 0,10,5 } };
+static int temp_mantissa_t[1][3] = { { 1,8,9 } };
+static int temp_length_mantissa_r[3][3] = { {10,20,11},{10,5,11},{2,20,11} };
+static int temp_length_mantissa_t[1][3] = { { 1,10,5 } };
+
 class SEIMultiviewAcquisitionInfo : public SEI
 {
 public:
     SEIMultiviewAcquisitionInfo()
+        :sign_r(),
+        exponent_r(),
+        mantissa_r(),
+        sign_t(),
+        exponent_t(),
+        mantissa_t(),
+        length_mantissa_r(),
+        length_mantissa_t(),
+        m_intrinsicParamFlag(true),
+        m_extrinsicParamFlag(true),
+        m_intrinsicParamsEqualFlag(true)
     {
         m_payloadType = MULTIVIEW_ACQUISITION_INFO;
         m_payloadSize = 0;
+
+        for (int i = 0; i <= 0; i++)
+        {
+            for (int j = 0; j <= 2; j++)  /* row */
+            {
+                for (int k = 0; k <= 2; k++)  /* column */
+                {
+                    temp_sign_r[j][k] = sign_r[j][k];
+                    temp_exponent_r[j][k] = exponent_r[j][k];
+                    temp_mantissa_r[j][k] = mantissa_r[j][k];
+                    temp_length_mantissa_r[j][k] = length_mantissa_r[j][k];
+                }
+                temp_sign_t[i][j] = sign_t[i][j];
+                temp_exponent_t[i][j] = exponent_t[i][j];
+                temp_mantissa_t[i][j] = mantissa_t[i][j];
+                temp_length_mantissa_t[i][j] = length_mantissa_t[i][j];
+            }
+        }
     }
 
-    int sign_r[3][3] = { {0,1,0},{1,0,0},{0,1,1} };
-    int exponent_r[3][3] = { {10,20,11},{10,5,11},{2,20,11} };
-    int mantissa_r[3][3] = { {4,9,1},{0,3,4},{3,3,7} };
-    int sign_t[1][3] = { 0,1,0 };
-    int exponent_t[1][3] = { 0,10,5 };
-    int mantissa_t[1][3] = { 1,8,9 };
-    int lenght_mantissa_r[3][3] = { {10,20,11},{10,5,11},{2,20,11} };
-    int length_mantissa_t[1][3] = { 1,10,5 };
-    bool m_intrinsicParamFlag = true;
-    bool m_extrinsicParamFlag = true;
-    bool m_intrinsicParamsEqualFlag = true;
+    int sign_r[3][3];
+    int exponent_r[3][3];
+    int mantissa_r[3][3];
+    int sign_t[1][3];
+    int exponent_t[1][3];
+    int mantissa_t[1][3];
+    int length_mantissa_r[3][3];
+    int length_mantissa_t[1][3];
+
+    bool m_intrinsicParamFlag;
+    bool m_extrinsicParamFlag;
+    bool m_intrinsicParamsEqualFlag;
+
     void writeSEI(const SPS& sps)
     {
         WRITE_FLAG(m_intrinsicParamFlag, "intrinsic_param_flag");
@@ -495,7 +538,7 @@ public:
                     {
                         WRITE_FLAG(sign_r[j][k], "sign_r");
                         WRITE_CODE(exponent_r[j][k], 6, "exponent_r");
-                        WRITE_CODE(mantissa_r[j][k], lenght_mantissa_r[j][k], "mantissa_r");
+                        WRITE_CODE(mantissa_r[j][k], length_mantissa_r[j][k], "mantissa_r");
                     }
                     WRITE_FLAG(sign_t[i][j], "sign_t");
                     WRITE_CODE(exponent_t[i][j], 6, "exponent_t");

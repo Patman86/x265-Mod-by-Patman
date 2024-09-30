@@ -35,7 +35,6 @@ void Slice::createInterLayerReferencePictureSet(PicList& picList, PicList& refPi
 
     for (int i = 0; i < 1; i++)
     {
-        int layerIdRef = 0;// getRefPicLayerId(i);
         Frame* refPic = picList.getPOC(m_poc, 0);
         int viewIdCur = 0;
         int viewIdZero = 1;
@@ -53,9 +52,12 @@ void Slice::createInterLayerReferencePictureSet(PicList& picList, PicList& refPi
 }
 #endif
 
-void Slice::setRefPicList(PicList& picList, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1, int sLayerId)
+#if ENABLE_MULTIVIEW
+void Slice::setRefPicList(PicList& picList, int sLayerId, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1)
+#else
+void Slice::setRefPicList(PicList& picList, int sLayerId)
+#endif
 {
-    bool checkNumPocTotalCurr = m_param->bEnableSCC ? false : true;
     if (m_sliceType == I_SLICE)
     {
         memset(m_refFrameList, 0, sizeof(m_refFrameList));
@@ -64,6 +66,7 @@ void Slice::setRefPicList(PicList& picList, PicList& refPicSetInterLayer0, PicLi
         m_numRefIdx[1] = m_numRefIdx[0] = 0;
 
 #if ENABLE_SCC_EXT
+        bool checkNumPocTotalCurr = m_param->bEnableSCC ? false : true;
         if (!checkNumPocTotalCurr)
         {
             if (m_rps.numberOfPictures == 0)
@@ -94,6 +97,7 @@ void Slice::setRefPicList(PicList& picList, PicList& refPicSetInterLayer0, PicLi
 #endif
 
 #if ENABLE_SCC_EXT
+    bool checkNumPocTotalCurr = m_param->bEnableSCC ? false : true;
     if (!checkNumPocTotalCurr && m_rps.numberOfPictures == 0)
     {
         Frame* prevPic = picList.getPOC(X265_MAX(0, m_poc - 1));

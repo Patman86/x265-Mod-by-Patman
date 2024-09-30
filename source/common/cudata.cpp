@@ -327,7 +327,11 @@ void CUData::initCTU(const Frame& frame, uint32_t cuAddr, int qp, uint32_t first
 }
 
 // initialize Sub partition
+#if ENABLE_SCC_EXT
 void CUData::initSubCU(const CUData& ctu, const CUGeom& cuGeom, int qp, MV lastIntraBCMv[2])
+#else
+void CUData::initSubCU(const CUData& ctu, const CUGeom& cuGeom, int qp)
+#endif
 {
     m_absIdxInCTU   = cuGeom.absPartIdx;
     m_encData       = ctu.m_encData;
@@ -1737,7 +1741,11 @@ uint32_t CUData::getInterMergeCandidates(uint32_t absPartIdx, uint32_t puIdx, MV
 }
 
 // Create the PMV list. Called for each reference index.
+#if (ENABLE_MULTIVIEW || ENABLE_SCC_EXT)
 int CUData::getPMV(InterNeighbourMV* neighbours, uint32_t picList, uint32_t refIdx, MV* amvpCand, MV* pmv, uint32_t puIdx, uint32_t absPartIdx) const
+#else
+int CUData::getPMV(InterNeighbourMV* neighbours, uint32_t picList, uint32_t refIdx, MV* amvpCand, MV* pmv) const
+#endif
 {
     MV directMV[MD_ABOVE_LEFT + 1];
     MV indirectMV[MD_ABOVE_LEFT + 1];
@@ -1847,7 +1855,6 @@ int CUData::getPMV(InterNeighbourMV* neighbours, uint32_t picList, uint32_t refI
             int refId = refIdx;
             uint32_t absPartAddr = m_absIdxInCTU + absPartIdx;
             uint32_t partIdxRB = deriveRightBottomIdx(puIdx);
-            bool isValid;
 
             // co-located RightBottom temporal predictor (H)
             int ctuIdx = -1;
@@ -2128,7 +2135,7 @@ bool CUData::getColMVP(MV& outMV, int& outRefIdx, int picList, int cuAddr, int p
         outMV = scaleMvByPOCDist(colmv, curPOC, curRefPOC, colPOC, colRefPOC);
 #else
     outMV = scaleMvByPOCDist(colmv, curPOC, curRefPOC, colPOC, colRefPOC);
-#endif;
+#endif
     return true;
 }
 

@@ -1360,6 +1360,7 @@ namespace X265_NS {
             while (isspace((unsigned char)*argLine)) argLine++;
             char* start = strchr(argLine, '-');
             int argCount = 0;
+            char flag[] = "true";
             char** args = (char**)malloc(256 * sizeof(char*));
             //Adding a dummy string to avoid file parsing error
             args[argCount++] = (char*)"x265";
@@ -1427,7 +1428,7 @@ namespace X265_NS {
                         name = nameBuf;
                     }
                     if (!optarg)
-                        optarg = "true";
+                        optarg = flag;
                     else if (optarg[0] == '=')
                         optarg++;
 #define OPT(STR) else if (!strcmp(name, STR))

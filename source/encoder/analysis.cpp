@@ -2870,7 +2870,11 @@ void Analysis::recodeCU(const CUData& parentCTU, const CUGeom& cuGeom, int32_t q
                                 continue;
                             MV mvp;
 
+#if (ENABLE_MULTIVIEW || ENABLE_SCC_EXT)
                             int numMvc = mode.cu.getPMV(mode.interNeighbours, list, ref, mode.amvpCand[list][ref], mvc, part, pu.puAbsPartIdx);
+#else
+                            int numMvc = mode.cu.getPMV(mode.interNeighbours, list, ref, mode.amvpCand[list][ref], mvc);
+#endif
                             mvp = mode.amvpCand[list][ref][mode.cu.m_mvpIdx[list][pu.puAbsPartIdx]];
                             if (m_param->interRefine == 1)
                             {
@@ -3413,7 +3417,7 @@ void Analysis::checkRDCostIntraBCMerge2Nx2N(Mode& mergeIBC, const CUGeom& cuGeom
     {
         interDirNeighbours[ui] = 0;
     }
-    int org_qp;
+    int8_t org_qp;
     int xPos = cu.m_cuPelX;
     int yPos = cu.m_cuPelY;
     int width = 1 << cu.m_log2CUSize[0];
@@ -3426,7 +3430,7 @@ void Analysis::checkRDCostIntraBCMerge2Nx2N(Mode& mergeIBC, const CUGeom& cuGeom
     cu.roundMergeCandidates(cMvFieldNeighbours, numValidMergeCand);
     restrictBipredMergeCand(&cu, 0, cMvFieldNeighbours, interDirNeighbours, numValidMergeCand);
 
-    for (uint32_t mergeCand = 0; mergeCand < numValidMergeCand; ++mergeCand)
+    for (uint8_t mergeCand = 0; mergeCand < numValidMergeCand; ++mergeCand)
     {
         if (interDirNeighbours[mergeCand] != 1)
         {
@@ -3533,7 +3537,11 @@ void Analysis::checkInter_rd0_4(Mode& interMode, const CUGeom& cuGeom, PartSize 
     }
 }
 
+#if ENABLE_SCC_EXT
 void Analysis::checkInter_rd5_6(Mode& interMode, const CUGeom& cuGeom, PartSize partSize, uint32_t refMask[2], MV* iMVCandList)
+#else
+void Analysis::checkInter_rd5_6(Mode& interMode, const CUGeom& cuGeom, PartSize partSize, uint32_t refMask[2])
+#endif
 {
     interMode.initCosts();
     interMode.cu.setPartSizeSubParts(partSize);
@@ -3570,7 +3578,11 @@ void Analysis::checkInter_rd5_6(Mode& interMode, const CUGeom& cuGeom, PartSize 
         }
     }
 
+#if ENABLE_SCC_EXT
     predInterSearch(interMode, cuGeom, m_csp != X265_CSP_I400 && m_frame->m_fencPic->m_picCsp != X265_CSP_I400, refMask, iMVCandList);
+#else
+    predInterSearch(interMode, cuGeom, m_csp != X265_CSP_I400 && m_frame->m_fencPic->m_picCsp != X265_CSP_I400, refMask);
+#endif
 
     /* predInterSearch sets interMode.sa8dBits, but this is ignored */
     encodeResAndCalcRdInterCU(interMode, cuGeom);

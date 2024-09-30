@@ -1986,7 +1986,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 /* Free up inputPic->analysisData since it has already been used */
                 if ((m_param->analysisLoad && !m_param->analysisSave) || ((m_param->bAnalysisType == AVC_INFO) && slice->m_sliceType != I_SLICE))
                     x265_free_analysis_data(m_param, &outFrame->m_analysisData);
-                if (pic_out && (&pic_out[sLayer]))
+                if (pic_out)
                 {
                     PicYuv* recpic = outFrame->m_reconPic[0];
                     pic_out[sLayer].poc = slice->m_poc;
@@ -2069,7 +2069,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 }
                 if (m_param->rc.bStatWrite && (m_param->analysisMultiPassRefine || m_param->analysisMultiPassDistortion))
                 {
-                    if (pic_out && (&pic_out[sLayer]))
+                    if (pic_out)
                     {
                         pic_out[sLayer].analysisData.poc = pic_out[sLayer].poc;
                         pic_out[sLayer].analysisData.interData = outFrame->m_analysisData.interData;
@@ -2163,7 +2163,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 if (m_param->rc.bStatWrite)
                     if (m_rateControl->writeRateControlFrameStats(outFrame, &curEncoder->m_rce))
                         m_aborted = true;
-                if (pic_out && (&pic_out[sLayer]))
+                if (pic_out)
                 {
                     /* m_rcData is allocated for every frame */
                     pic_out[sLayer].rcData = outFrame->m_rcData;
@@ -2197,7 +2197,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 }
 
                 /* Allow this frame to be recycled if no frame encoders are using it for reference */
-                if (!pic_out || !(&pic_out[sLayer]))
+                if (!pic_out)
                 {
                     ATOMIC_DEC(&outFrame->m_countRefEncoders);
                     m_dpb->recycleUnreferenced();
@@ -2473,14 +2473,14 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                     switch (m_param->selectiveSAO)
                     {
                     case 3: if (!IS_REFERENCED(frameEnc[layer]))
-                        slice->m_bUseSao = curEncoder->m_frameFilter.m_useSao = 0;
-                        break;
+                                slice->m_bUseSao = curEncoder->m_frameFilter.m_useSao = 0;
+                            break;
                     case 2: if (!!m_param->bframes && slice->m_sliceType == B_SLICE)
-                        slice->m_bUseSao = curEncoder->m_frameFilter.m_useSao = 0;
-                        break;
+                                slice->m_bUseSao = curEncoder->m_frameFilter.m_useSao = 0;
+                            break;
                     case 1: if (slice->m_sliceType != I_SLICE)
-                        slice->m_bUseSao = curEncoder->m_frameFilter.m_useSao = 0;
-                        break;
+                                slice->m_bUseSao = curEncoder->m_frameFilter.m_useSao = 0;
+                            break;
                     }
                 }
                 else
@@ -3369,7 +3369,11 @@ void Encoder::getStreamHeaders(NALList& list, Entropy& sbacCoder, Bitstream& bs)
     
     /* headers for start of bitstream */
     bs.resetBits();
+#if ENABLE_ALPHA || ENABLE_MULTIVIEW
     sbacCoder.codeVPS(m_vps, m_sps);
+#else
+    sbacCoder.codeVPS(m_vps);
+#endif
     bs.writeByteAlignment();
     list.serialize(NAL_UNIT_VPS, bs);
 
@@ -3503,7 +3507,7 @@ void Encoder::initVPS(VPS *vps)
     if (m_param->numScalableLayers > 1)
     {
         vps->vps_extension_flag = true;
-        int dimIdLen = 0, auxDimIdLen = 0, maxAuxId = 1, auxId[2] = { 0,1 };
+        uint8_t dimIdLen = 0, auxDimIdLen = 0, maxAuxId = 1, auxId[2] = { 0,1 };
         vps->splitting_flag = false;
         memset(vps->m_scalabilityMask, 0, sizeof(vps->m_scalabilityMask));
         memset(vps->m_layerIdInNuh, 0, sizeof(vps->m_layerIdInNuh));
@@ -3524,7 +3528,7 @@ void Encoder::initVPS(VPS *vps)
         }
         vps->m_dimensionIdLen[0] = dimIdLen;
 
-        for (int i = 1; i < m_param->numScalableLayers; i++)
+        for (uint8_t i = 1; i < m_param->numScalableLayers; i++)
         {
             vps->m_layerIdInNuh[i] = i;
             vps->m_dimensionId[i][0] = i;
