@@ -479,6 +479,10 @@ else()
     option(ENABLE_ASSEMBLY "Enable use of assembly coded primitives" OFF)
 endif()
 
+if(ENABLE_ASSEMBLY)
+   add_definitions(-DENABLE_ASSEMBLY)
+endif()
+
 option(CHECKED_BUILD "Enable run-time sanity checks (debugging)" OFF)
 if(CHECKED_BUILD)
     add_definitions(-DCHECKED_BUILD=1)
