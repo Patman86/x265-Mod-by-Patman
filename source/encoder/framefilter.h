@@ -131,7 +131,7 @@ public:
 
     void processRow(int row, int layer);
     void processPostRow(int row, int layer);
-    void computeMEIntegral(int row);
+    void computeMEIntegral(int row, int layer);
 };
 }
 

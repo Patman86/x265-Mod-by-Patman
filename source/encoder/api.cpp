@@ -405,8 +405,15 @@ int x265_encoder_reconfig_zone(x265_encoder* enc, x265_zone* zone_in)
 
     return 0;
 }
-
-int x265_encoder_encode(x265_encoder *enc, x265_nal **pp_nal, uint32_t *pi_nal, x265_picture *pic_in, x265_picture **pic_out)
+void x265_configure_vbv_end(x265_encoder* enc, x265_picture* picture, double totalstreamduration)
+{
+    Encoder* encoder = static_cast<Encoder*>(enc);
+    if ((totalstreamduration > 0) && (picture->poc) > ((encoder->m_param->vbvEndFrameAdjust)*(totalstreamduration)*((double)(encoder->m_param->fpsNum / encoder->m_param->fpsDenom))))
+    {
+         picture->vbvEndFlag = 1;
+    }
+}
+int x265_encoder_encode(x265_encoder* enc, x265_nal** pp_nal, uint32_t* pi_nal, x265_picture* pic_in, x265_picture* pic_out)
 {
     if (!enc)
         return -1;
@@ -604,7 +611,7 @@ fail:
     if (numEncoded && encoder->m_param->csvLogLevel && encoder->m_outputCount >= encoder->m_latestParam->chunkStart)
     {
         for (int layer = 0; layer < encoder->m_param->numLayers; layer++)
-            x265_csvlog_frame(encoder->m_param, pic_out[layer]);
+            x265_csvlog_frame(encoder->m_param, pic_out + layer);
     }
 
     if (numEncoded < 0)
@@ -1000,6 +1007,7 @@ void x265_picture_init(x265_param *param, x265_picture *pic)
     pic->rpu.payloadSize = 0;
     pic->rpu.payload = NULL;
     pic->picStruct = 0;
+    pic->vbvEndFlag = 0;
 
     if ((param->analysisSave || param->analysisLoad) || (param->bAnalysisType == AVC_INFO))
     {
@@ -1066,6 +1074,7 @@ static const x265_api libapi =
     &x265_encoder_reconfig,
     &x265_encoder_reconfig_zone,
     &x265_encoder_headers,
+    &x265_configure_vbv_end,
     &x265_encoder_encode,
     &x265_encoder_get_stats,
     &x265_encoder_log,
@@ -2130,6 +2139,7 @@ fail_or_end:
 double x265_calculate_vmafscore(x265_param *param, x265_vmaf_data *data)
 {
     double score;
+    const char* pix_format;
 
     data->width = param->sourceWidth;
     data->height = param->sourceHeight;
@@ -2140,22 +2150,22 @@ double x265_calculate_vmafscore(x265_param *param, x265_vmaf_data *data)
         if ((param->sourceWidth * param->sourceHeight) % 2 != 0)
             x265_log(NULL, X265_LOG_ERROR, "Invalid file size\n");
         data->offset = param->sourceWidth * param->sourceHeight / 2;
-        vcd->format = "yuv420p";
+        pix_format = "yuv420p";
     }
     else if (param->internalCsp == X265_CSP_I422)
     {
         data->offset = param->sourceWidth * param->sourceHeight;
-        vcd->format = "yuv422p10le";
+        pix_format = "yuv422p10le";
     }
     else if (param->internalCsp == X265_CSP_I444)
     {
         data->offset = param->sourceWidth * param->sourceHeight * 2;
-		vcd->format = "yuv444p10le";
+        pix_format = "yuv444p10le";
     }
     else
         x265_log(NULL, X265_LOG_ERROR, "Invalid format\n");
 
-    compute_vmaf(&score, vcd->format, data->width, data->height, param->sourceBitDepth, read_frame, data, vcd->model_path, vcd->log_path, vcd->log_fmt, vcd->disable_clip, vcd->disable_avx, vcd->enable_transform, vcd->phone_model, vcd->psnr, vcd->ssim, vcd->ms_ssim, vcd->pool, vcd->thread, vcd->subsample);
+    compute_vmaf(&score, (char*)pix_format, data->width, data->height, param->sourceBitDepth, read_frame, data, vcd->model_path, vcd->log_path, vcd->log_fmt, vcd->disable_clip, vcd->disable_avx, vcd->enable_transform, vcd->phone_model, vcd->psnr, vcd->ssim, vcd->ms_ssim, vcd->pool, vcd->thread, vcd->subsample);
 
     return score;
 }
@@ -2251,21 +2261,22 @@ int read_frame_8bit(float *reference_data, float *distorted_data, float *temp_da
 double x265_calculate_vmaf_framelevelscore(x265_param *param, x265_vmaf_framedata *vmafframedata)
 {
     double score;
+    const char* pix_format;
 
     if (param->internalCsp == X265_CSP_I420)
-        vcd->format = "yuv420p";
+        pix_format = "yuv420p";
     else if (param->internalCsp == X265_CSP_I422)
-        vcd->format = "yuv422p10le";
+        pix_format = "yuv422p10le";
     else
-		vcd->format = "yuv444p10le";
+        pix_format = "yuv444p10le";
 
     int (*read_frame)(float *reference_data, float *distorted_data, float *temp_data,
-                      int stride, void *s);
+        int stride, void *s);
     if (vmafframedata->internalBitDepth == 8)
         read_frame = read_frame_8bit;
     else
         read_frame = read_frame_10bit;
-    compute_vmaf(&score, vcd->format, vmafframedata->width, vmafframedata->height, param->sourceBitDepth, read_frame, vmafframedata, vcd->model_path, vcd->log_path, vcd->log_fmt, vcd->disable_clip, vcd->disable_avx, vcd->enable_transform, vcd->phone_model, vcd->psnr, vcd->ssim, vcd->ms_ssim, vcd->pool, vcd->thread, vcd->subsample);
+    compute_vmaf(&score, (char*)pix_format, vmafframedata->width, vmafframedata->height, param->sourceBitDepth, read_frame, vmafframedata, vcd->model_path, vcd->log_path, vcd->log_fmt, vcd->disable_clip, vcd->disable_avx, vcd->enable_transform, vcd->phone_model, vcd->psnr, vcd->ssim, vcd->ms_ssim, vcd->pool, vcd->thread, vcd->subsample);
 
     return score;
 }

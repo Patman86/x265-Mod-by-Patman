@@ -148,6 +148,8 @@ public:
     Frame*                 m_prevMCSTF;
     int*                   m_isSubSampled;
 
+    /*Vbv-End-Flag*/
+    int vbvEndFlag;
     /* aq-mode 4 : Gaussian, edge and theta frames for edge information */
     pixel*                 m_edgePic;
     pixel*                 m_gaussianPic;

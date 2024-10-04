@@ -213,6 +213,7 @@ RateControl::RateControl(x265_param& p, Encoder *top)
     m_isFirstMiniGop = false;
     m_lastScenecut = -1;
     m_lastScenecutAwareIFrame = -1;
+    m_totalFrames = -1;
     if (m_param->rc.rateControlMode == X265_RC_CRF)
     {
         m_param->rc.qp = (int)m_param->rc.rfConstant;
@@ -1498,11 +1499,14 @@ int RateControl::rateControlStart(Frame* curFrame, RateControlEntry* rce, Encode
         updateVbvPlan(enc);
         rce->bufferFill = m_bufferFill;
         rce->vbvEndAdj = false;
-        if (m_param->vbvBufferEnd && rce->encodeOrder >= m_param->vbvEndFrameAdjust * m_param->totalFrames)
-        {
-            rce->vbvEndAdj = true;
-            rce->targetFill = 0;
-        }
+         if (m_param->vbvBufferEnd && ((curFrame->vbvEndFlag) || ((m_param->totalFrames) && (rce->encodeOrder >= (m_param->vbvEndFrameAdjust * m_param->totalFrames)))))
+         {
+              if (m_totalFrames == -1)
+                   m_totalFrames = curFrame->vbvEndFlag ? static_cast<int>((1 / m_param->vbvEndFrameAdjust) * rce->encodeOrder) : m_param->totalFrames;
+              rce->remainingVbvEndFrames = ((m_totalFrames) - (rce->encodeOrder));
+              rce->vbvEndAdj = true;
+              rce->targetFill = 0;
+         }
 
         int mincr = enc->m_vps.ptl.minCrForLevel;
         /* Profiles above Main10 don't require maxAU size check, so just set the maximum to a large value. */
@@ -2761,8 +2765,12 @@ double RateControl::clipQscale(Frame* curFrame, RateControlEntry* rce, double q)
                 {
                     bool loopBreak = false;
                     double bufferDiff = m_param->vbvBufferEnd - (m_bufferFill / m_bufferSize);
-                    rce->targetFill = m_bufferFill + m_bufferSize * (bufferDiff / (m_param->totalFrames - rce->encodeOrder));
-                    if (bufferFillCur < rce->targetFill)
+                        if (rce->remainingVbvEndFrames > 0) {
+                             rce->targetFill = m_bufferFill + m_bufferSize * (bufferDiff / (double)(rce->remainingVbvEndFrames));
+                        }
+                        else
+                             rce->targetFill = m_bufferFill + m_bufferSize * bufferDiff;
+                        if (bufferFillCur < rce->targetFill)
                     {
                         q *= 1.01;
                         loopTerminate |= 1;

@@ -3503,7 +3503,7 @@ void Search::setIntraSearchRange(Mode& intraBCMode, MV& pred, int puIdx, int roi
     const uint32_t picWidth = m_slice->m_sps->picWidthInLumaSamples;
     const uint32_t picHeight = m_slice->m_sps->picHeightInLumaSamples;
     bool  isFullFrameSearchrangeEnabled = false; // disabled by default
-    if (cu.m_cuDepth[0] == 2 && cu.m_partSize[0] == SIZE_2Nx2N && isFullFrameSearchrangeEnabled)// full frame search
+    if (1 << cu.m_log2CUSize[0] == 16 && cu.m_partSize[0] == SIZE_2Nx2N && isFullFrameSearchrangeEnabled)// full frame search
     {
         srLeft = -1 * cuPelX;
         srTop = -1 * cuPelY;
@@ -3513,7 +3513,7 @@ void Search::setIntraSearchRange(Mode& intraBCMode, MV& pred, int puIdx, int roi
     }
     else
     {
-        const uint32_t searchWidthInCTUs = cu.m_cuDepth[0] == 3 ? 1 : (isFullFrameSearchrangeEnabled) ? -1 : 1;
+        const uint32_t searchWidthInCTUs = 1 << cu.m_log2CUSize[0] == 8 ? 1 : (isFullFrameSearchrangeEnabled) ? -1 : 1;
         uint32_t width = 0, maxWidth = searchWidthInCTUs * lcuWidth;
         for (const CUData* pTestCU = cu.m_cuLeft;
             width < maxWidth && pTestCU != NULL && pTestCU->m_slice != NULL;
@@ -3718,7 +3718,7 @@ bool Search::predIntraBCSearch(Mode& intraBCMode, const CUGeom& cuGeom, bool bCh
 
         if (ePartSize != SIZE_2Nx2N)
         {
-            if (log2ParallelMergeLevelMinus2 && ePartSize != SIZE_2Nx2N && cu.m_cuDepth[0] >= 3)
+            if (log2ParallelMergeLevelMinus2 && ePartSize != SIZE_2Nx2N && 1 << cu.m_log2CUSize[0] >= 8)
             {
                 cu.setPartSizeSubParts(SIZE_2Nx2N);
                 if (puIdx == 0)
@@ -4010,7 +4010,7 @@ bool Search::predMixedIntraBCInterSearch(Mode& intraBCMixedMode, const CUGeom& c
 
                 if (ePartSize != SIZE_2Nx2N)
                 {
-                    if (log2ParallelMergeLevelMinus2 && ePartSize != SIZE_2Nx2N && cu.m_cuDepth[0] >= 3)
+                    if (log2ParallelMergeLevelMinus2 && ePartSize != SIZE_2Nx2N && 1 << cu.m_log2CUSize[0] >= 8)
                     {
                         cu.setPartSizeSubParts(SIZE_2Nx2N);
                         if (partIdx == 0)

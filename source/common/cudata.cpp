@@ -2378,9 +2378,9 @@ void CUData::getIntraBCMVPsEncOnly(uint32_t absPartIdx, MV* MvPred, int& nbPred,
     uint32_t            m_numPartitionsInCtu = s_numPartInCUSize * s_numPartInCUSize;
     uint32_t            m_frameWidthInCtus = (m_slice->m_sps->picWidthInLumaSamples % m_slice->m_param->maxCUSize) ? m_slice->m_sps->picWidthInLumaSamples / m_slice->m_param->maxCUSize + 1 : m_slice->m_sps->picWidthInLumaSamples / m_slice->m_param->maxCUSize;
 
-    uint32_t            partIdxLT = m_absIdxInCTU + absPartIdx;
-    uint32_t            partIdxLB = g_rasterToZscan[g_zscanToRaster[partIdxLT] + (height / 4 - 1) * numPartInCUWidth];
-    uint32_t            partIdxRT = g_rasterToZscan[g_zscanToRaster[partIdxLT] + width / 4 - 1];
+    uint32_t            partIdxLT = m_absIdxInCTU;
+    uint32_t            partIdxLB = g_rasterToZscan[g_zscanToRaster[m_absIdxInCTU] + (((1 << (m_log2CUSize[0] - LOG2_UNIT_SIZE - 1)) - 1) << LOG2_RASTER_SIZE)];
+    uint32_t            partIdxRT = g_rasterToZscan[g_zscanToRaster[partIdxLT] + (1 << (m_log2CUSize[0] - LOG2_UNIT_SIZE)) - 1];
 
     left = above = 0;
 

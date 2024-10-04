@@ -100,6 +100,7 @@ struct RateControlEntry
     bool    isActive;
     double  amortizeFrames;
     double  amortizeFraction;
+    int  remainingVbvEndFrames;
     /* Required in 2-pass rate control */
     uint64_t expectedBits; /* total expected bits up to the current frame (current one excluded) */
     double   iCuCount;
@@ -139,6 +140,7 @@ public:
     double*     m_relativeComplexity;
     int         m_zoneBufferIdx;
 
+    int    m_totalFrames;
     bool   m_isAbr;
     bool   m_isVbv;
     bool   m_isCbr;

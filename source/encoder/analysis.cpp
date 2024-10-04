@@ -3623,7 +3623,7 @@ void Analysis::checkBidir2Nx2N(Mode& inter2Nx2N, Mode& bidir2Nx2N, const CUGeom&
     CUData& cu = bidir2Nx2N.cu;
 
 #if ENABLE_SCC_EXT
-    if ((cu.is8x8BipredRestriction(inter2Nx2N.bestME[0][0].mv, inter2Nx2N.bestME[0][1].mv, inter2Nx2N.bestME[0][0].ref, inter2Nx2N.bestME[0][1].ref) ? (cu.m_cuDepth[0] == 3) : cu.isBipredRestriction()) || inter2Nx2N.bestME[0][0].cost == MAX_UINT || inter2Nx2N.bestME[0][1].cost == MAX_UINT)
+    if ((cu.is8x8BipredRestriction(inter2Nx2N.bestME[0][0].mv, inter2Nx2N.bestME[0][1].mv, inter2Nx2N.bestME[0][0].ref, inter2Nx2N.bestME[0][1].ref) ? (1 << cu.m_log2CUSize[0] == 8) : cu.isBipredRestriction()) || inter2Nx2N.bestME[0][0].cost == MAX_UINT || inter2Nx2N.bestME[0][1].cost == MAX_UINT)
 #else
     if (cu.isBipredRestriction() || inter2Nx2N.bestME[0][0].cost == MAX_UINT || inter2Nx2N.bestME[0][1].cost == MAX_UINT)
 #endif

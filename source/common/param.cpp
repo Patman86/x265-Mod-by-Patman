@@ -407,6 +407,7 @@ void x265_param_default(x265_param* param)
 #endif
     /* Film grain characteristics model filename */
     param->filmGrain = NULL;
+    param->aomFilmGrain = NULL;
     param->bEnableSBRC = 0;
 
     /* Multi-View Encoding*/
@@ -1470,6 +1471,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("eos") p->bEnableEndOfSequence = atobool(value);
         /* Film grain characterstics model filename */
         OPT("film-grain") p->filmGrain = (char* )value;
+        OPT("aom-film-grain") p->aomFilmGrain = (char*)value;
         OPT("mcstf") p->bEnableTemporalFilter = atobool(value);
         OPT("sbrc") p->bEnableSBRC = atobool(value);
 #if ENABLE_ALPHA
@@ -1834,8 +1836,6 @@ int x265_check_params(x265_param* param)
         "Valid final VBV buffer emptiness must be a fraction 0 - 1, or size in kbits");
     CHECK(param->vbvEndFrameAdjust < 0,
         "Valid vbv-end-fr-adj must be a fraction 0 - 1");
-    CHECK(!param->totalFrames && param->vbvEndFrameAdjust,
-        "vbv-end-fr-adj cannot be enabled when total number of frames is unknown");
     CHECK(param->minVbvFullness < 0 && param->minVbvFullness > 100,
         "min-vbv-fullness must be a fraction 0 - 100");
     CHECK(param->maxVbvFullness < 0 && param->maxVbvFullness > 100,
@@ -1952,7 +1952,7 @@ int x265_check_params(x265_param* param)
         param->bSingleSeiNal = 0;
         x265_log(param, X265_LOG_WARNING, "None of the SEI messages are enabled. Disabling Single SEI NAL\n");
     }
-    if (param->bEnableTemporalFilter && (param->frameNumThreads > 1))
+    if (param->bEnableTemporalFilter && (param->frameNumThreads != 1))
     {
         param->bEnableTemporalFilter = 0;
         x265_log(param, X265_LOG_WARNING, "MCSTF can be enabled with frame thread = 1 only. Disabling MCSTF\n");
@@ -2419,12 +2419,14 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     s += sprintf(s, " qp-adaptation-range=%.2f", p->rc.qpAdaptationRange);
     s += sprintf(s, " scenecut-aware-qp=%d", p->bEnableSceneCutAwareQp);
     if (p->bEnableSceneCutAwareQp)
-        s += sprintf(s, " fwd-scenecut-window=%d fwd-ref-qp-delta=%.2f fwd-nonref-qp-delta=%.2f bwd-scenecut-window=%d bwd-ref-qp-delta=%.2f bwd-nonref-qp-delta=%.2f", p->fwdScenecutWindow, p->fwdRefQpDelta, p->fwdNonRefQpDelta, p->bwdScenecutWindow, p->bwdRefQpDelta, p->bwdNonRefQpDelta);
+        s += sprintf(s, " fwd-scenecut-window=%d fwd-ref-qp-delta=%.2f fwd-nonref-qp-delta=%.2f bwd-scenecut-window=%d bwd-ref-qp-delta=%.2f bwd-nonref-qp-delta=%.2f", p->fwdScenecutWindow, p->fwdRefQpDelta[0], p->fwdNonRefQpDelta[0], p->bwdMaxScenecutWindow, p->bwdRefQpDelta[0], p->bwdNonRefQpDelta[0]);
     s += sprintf(s, " conformance-window-offsets right=%d bottom=%d", p->confWinRightOffset, p->confWinBottomOffset);
     s += sprintf(s, " decoder-max-rate=%d", p->decoderVbvMaxRate);
     BOOL(p->bliveVBV2pass, "vbv-live-multi-pass");
     if (p->filmGrain)
         s += sprintf(s, " film-grain=%s", p->filmGrain); // Film grain characteristics model filename
+    if (p->aomFilmGrain)
+        s += sprintf(s, " aom-film-grain=%s", p->aomFilmGrain);
     BOOL(p->bEnableTemporalFilter, "mcstf");
 #if ENABLE_ALPHA
     BOOL(p->bEnableAlpha, "alpha");
@@ -2982,6 +2984,9 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     /* Film grain */
     if (src->filmGrain)
         dst->filmGrain = src->filmGrain;
+    /* Aom Film grain*/
+    if (src->aomFilmGrain)
+        dst->aomFilmGrain = src->aomFilmGrain;
     dst->bEnableSBRC = src->bEnableSBRC;
 }
 

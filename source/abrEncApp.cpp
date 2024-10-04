@@ -596,11 +596,10 @@ ret:
                 pic_in[view] = &pic_orig[view];
             /* Allocate recon picture if analysis save/load is enabled */
             std::priority_queue<int64_t>* pts_queue = m_cliopt.output->needPTS() ? new std::priority_queue<int64_t>() : NULL;
-            x265_picture* pic_recon[MAX_LAYERS];
+            x265_picture* pic_recon;
             x265_picture pic_out[MAX_LAYERS];
 
-            for (int i = 0; i < m_param->numLayers; i++)
-                pic_recon[i] = (m_cliopt.recon[i] || m_param->analysisSave || m_param->analysisLoad || pts_queue || reconPlay || m_param->csvLogLevel) ? &pic_out[i] : NULL;
+            pic_recon = (m_cliopt.recon || m_param->analysisSave || m_param->analysisLoad || pts_queue || reconPlay || m_param->csvLogLevel) ? pic_out : NULL;
             uint32_t inFrameCount = 0;
             uint32_t outFrameCount = 0;
             x265_nal *p_nal;
@@ -809,7 +808,7 @@ ret:
                     }
 
                     if (reconPlay && numEncoded)
-                        reconPlay->writePicture(*pic_recon[0]);
+                        reconPlay->writePicture(*pic_recon);
 
                     outFrameCount += numEncoded;
 
@@ -820,7 +819,7 @@ ret:
 
                     for (int layer = 0; layer < m_param->numLayers; layer++)
                     {
-                        if (numEncoded && pic_recon[layer] && m_cliopt.recon[layer])
+                        if (numEncoded && pic_recon && m_cliopt.recon[layer])
                             m_cliopt.recon[layer]->writePicture(pic_out[layer]);
                     }
                     if (nal)
@@ -848,7 +847,7 @@ ret:
                 }
 
                 if (reconPlay && numEncoded)
-                    reconPlay->writePicture(*pic_recon[0]);
+                    reconPlay->writePicture(*pic_recon);
 
                 outFrameCount += numEncoded;
                 if (isAbrSave && numEncoded)
@@ -858,7 +857,7 @@ ret:
 
                 for (int layer = 0; layer < m_param->numLayers; layer++)
                 {
-                    if (numEncoded && pic_recon[layer] && m_cliopt.recon[layer])
+                    if (numEncoded && pic_recon && m_cliopt.recon[layer])
                         m_cliopt.recon[layer]->writePicture(pic_out[layer]);
                 }
                 if (nal)
