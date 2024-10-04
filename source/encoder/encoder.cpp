@@ -1724,7 +1724,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             inFrame[layer]->m_poc = (!layer) ? (++m_pocLast) : m_pocLast;
             inFrame[layer]->m_userData = inputPic[0]->userData;
             inFrame[layer]->m_pts = inputPic[0]->pts;
-              inFrame[layer]->vbvEndFlag = inputPic[layer]->vbvEndFlag;
+            inFrame[layer]-> vbvEndFlag = inputPic[0]->vbvEndFlag;
 
             if ((m_param->bEnableSceneCutAwareQp & BACKWARD) && m_param->rc.bStatRead)
             {

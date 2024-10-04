@@ -1466,7 +1466,7 @@ int RateControl::rateControlStart(Frame* curFrame, RateControlEntry* rce, Encode
          if (m_param->vbvBufferEnd && ((curFrame->vbvEndFlag) || ((m_param->totalFrames) && (rce->encodeOrder >= (m_param->vbvEndFrameAdjust * m_param->totalFrames)))))
          {
               if (m_totalFrames == -1)
-                   m_totalFrames = curFrame->vbvEndFlag ? (1 / m_param->vbvEndFrameAdjust) * rce->encodeOrder : m_param->totalFrames;
+                   m_totalFrames = curFrame->vbvEndFlag ? static_cast<int>((1 / m_param->vbvEndFrameAdjust) * rce->encodeOrder) : m_param->totalFrames;
               rce->remainingVbvEndFrames = ((m_totalFrames) - (rce->encodeOrder));
               rce->vbvEndAdj = true;
               rce->targetFill = 0;
