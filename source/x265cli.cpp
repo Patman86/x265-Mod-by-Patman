@@ -301,13 +301,6 @@ namespace X265_NS {
             "                                    - 5 : auto variance with edge density and bias towards dark scenes.\n"
             "                                Default:%d\n", param->rc.aqMode);
         H0("   --[no-]auto-aq                Automatically decides the AQ Mode for each frame, using its scene statistics, such as luma intensity and edge density. Default %s\n", OPT(param->rc.bAutoAq));
-        H0("   --aq-mode <integer>           Mode for Adaptive Quantization\n"
-           "                                   - 0:none\n"
-           "                                   - 1:uniform AQ\n"
-           "                                   - 2:auto variance\n"
-           "                                   - 3:auto variance with bias to dark scenes\n"
-           "                                   - 4:auto variance with edge information.\n"
-           "                                 Default %d\n", param->rc.aqMode);
         H0("   --[no-]hevc-aq                Mode for HEVC Adaptive Quantization. Default %s\n", OPT(param->rc.hevcAq));
         H0("   --aq-strength <float>         Reduces blocking and blurring in flat and textured areas (0 to 3.0). Default %.2f\n", param->rc.aqStrength);
         H0("   --aq-bias-strength <float>    Sets the bias to dark strength in AQ modes 3 and 5. Default %.2f\n", param->rc.aqBiasStrength);
