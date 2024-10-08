@@ -1408,6 +1408,7 @@ FILE* x265_csvlog_open(const x265_param* param)
 #if ENABLE_LIBVMAF
                     fprintf(csvfp, ", VMAF Frame Score");
 #endif
+                    fprintf(csvfp, ", Target bitrate");
                 }
                 fprintf(csvfp, "\n");
             }
@@ -1535,6 +1536,7 @@ void x265_csvlog_frame(const x265_param* param, const x265_picture* pic)
 #if ENABLE_LIBVMAF
         fprintf(param->csvfpt, ", %lf", frameStats->vmafFrameScore);
 #endif
+        fprintf(param->csvfpt, ", %I64d", frameStats->currTrBitrate);
     }
     fprintf(param->csvfpt, "\n");
     fflush(stderr);

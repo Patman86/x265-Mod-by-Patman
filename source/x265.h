@@ -315,6 +315,7 @@ typedef struct x265_frame_stats
     double           bufferFillFinal;
     double           unclippedBufferFillFinal;
     uint8_t          tLayer;
+    int64_t          currTrBitrate;
 } x265_frame_stats;
 
 typedef struct x265_ctu_info_t

@@ -175,6 +175,13 @@ public:
     Frame*                 m_nextSubDPB;           // PicList doubly linked list pointers
     Frame*                 m_prevSubDPB;
 
+    /*Target bitrate*/
+    int64_t                m_targetBitrate;
+    /* target CRF for this picture.*/
+    int                    m_targetCrf;
+    /* target QP for this picture.*/
+    int                    m_targetQp;
+
     Frame();
 
     bool create(x265_param *param, float* quantOffsets);
