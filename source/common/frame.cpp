@@ -81,6 +81,10 @@ Frame::Frame()
     m_valid = 0;
     m_nextSubDPB = NULL;
     m_prevSubDPB = NULL;
+
+    m_targetBitrate = 0;
+    m_targetCrf = 0;
+    m_targetQp = 0;
 }
 
 bool Frame::create(x265_param *param, float* quantOffsets)
