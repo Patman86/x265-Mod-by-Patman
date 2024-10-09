@@ -197,4 +197,12 @@ BasketballDrive_1920x1080_50.y4m, --preset ultrafast --no-open-gop --chunk-start
 ducks_take_off_420_720p50.y4m,--preset slow --temporal-layers 3 --b-adapt 0
 parkrun_ter_720p50.y4m,--preset medium --temporal-layers 4 --b-adapt 0
 BasketballDrive_1920x1080_50.y4m, --preset medium --no-open-gop --keyint 50 --min-keyint 50 --temporal-layers 5 --b-adapt 0
+
+#MCSTF tests
+BasketballDrive_1920x1080_50.y4m, --crf 24 --mcstf --preset slower --bframes 5 --frame-threads 1 --no-cutree
+crowd_run_1080p50.y4m, --crf 26 --mcstf --preset medium --bframes 5 --frame-threads 1 --tskip-fast --constrained-intra
+
+#SBRC tests
+BasketballDrive_1920x1080_50.y4m, --crf 26 --preset slow --sbrc --no-open-gop --keyint 60 --min-keyint 60 --vbv-bufsize 6000 --vbv-maxrate 5000 --temporal-layers 4 --b-adapt 0 --no-cutree
+crowd_run_1080p50.y4m, --crf 22 --preset superfast --sbrc --no-open-gop --me sea --vbv-maxrate 9000 --vbv-bufsize 7500 --keyint 100 --min-keyint 100
 # vim: tw=200
