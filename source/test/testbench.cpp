@@ -120,11 +120,17 @@ int main(int argc, char *argv[])
         }
         else if (!strncmp(name, "cpuid", strlen(name)))
         {
+            int cpu_detect_cpuid = cpuid;
             bool bError = false;
             cpuid = parseCpuName(value, bError, enableavx512);
             if (bError)
             {
                 printf("Invalid CPU name: %s\n", value);
+                return 1;
+            }
+            else if ((cpuid & cpu_detect_cpuid) != cpuid)
+            {
+                printf("Feature detection conflicts with provided --cpuid: %s\n", value);
                 return 1;
             }
             i += 2;

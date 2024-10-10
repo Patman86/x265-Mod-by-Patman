@@ -1587,8 +1587,10 @@ int parseCpuName(const char* value, bool& bError, bool bEnableavx512)
         }
 
         free(buf);
+#if X265_ARCH_X86
         if ((cpu & X265_CPU_SSSE3) && !(cpu & X265_CPU_SSE2_IS_SLOW))
             cpu |= X265_CPU_SSE2_IS_FAST;
+#endif
     }
 
     return cpu;
