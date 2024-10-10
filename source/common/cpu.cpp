@@ -390,6 +390,7 @@ uint32_t cpu_detect(bool benableavx512)
 }
 
 #elif X265_ARCH_ARM64
+#include "aarch64/cpu.h"
 
 uint32_t cpu_detect(bool benableavx512)
 {
@@ -397,21 +398,7 @@ uint32_t cpu_detect(bool benableavx512)
     int flags = 0;
 
 #ifdef ENABLE_ASSEMBLY
-    #if HAVE_NEON
-         flags |= X265_CPU_NEON;
-    #endif
-    #if HAVE_NEON_DOTPROD
-         flags |= X265_CPU_NEON_DOTPROD;
-    #endif
-    #if HAVE_NEON_I8MM
-         flags |= X265_CPU_NEON_I8MM;
-    #endif
-    #if HAVE_SVE
-         flags |= X265_CPU_SVE;
-    #endif
-    #if HAVE_SVE2
-         flags |= X265_CPU_SVE2;
-    #endif
+    flags = aarch64_cpu_detect();
 #endif
 
     return flags;

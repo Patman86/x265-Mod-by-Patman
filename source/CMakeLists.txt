@@ -87,12 +87,28 @@ elseif(ARM64MATCH GREATER "-1")
 
     option(AARCH64_WARNINGS_AS_ERRORS "Build with -Werror for AArch64 Intrinsics files" OFF)
 
+    option(AARCH64_RUNTIME_CPU_DETECT "Enable AArch64 run-time CPU feature detection" ON)
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux")
+        set(AARCH64_RUNTIME_CPU_DETECT OFF CACHE BOOL "" FORCE)
+        message(STATUS "Run-time CPU feature detection unsupported on this platform")
+    endif()
+
     # Options for manually enabling/disabling AArch64 SIMD extensions.
     option(ENABLE_NEON "Enable Neon" ON)
     option(ENABLE_NEON_DOTPROD "Enable Neon DotProd" ON)
     option(ENABLE_NEON_I8MM "Enable Neon I8MM" ON)
     option(ENABLE_SVE "Enable SVE" ON)
     option(ENABLE_SVE2 "Enable SVE2" ON)
+
+    # Compiler flags for AArch64 extensions.
+    set(AARCH64_NEON_FLAG "-march=armv8-a")
+    # Neon DotProd is mandatory from Armv8.4.
+    set(AARCH64_NEON_DOTPROD_FLAG "-march=armv8.2-a+dotprod")
+    # Neon I8MM is mandatory from Armv8.6.
+    set(AARCH64_NEON_I8MM_FLAG "-march=armv8.2-a+dotprod+i8mm")
+    set(AARCH64_SVE_FLAG "-march=armv8.2-a+dotprod+i8mm+sve")
+    # SVE2 is only available from Armv9.0, and armv9-a implies +dotprod and +sve.
+    set(AARCH64_SVE2_FLAG "-march=armv9-a+i8mm+sve2")
 else()
     message(STATUS "CMAKE_SYSTEM_PROCESSOR value `${CMAKE_SYSTEM_PROCESSOR}` is unknown")
     message(STATUS "Please add this value near ${CMAKE_CURRENT_LIST_FILE}:${CMAKE_CURRENT_LIST_LINE}")
@@ -268,7 +284,13 @@ if(GCC)
         set(CPU_HAS_NEON 1)
         add_definitions(-DX265_ARCH_ARM64=1)
 
-        if(CROSS_COMPILE_ARM64)
+        if (AARCH64_RUNTIME_CPU_DETECT)
+            add_definitions(-DAARCH64_RUNTIME_CPU_DETECT=1)
+            message(STATUS "Configuring build for run-time CPU feature detection")
+        endif()
+
+        if(AARCH64_RUNTIME_CPU_DETECT OR CROSS_COMPILE_ARM64)
+            # Add all extensions when compiling for run-time CPU feature detection or cross compiling.
             set(CPU_HAS_NEON_DOTPROD 1)
             set(CPU_HAS_NEON_I8MM 1)
             set(CPU_HAS_SVE 1)
@@ -280,7 +302,7 @@ if(GCC)
                 find_package(SVE)
                 find_package(SVE2)
             else()
-                message(STATUS "Compile time feature detection unsupported on this platform")
+                message(STATUS "Compile-time CPU feature detection unsupported on this platform")
             endif()
         endif()
 
@@ -312,33 +334,25 @@ if(GCC)
 
         if(CPU_HAS_NEON)
             message(STATUS "Found Neon")
-            set(ARM_ARGS -O3 -march=armv8-a)
             add_definitions(-DHAVE_NEON=1)
         endif()
         if(CPU_HAS_NEON_DOTPROD)
-            # Neon DotProd is mandatory from Armv8.4.
             message(STATUS "Found Neon DotProd")
-            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod)
             add_definitions(-DHAVE_NEON_DOTPROD=1)
         endif()
         if(CPU_HAS_NEON_I8MM)
-            # Neon I8MM is mandatory from Armv8.6.
             message(STATUS "Found Neon I8MM")
-            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod+i8mm)
             add_definitions(-DHAVE_NEON_I8MM=1)
         endif()
         if(CPU_HAS_SVE)
             message(STATUS "Found SVE")
-            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod+i8mm+sve)
             add_definitions(-DHAVE_SVE=1)
         endif()
         if(CPU_HAS_SVE2)
             message(STATUS "Found SVE2")
-            # SVE2 is only available from Armv9.0, and armv9-a implies +dotprod
-            set(ARM_ARGS -O3 -march=armv9-a+i8mm+sve2)
             add_definitions(-DHAVE_SVE2=1)
         endif()
-        set(ARM_ARGS ${ARM_ARGS} -fPIC)
+        set(ARM_ARGS -O3 -fPIC)
         # Do not allow implicit vector type conversions in Clang builds (this
         # is already the default in GCC builds).
         check_cxx_compiler_flag(-flax-vector-conversions=none CC_HAS_FLAX_VEC_CONV_NONE)
@@ -356,7 +370,8 @@ int main() { return 0; }")
             set(OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
             # CMAKE_REQUIRED_FLAGS requires a space-delimited string, whereas
             # ARM_ARGS is defined and used elsewhere as a ;-list.
-            foreach(ARM_ARG ${ARM_ARGS})
+            # Add `-march=...+sve` so the test functions correctly with Clang.
+            foreach(ARM_ARG ${ARM_ARGS} ${AARCH64_SVE_FLAG})
                 string(APPEND CMAKE_REQUIRED_FLAGS " ${ARM_ARG}")
             endforeach()
             check_c_source_compiles("${SVE_HEADER_TEST}" SVE_HEADER_C_TEST_COMPILED)
@@ -705,18 +720,18 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
             add_custom_command(
                 OUTPUT ${ASM}.${SUFFIX}
                 COMMAND ${CMAKE_CXX_COMPILER}
-                ARGS ${ARM_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                ARGS ${ARM_ARGS} ${ASM_FLAGS} ${AARCH64_NEON_FLAG} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                 DEPENDS ${ASM_SRC})
         endforeach()
-        if(CPU_HAS_SVE2)
-            foreach(ASM ${ARM_ASMS_SVE2})
+        if(CPU_HAS_NEON_DOTPROD)
+            foreach(ASM ${ARM_ASMS_NEON_DOTPROD})
                 set(ASM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/common/aarch64/${ASM})
                 list(APPEND ASM_SRCS ${ASM_SRC})
                 list(APPEND ASM_OBJS ${ASM}.${SUFFIX})
                 add_custom_command(
                     OUTPUT ${ASM}.${SUFFIX}
                     COMMAND ${CMAKE_CXX_COMPILER}
-                    ARGS ${ARM_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                    ARGS ${ARM_ARGS} ${ASM_FLAGS} ${AARCH64_NEON_DOTPROD_FLAG} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                     DEPENDS ${ASM_SRC})
             endforeach()
         endif()
@@ -728,19 +743,19 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
                 add_custom_command(
                     OUTPUT ${ASM}.${SUFFIX}
                     COMMAND ${CMAKE_CXX_COMPILER}
-                    ARGS ${ARM_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                    ARGS ${ARM_ARGS} ${ASM_FLAGS} ${AARCH64_SVE_FLAG} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                     DEPENDS ${ASM_SRC})
             endforeach()
         endif()
-        if(CPU_HAS_NEON_DOTPROD)
-            foreach(ASM ${ARM_ASMS_NEON_DOTPROD})
+        if(CPU_HAS_SVE2)
+            foreach(ASM ${ARM_ASMS_SVE2})
                 set(ASM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/common/aarch64/${ASM})
                 list(APPEND ASM_SRCS ${ASM_SRC})
                 list(APPEND ASM_OBJS ${ASM}.${SUFFIX})
                 add_custom_command(
                     OUTPUT ${ASM}.${SUFFIX}
                     COMMAND ${CMAKE_CXX_COMPILER}
-                    ARGS ${ARM_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                    ARGS ${ARM_ARGS} ${ASM_FLAGS} ${AARCH64_SVE2_FLAG} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                     DEPENDS ${ASM_SRC})
             endforeach()
         endif()

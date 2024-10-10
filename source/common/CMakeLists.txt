@@ -103,6 +103,7 @@ if(ENABLE_ASSEMBLY AND (ARM64 OR CROSS_COMPILE_ARM64))
         add_definitions(-DAUTO_VECTORIZE=1)
     endif()
 
+    # Add Arm intrinsics files here.
     set(C_SRCS_NEON asm-primitives.cpp pixel-prim.h pixel-prim.cpp filter-prim.h filter-prim.cpp dct-prim.h dct-prim.cpp loopfilter-prim.cpp loopfilter-prim.h intrapred-prim.cpp arm64-utils.cpp arm64-utils.h fun-decls.h sao-prim.cpp  mem-neon.h)
     set(C_SRCS_NEON_DOTPROD filter-neon-dotprod.cpp)
     set(C_SRCS_NEON_I8MM filter-neon-i8mm.cpp)
@@ -110,11 +111,11 @@ if(ENABLE_ASSEMBLY AND (ARM64 OR CROSS_COMPILE_ARM64))
     set(C_SRCS_SVE2 sao-prim-sve2.cpp)
     enable_language(ASM)
 
-    # add ARM assembly/intrinsic files here
+    # Add Arm assembly files here.
     set(A_SRCS asm.S mc-a.S mc-a-common.S sad-a.S pixel-util.S pixel-util-common.S p2s.S p2s-common.S blockcopy8.S blockcopy8-common.S ssd-a.S ssd-a-common.S intrapred.S dct.S)
+    set(A_SRCS_NEON_DOTPROD sad-neon-dotprod.S ssd-neon-dotprod.S)
     set(A_SRCS_SVE asm-sve.S blockcopy8-sve.S p2s-sve.S pixel-util-sve.S)
     set(A_SRCS_SVE2 mc-a-sve2.S pixel-util-sve2.S ssd-a-sve2.S)
-    set(A_SRCS_NEON_DOTPROD sad-neon-dotprod.S ssd-neon-dotprod.S)
     set(VEC_PRIMITIVES)
 
     set(ARM_ASMS "${A_SRCS}" CACHE INTERNAL "ARM Assembly Sources")
@@ -123,29 +124,34 @@ if(ENABLE_ASSEMBLY AND (ARM64 OR CROSS_COMPILE_ARM64))
     set(ARM_ASMS_NEON_DOTPROD "${A_SRCS_NEON_DOTPROD}" CACHE INTERNAL "Arm Assembly Sources that use the Neon DotProd extension")
     foreach(SRC ${C_SRCS_NEON})
         set(ASM_PRIMITIVES ${ASM_PRIMITIVES} aarch64/${SRC})
+        set_source_files_properties(aarch64/${SRC} PROPERTIES COMPILE_FLAGS ${AARCH64_NEON_FLAG})
     endforeach()
-
-    if(CPU_HAS_NEON_I8MM)
-        foreach(SRC ${C_SRCS_NEON_I8MM})
-            set(ASM_PRIMITIVES ${ASM_PRIMITIVES} aarch64/${SRC})
-        endforeach()
-    endif()
 
     if(CPU_HAS_NEON_DOTPROD)
         foreach(SRC ${C_SRCS_NEON_DOTPROD})
             set(ASM_PRIMITIVES ${ASM_PRIMITIVES} aarch64/${SRC})
+            set_source_files_properties(aarch64/${SRC} PROPERTIES COMPILE_FLAGS ${AARCH64_NEON_DOTPROD_FLAG})
+        endforeach()
+    endif()
+
+    if(CPU_HAS_NEON_I8MM)
+        foreach(SRC ${C_SRCS_NEON_I8MM})
+            set(ASM_PRIMITIVES ${ASM_PRIMITIVES} aarch64/${SRC})
+            set_source_files_properties(aarch64/${SRC} PROPERTIES COMPILE_FLAGS ${AARCH64_NEON_I8MM_FLAG})
         endforeach()
     endif()
 
     if(CPU_HAS_SVE AND HAVE_SVE_BRIDGE)
         foreach(SRC ${C_SRCS_SVE})
             set(ASM_PRIMITIVES ${ASM_PRIMITIVES} aarch64/${SRC})
+            set_source_files_properties(aarch64/${SRC} PROPERTIES COMPILE_FLAGS ${AARCH64_SVE_FLAG})
         endforeach()
     endif()
 
     if(CPU_HAS_SVE2 AND HAVE_SVE_BRIDGE)
         foreach(SRC ${C_SRCS_SVE2})
             set(ASM_PRIMITIVES ${ASM_PRIMITIVES} aarch64/${SRC})
+            set_source_files_properties(aarch64/${SRC} PROPERTIES COMPILE_FLAGS ${AARCH64_SVE2_FLAG})
         endforeach()
     endif()
 
