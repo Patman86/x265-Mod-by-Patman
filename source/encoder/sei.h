@@ -168,6 +168,137 @@ class FilmGrainCharacteristics : public SEI
     }
 };
 
+class AomFilmGrainCharacteristics : public SEI {
+
+public:
+
+    AomFilmGrainCharacteristics()
+    {
+        m_payloadType = USER_DATA_REGISTERED_ITU_T_T35;
+        m_payloadSize = 0;
+    }
+
+    int32_t     m_apply_grain;
+    int32_t     m_update_grain;
+    int32_t     m_scaling_points_y[14][2];
+    int32_t     m_num_y_points;
+    int32_t     m_scaling_points_cb[10][2];
+    int32_t     m_num_cb_points;
+    int32_t     m_scaling_points_cr[10][2];
+    int32_t     m_num_cr_points;
+    int32_t     m_scaling_shift;
+    int32_t     m_ar_coeff_lag;
+    int32_t     m_ar_coeffs_y[24];
+    int32_t     m_ar_coeffs_cb[25];
+    int32_t     m_ar_coeffs_cr[25];
+    int32_t     m_ar_coeff_shift;
+    int32_t     m_cb_mult;
+    int32_t     m_cb_luma_mult;
+    int32_t     m_cb_offset;
+    int32_t     m_cr_mult;
+    int32_t     m_cr_luma_mult;
+    int32_t     m_cr_offset;
+    int32_t     m_overlap_flag;
+    int32_t     m_clip_to_restricted_range;
+    int32_t     m_bitDepth;
+    int32_t     m_chroma_scaling_from_luma;
+    int32_t     m_grain_scale_shift;
+    uint16_t    m_grain_seed;
+
+    void writeSEI(const SPS&)
+    {
+        WRITE_CODE(0x26, 8, "country_code");
+        WRITE_CODE(0x5890, 16, "provider_code");
+        WRITE_CODE(0x0001, 16, "provider_oriented_code");
+        WRITE_FLAG(m_apply_grain, "afgs1_enable_flag");
+        WRITE_CODE(m_grain_seed, 16, "grain_seed");
+        WRITE_CODE(0, 3, "film_grain_param_set_idx");
+        WRITE_CODE(m_update_grain, 1, "update_grain");
+        WRITE_CODE(m_num_y_points, 4, "num_y_points");
+        if (m_num_y_points)
+        {
+            for (int i = 0; i < m_num_y_points; i++)
+            {
+                for (int j = 0; j < 2; j++)
+                {
+                    WRITE_CODE(m_scaling_points_y[i][j], 8, "scaling_points_y[i][j]");
+                }
+            }
+        }
+        WRITE_FLAG(m_num_cb_points == 0 && m_num_cr_points == 0, "luma_only_flag");
+        WRITE_FLAG(0, "chroma_scaling_from_luma");
+        WRITE_CODE(m_num_cb_points, 4, "num_cb_points");
+        if (m_num_cb_points)
+        {
+            for (int i = 0; i < m_num_cb_points; i++)
+            {
+                for (int j = 0; j < 2; j++)
+                {
+                    WRITE_CODE(m_scaling_points_cb[i][j], 8, "scaling_points_cb[i][j]");
+                }
+            }
+        }
+        WRITE_CODE(m_num_cr_points, 4, "num_cr_points");
+        if (m_num_cr_points)
+        {
+            for (int i = 0; i < m_num_cr_points; i++)
+            {
+                for (int j = 0; j < 2; j++)
+                {
+                    WRITE_CODE(m_scaling_points_cr[i][j], 8, "scaling_points_cr[i][j]");
+                }
+            }
+        }
+        WRITE_CODE(m_scaling_shift - 8, 2, "scaling_shift");
+        WRITE_CODE(m_ar_coeff_lag, 2, "ar_coeff_lag");
+        if (m_num_y_points)
+        {
+            for (int i = 0; i < 24; i++)
+            {
+                WRITE_CODE(m_ar_coeffs_y[i] + 128, 8, "ar_coeff_y[i]");
+            }
+        }
+        if (m_num_cb_points || m_chroma_scaling_from_luma)
+        {
+            for (int i = 0; i < 25; i++)
+            {
+                WRITE_CODE(m_ar_coeffs_cb[i] + 128, 8, "ar_coeff_cb[i]");
+            }
+        }
+        if (m_num_cr_points || m_chroma_scaling_from_luma)
+        {
+            for (int i = 0; i < 25; i++)
+            {
+                WRITE_CODE(m_ar_coeffs_cr[i] + 128, 8, "ar_coeff_cr[i]");
+            }
+        }
+        WRITE_CODE(m_ar_coeff_shift - 6, 2, "ar_coeff_shift");
+        WRITE_CODE(m_grain_scale_shift, 2, "grain_scale_shift");
+        if (m_num_cb_points)
+        {
+            WRITE_CODE(m_cb_mult, 8, "cb_mult");
+            WRITE_CODE(m_cb_luma_mult, 8, "cb_luma_mult");
+            WRITE_CODE(m_cb_offset, 9, "cb_offset");
+        }
+        if (m_num_cr_points)
+        {
+            WRITE_CODE(m_cr_mult, 8, "cr_mult");
+            WRITE_CODE(m_cr_luma_mult, 8, "cr_luma_mult");
+            WRITE_CODE(m_cr_offset, 9, "cr_offset");
+        }
+        WRITE_FLAG(m_overlap_flag, "overlap_flag");
+        WRITE_FLAG(m_clip_to_restricted_range, "clip_to_restricted_range");
+        if (m_bitIf->getNumberOfWrittenBits() % X265_BYTE != 0)
+        {
+            WRITE_FLAG(1, "payload_bit_equal_to_one");
+            while (m_bitIf->getNumberOfWrittenBits() % X265_BYTE != 0)
+            {
+                WRITE_FLAG(0, "payload_bit_equal_to_zero");
+            }
+        }
+    }
+};
+
 static const uint32_t ISO_IEC_11578_LEN = 16;
 
 class SEIuserDataUnregistered : public SEI
@@ -229,14 +360,17 @@ class SEIThreeDimensionalReferenceDisplaysInfo : public SEI
 {
 public:
     SEIThreeDimensionalReferenceDisplaysInfo()
+        : m_numRefDisplaysMinus1(0),
+        m_refViewingDistanceFlag(false),
+        m_additionalShiftPresentFlag(false)
     {
         m_payloadType = THREE_DIMENSIONAL_REFERENCE_DISPLAYS_INFO;
         m_payloadSize = 0;
     }
 
-    int  m_numRefDisplaysMinus1 = 0;
-    bool m_refViewingDistanceFlag = false;
-    bool m_additionalShiftPresentFlag = false;
+    int m_numRefDisplaysMinus1;
+    bool m_refViewingDistanceFlag;
+    bool m_additionalShiftPresentFlag;
     void writeSEI(const SPS&)
     {
         WRITE_UVLC(31, "prec_ref_display_width");
@@ -301,26 +435,66 @@ public:
     }
 };
 
+static int temp_sign_r[3][3] = { {0,1,0},{1,0,0},{0,1,1} };
+static int temp_exponent_r[3][3] = { {10,20,11},{10,5,11},{2,20,11} };
+static int temp_mantissa_r[3][3] = { {4,9,1},{0,3,4},{3,3,7} };
+static int temp_sign_t[1][3] = { { 0,1,0  } };
+static int temp_exponent_t[1][3] = { { 0,10,5 } };
+static int temp_mantissa_t[1][3] = { { 1,8,9 } };
+static int temp_length_mantissa_r[3][3] = { {10,20,11},{10,5,11},{2,20,11} };
+static int temp_length_mantissa_t[1][3] = { { 1,10,5 } };
+
 class SEIMultiviewAcquisitionInfo : public SEI
 {
 public:
     SEIMultiviewAcquisitionInfo()
+        :sign_r(),
+        exponent_r(),
+        mantissa_r(),
+        sign_t(),
+        exponent_t(),
+        mantissa_t(),
+        length_mantissa_r(),
+        length_mantissa_t(),
+        m_intrinsicParamFlag(true),
+        m_extrinsicParamFlag(true),
+        m_intrinsicParamsEqualFlag(true)
     {
         m_payloadType = MULTIVIEW_ACQUISITION_INFO;
         m_payloadSize = 0;
+
+        for (int i = 0; i <= 0; i++)
+        {
+            for (int j = 0; j <= 2; j++)  /* row */
+            {
+                for (int k = 0; k <= 2; k++)  /* column */
+                {
+                    temp_sign_r[j][k] = sign_r[j][k];
+                    temp_exponent_r[j][k] = exponent_r[j][k];
+                    temp_mantissa_r[j][k] = mantissa_r[j][k];
+                    temp_length_mantissa_r[j][k] = length_mantissa_r[j][k];
+                }
+                temp_sign_t[i][j] = sign_t[i][j];
+                temp_exponent_t[i][j] = exponent_t[i][j];
+                temp_mantissa_t[i][j] = mantissa_t[i][j];
+                temp_length_mantissa_t[i][j] = length_mantissa_t[i][j];
+            }
+        }
     }
 
-    int sign_r[3][3] = { {0,1,0},{1,0,0},{0,1,1} };
-    int exponent_r[3][3] = { {10,20,11},{10,5,11},{2,20,11} };
-    int mantissa_r[3][3] = { {4,9,1},{0,3,4},{3,3,7} };
-    int sign_t[1][3] = { 0,1,0 };
-    int exponent_t[1][3] = { 0,10,5 };
-    int mantissa_t[1][3] = { 1,8,9 };
-    int lenght_mantissa_r[3][3] = { {10,20,11},{10,5,11},{2,20,11} };
-    int length_mantissa_t[1][3] = { 1,10,5 };
-    bool m_intrinsicParamFlag = true;
-    bool m_extrinsicParamFlag = true;
-    bool m_intrinsicParamsEqualFlag = true;
+    int sign_r[3][3];
+    int exponent_r[3][3];
+    int mantissa_r[3][3];
+    int sign_t[1][3];
+    int exponent_t[1][3];
+    int mantissa_t[1][3];
+    int length_mantissa_r[3][3];
+    int length_mantissa_t[1][3];
+
+    bool m_intrinsicParamFlag;
+    bool m_extrinsicParamFlag;
+    bool m_intrinsicParamsEqualFlag;
+
     void writeSEI(const SPS& sps)
     {
         WRITE_FLAG(m_intrinsicParamFlag, "intrinsic_param_flag");
@@ -364,7 +538,7 @@ public:
                     {
                         WRITE_FLAG(sign_r[j][k], "sign_r");
                         WRITE_CODE(exponent_r[j][k], 6, "exponent_r");
-                        WRITE_CODE(mantissa_r[j][k], lenght_mantissa_r[j][k], "mantissa_r");
+                        WRITE_CODE(mantissa_r[j][k], length_mantissa_r[j][k], "mantissa_r");
                     }
                     WRITE_FLAG(sign_t[i][j], "sign_t");
                     WRITE_CODE(exponent_t[i][j], 6, "exponent_t");

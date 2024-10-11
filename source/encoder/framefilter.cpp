@@ -659,7 +659,7 @@ void FrameFilter::processPostRow(int row, int layer)
 
     /* Generate integral planes for SEA motion search */
     if(m_param->searchMethod == X265_SEA)
-        computeMEIntegral(row);
+        computeMEIntegral(row, layer);
     // Notify other FrameEncoders that this row of reconstructed pixels is available
     m_frame->m_reconRowFlag[row].set(1);
 
@@ -722,10 +722,10 @@ void FrameFilter::processPostRow(int row, int layer)
     }
 }
 
-void FrameFilter::computeMEIntegral(int row)
+void FrameFilter::computeMEIntegral(int row, int layer)
 {
     int lastRow = row == (int)m_frame->m_encData->m_slice->m_sps->numCuInHeight - 1;
-    if (m_frame->m_lowres.sliceType != X265_TYPE_B)
+    if (m_frame->m_lowres.sliceType != X265_TYPE_B || !layer)
     {
         /* If WPP, other than first row, integral calculation for current row needs to wait till the
         * integral for the previous row is computed */

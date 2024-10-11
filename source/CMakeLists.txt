@@ -31,7 +31,7 @@ option(NATIVE_BUILD "Target the build CPU" OFF)
 option(STATIC_LINK_CRT "Statically link C runtime for release builds" OFF)
 mark_as_advanced(FPROFILE_USE FPROFILE_GENERATE NATIVE_BUILD)
 # X265_BUILD must be incremented each time the public API is changed
-set(X265_BUILD 212)
+set(X265_BUILD 213)
 configure_file("${PROJECT_SOURCE_DIR}/x265.def.in"
                "${PROJECT_BINARY_DIR}/x265.def")
 configure_file("${PROJECT_SOURCE_DIR}/x265_config.h.in"
@@ -331,7 +331,7 @@ if(GCC)
         if(CPU_HAS_SVE2)
             message(STATUS "Found SVE2")
             # SVE2 is only available from Armv9.0, and armv9-a implies +dotprod
-            set(ARM_ARGS -O3 -march=armv9-a+i8mm+sve2)
+            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod+i8mm+sve)
             add_definitions(-DHAVE_SVE2=1)
         endif()
         set(ARM_ARGS ${ARM_ARGS} -fPIC)
@@ -472,6 +472,10 @@ elseif(NASM_FOUND AND X86)
     endif()
 else()
     option(ENABLE_ASSEMBLY "Enable use of assembly coded primitives" OFF)
+endif()
+
+if(ENABLE_ASSEMBLY)
+   add_definitions(-DENABLE_ASSEMBLY)
 endif()
 
 option(CHECKED_BUILD "Enable run-time sanity checks (debugging)" OFF)

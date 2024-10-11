@@ -142,6 +142,36 @@ struct FGPresent
     bool        m_presentFlag[3];
 };
 
+struct AomFilmGrain
+{
+    int32_t     m_apply_grain;
+    int32_t     m_update_grain;
+    int32_t     m_scaling_points_y[14][2];
+    int32_t     m_num_y_points;
+    int32_t     m_scaling_points_cb[10][2];
+    int32_t     m_num_cb_points;
+    int32_t     m_scaling_points_cr[10][2];
+    int32_t     m_num_cr_points;
+    int32_t     m_scaling_shift;
+    int32_t     m_ar_coeff_lag;
+    int32_t     m_ar_coeffs_y[24];
+    int32_t     m_ar_coeffs_cb[25];
+    int32_t     m_ar_coeffs_cr[25];
+    int32_t     m_ar_coeff_shift;
+    int32_t     m_cb_mult;
+    int32_t     m_cb_luma_mult;
+    int32_t     m_cb_offset;
+    int32_t     m_cr_mult;
+    int32_t     m_cr_luma_mult;
+    int32_t     m_cr_offset;
+    int32_t     m_overlap_flag;
+    int32_t     m_clip_to_restricted_range;
+    int32_t     m_bitDepth;
+    int32_t     m_chroma_scaling_from_luma;
+    int32_t     m_grain_scale_shift;
+    uint16_t    m_grain_seed;
+};
+
 // Manages the wave-front processing of a single encoding frame
 class FrameEncoder : public WaveFront, public Thread
 {
@@ -287,6 +317,7 @@ protected:
     void computeAvgTrainingData(int layer);
     void collectDynDataRow(CUData& ctu, FrameStats* rowStats);    
     void readModel(FilmGrainCharacteristics* m_filmGrain, FILE* filmgrain);
+    void readAomModel(AomFilmGrainCharacteristics* m_aomFilmGrain, FILE* Aomfilmgrain);
 };
 }
 

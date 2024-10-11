@@ -22,6 +22,7 @@
  *****************************************************************************/
 
 #include "sao-prim.h"
+#include "neon-sve-bridge.h"
 
 /*
  * Compute Edge Offset statistics (count and stats).

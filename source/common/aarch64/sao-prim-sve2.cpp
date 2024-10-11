@@ -22,6 +22,7 @@
  *****************************************************************************/
 
 #include "sao-prim.h"
+#include "neon-sve-bridge.h"
 
 static inline uint8x16_t sve_count(int8x16_t in)
 {

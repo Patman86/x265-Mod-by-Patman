@@ -285,6 +285,8 @@ public:
     ThreadSafeInteger* zoneWriteCount;
     /* Film grain model file */
     FILE* m_filmGrainIn;
+    /* Aom film grain model file*/
+    FILE* m_aomFilmGrainIn;
     OrigPicBuffer*          m_origPicBuffer;
 
     Encoder();
@@ -300,7 +302,7 @@ public:
     void stopJobs();
     void destroy();
 
-    int encode(const x265_picture* pic, x265_picture **pic_out);
+    int encode(const x265_picture* pic, x265_picture *pic_out);
 
     int reconfigureParam(x265_param* encParam, x265_param* param);
 

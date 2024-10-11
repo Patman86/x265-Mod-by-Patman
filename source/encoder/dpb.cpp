@@ -295,7 +295,11 @@ void DPB::prepareEncode(Frame *newFrame)
     else
 #endif
         slice->m_numRefIdx[1] = X265_MIN(newFrame->m_param->bBPyramid ? 2 : 1, slice->m_rps.numberOfPositivePictures);
-    slice->setRefPicList(m_picList, newFrame->refPicSetInterLayer0, newFrame->refPicSetInterLayer1, layer);
+#if ENABLE_MULTIVIEW
+    slice->setRefPicList(m_picList, layer, newFrame->refPicSetInterLayer0, newFrame->refPicSetInterLayer1);
+#else
+    slice->setRefPicList(m_picList, layer);
+#endif
 
     X265_CHECK(slice->m_sliceType != B_SLICE || slice->m_numRefIdx[1], "B slice without L1 references (non-fatal)\n");
 
@@ -419,7 +423,7 @@ void DPB::computeRPS(int curPoc, int tempId, bool isRAP, RPS * rps, unsigned int
             if ((!m_bTemporalSublayer || (iterPic->m_tempLayer <= tempId)) && ((m_lastIDR >= curPoc) || (m_lastIDR <= iterPic->m_poc)))
             {
 #if ENABLE_MULTIVIEW
-                    if (iterPic->m_param->numViews > 1 && layer && numNeg == iterPic->m_param->maxNumReferences - 1 && (iterPic->m_poc - curPoc) < 0)
+                    if (iterPic->m_param->numViews > 1 && layer && numNeg == (uint8_t)(iterPic->m_param->maxNumReferences - 1) && (iterPic->m_poc - curPoc) < 0)
                     {
                         iterPic = iterPic->m_next;
                         continue;

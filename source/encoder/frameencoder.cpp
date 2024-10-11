@@ -668,8 +668,8 @@ void FrameEncoder::compressFrame(int layer)
                 {
                     int numAQPartInWidth = (m_frame[0]->m_fencPic->m_picWidth + aqPartWidth - 1) / aqPartWidth;
                     int numAQPartInHeight = (m_frame[0]->m_fencPic->m_picHeight + aqPartHeight - 1) / aqPartHeight;
-                    memset(m_frame[layer]->m_lowres.pAQLayer[d].dQpOffset, 0.0, sizeof(double)*numAQPartInWidth* numAQPartInHeight);
-                    memset(m_frame[layer]->m_lowres.pAQLayer[d].dCuTreeOffset, 0.0, sizeof(double)* numAQPartInWidth* numAQPartInHeight);
+                    memset(m_frame[layer]->m_lowres.pAQLayer[d].dQpOffset, 0, sizeof(double)*numAQPartInWidth* numAQPartInHeight);
+                    memset(m_frame[layer]->m_lowres.pAQLayer[d].dCuTreeOffset, 0, sizeof(double)* numAQPartInWidth* numAQPartInHeight);
                 }
             }
         }
@@ -871,6 +871,14 @@ void FrameEncoder::compressFrame(int layer)
         /* Read the Film grain model file */
         readModel(&m_filmGrain, this->m_top->m_filmGrainIn);
         m_filmGrain.writeSEImessages(m_bs, *slice->m_sps, NAL_UNIT_PREFIX_SEI, m_nalList, m_param->bSingleSeiNal, layer);
+    }
+    /* Write Aom film grain characteristics if present */
+    if (this->m_top->m_aomFilmGrainIn)
+    {
+        AomFilmGrainCharacteristics m_aomFilmGrain;
+        /* Read the Film grain model file */
+        readAomModel(&m_aomFilmGrain, this->m_top->m_aomFilmGrainIn);
+        m_aomFilmGrain.writeSEImessages(m_bs, *slice->m_sps, NAL_UNIT_PREFIX_SEI, m_nalList, m_param->bSingleSeiNal);
     }
     /* Write user SEI */
     for (int i = 0; i < m_frame[layer]->m_userSEI.numPayloads; i++)
@@ -1475,7 +1483,7 @@ void FrameEncoder::encodeSlice(uint32_t sliceAddr, int layer)
 void FrameEncoder::processRow(int row, int threadId, int layer)
 {
     int64_t startTime = x265_mdate();
-    if (ATOMIC_INC(&m_activeWorkerCount) == 1 && m_stallStartTime)
+    if (ATOMIC_INC(&m_activeWorkerCount) == 1 && m_stallStartTime[layer])
         m_totalNoWorkerTime[layer] += x265_mdate() - m_stallStartTime[layer];
 
     const uint32_t realRow = m_idx_to_row[row >> 1];
@@ -2335,6 +2343,91 @@ void FrameEncoder::readModel(FilmGrainCharacteristics* m_filmGrain, FILE* filmgr
         }
     }
 }
+
+void FrameEncoder::readAomModel(AomFilmGrainCharacteristics* m_aomFilmGrain, FILE* Aomfilmgrain)
+{
+    char const* errorMessage = "Error reading Aom FilmGrain characteristics\n";
+    AomFilmGrain m_afg;
+    m_afg.m_chroma_scaling_from_luma = 0;
+    x265_fread((char*)&m_aomFilmGrain->m_apply_grain, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+    x265_fread((char*)&m_aomFilmGrain->m_grain_seed, sizeof(uint16_t), 1, Aomfilmgrain, errorMessage);
+    x265_fread((char*)&m_aomFilmGrain->m_update_grain, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+    x265_fread((char*)&m_aomFilmGrain->m_num_y_points, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+    if (m_aomFilmGrain->m_num_y_points)
+    {
+        for (int i = 0; i < m_aomFilmGrain->m_num_y_points; i++)
+        {
+            for (int j = 0; j < 2; j++)
+            {
+                x265_fread((char*)&m_aomFilmGrain->m_scaling_points_y[i][j], sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+            }
+        }
+    }
+    x265_fread((char*)&m_aomFilmGrain->m_num_cb_points, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+    if (m_aomFilmGrain->m_num_cb_points)
+    {
+        for (int i = 0; i < m_aomFilmGrain->m_num_cb_points; i++)
+        {
+            for (int j = 0; j < 2; j++)
+            {
+                x265_fread((char*)&m_aomFilmGrain->m_scaling_points_cb[i][j], sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+            }
+        }
+    }
+    x265_fread((char*)&m_aomFilmGrain->m_num_cr_points, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+    if (m_aomFilmGrain->m_num_cr_points)
+    {
+        for (int i = 0; i < m_aomFilmGrain->m_num_cr_points; i++)
+        {
+            for (int j = 0; j < 2; j++)
+            {
+                x265_fread((char*)&m_aomFilmGrain->m_scaling_points_cr[i][j], sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+            }
+        }
+    }
+    x265_fread((char*)&m_aomFilmGrain->m_scaling_shift, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+    x265_fread((char*)&m_aomFilmGrain->m_ar_coeff_lag, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+    if (m_aomFilmGrain->m_num_y_points)
+    {
+
+        for (int i = 0; i < 24; i++)
+        {
+            x265_fread((char*)&m_aomFilmGrain->m_ar_coeffs_y[i], sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+        }
+    }
+    if (m_aomFilmGrain->m_num_cb_points || m_afg.m_chroma_scaling_from_luma)
+    {
+        for (int i = 0; i < 25; i++)
+        {
+            x265_fread((char*)&m_aomFilmGrain->m_ar_coeffs_cb[i], sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+        }
+    }
+    if (m_aomFilmGrain->m_num_cr_points || m_afg.m_chroma_scaling_from_luma)
+    {
+
+        for (int i = 0; i < 25; i++)
+        {
+            x265_fread((char*)&m_aomFilmGrain->m_ar_coeffs_cr[i], sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+        }
+    }
+    x265_fread((char*)&m_aomFilmGrain->m_ar_coeff_shift, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+    x265_fread((char*)&m_aomFilmGrain->m_grain_scale_shift, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+    if (m_aomFilmGrain->m_num_cb_points)
+    {
+        x265_fread((char*)&m_aomFilmGrain->m_cb_mult, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+        x265_fread((char*)&m_aomFilmGrain->m_cb_luma_mult, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+        x265_fread((char*)&m_aomFilmGrain->m_cb_offset, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+    }
+    if (m_aomFilmGrain->m_num_cr_points)
+    {
+        x265_fread((char*)&m_aomFilmGrain->m_cr_mult, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+        x265_fread((char*)&m_aomFilmGrain->m_cr_luma_mult, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+        x265_fread((char*)&m_aomFilmGrain->m_cr_offset, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+    }
+    x265_fread((char*)&m_aomFilmGrain->m_overlap_flag, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+    x265_fread((char*)&m_aomFilmGrain->m_clip_to_restricted_range, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
+}
+
 #if ENABLE_LIBVMAF
 void FrameEncoder::vmafFrameLevelScore()
 {
@@ -2362,7 +2455,7 @@ void FrameEncoder::vmafFrameLevelScore()
 
 Frame** FrameEncoder::getEncodedPicture(NALList& output)
 {
-    if (m_frame && m_frame[0])
+    if (m_frame[0] && (m_param->numLayers <= 1 || m_frame[1]))
     {
         /* block here until worker thread completes */
         m_done.wait();

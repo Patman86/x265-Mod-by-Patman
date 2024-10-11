@@ -434,9 +434,11 @@ public:
 
     void disableWeights();
 
-    void setRefPicList(PicList& picList, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1, int viewId);
 #if ENABLE_MULTIVIEW
+    void setRefPicList(PicList& picList, int viewId, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1);
     void createInterLayerReferencePictureSet(PicList& picList, PicList& refPicSetInterLayer0, PicList& refPicSetInterLayer1);
+#else
+    void setRefPicList(PicList& picList, int viewId);
 #endif
 
 #if  ENABLE_SCC_EXT

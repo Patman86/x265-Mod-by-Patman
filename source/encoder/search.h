@@ -319,7 +319,9 @@ public:
     void     encodeIntraInInter(Mode& intraMode, const CUGeom& cuGeom);
 
     // estimation inter prediction (non-skip)
-    void      predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChromaMC, uint32_t masks[2], MV* iMVCandList = NULL);
+#if !ENABLE_SCC_EXT
+    void      predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChromaMC, uint32_t masks[2]);
+#endif
     void     searchMV(Mode& interMode, int list, int ref, MV& outmv, MV mvp[3], int numMvc, MV* mvc);
     // encode residual and compute rd-cost for inter mode
     void     encodeResAndCalcRdInterCU(Mode& interMode, const CUGeom& cuGeom);
@@ -340,6 +342,7 @@ public:
     MV getLowresMV(const CUData& cu, const PredictionUnit& pu, int list, int ref);
 
 #if ENABLE_SCC_EXT
+    void      predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChromaMC, uint32_t masks[2], MV* iMVCandList = NULL);
     bool      predIntraBCSearch(Mode& intraBCMode, const CUGeom& cuGeom, bool bChromaMC, PartSize ePartSize, bool testOnlyPred, bool bUse1DSearchFor8x8, IBC& ibc);
     void      intraBlockCopyEstimate(Mode& intraBCMode, const CUGeom& cuGeom, int puIdx, MV* pred, MV& mv, uint32_t& cost, bool testOnlyPred, bool bUse1DSearchFor8x8, IBC& ibc);
     void      setIntraSearchRange(Mode& intraBCMode, MV& pred, int puIdx, int roiWidth, int roiHeight, MV& searchRangeLT, MV& searchRangeRB);

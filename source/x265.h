@@ -408,6 +408,8 @@ typedef struct x265_picture
      * on output */
     int64_t dts;
 
+    int vbvEndFlag; // New flag for VBV end feature
+
     /* force quantizer for != X265_QP_AUTO */
     /* The value provided on input is returned with the same picture (POC) on
      * output */
@@ -635,8 +637,6 @@ typedef enum
 
 #if ENABLE_MULTIVIEW
 #define MAX_VIEWS 2
-#define MAX_VPS_NUM_SCALABILITY_TYPES     16
-#define MAX_VPS_LAYER_ID_PLUS1            MAX_VIEWS
 #define MULTIVIEW_SCALABILITY_IDX         1
 #else
 #define MAX_VIEWS 1
@@ -644,14 +644,15 @@ typedef enum
 
 #if ENABLE_ALPHA
 #define MAX_SCALABLE_LAYERS     2
-#define MAX_VPS_NUM_SCALABILITY_TYPES     16
-#define MAX_VPS_LAYER_ID_PLUS1            MAX_SCALABLE_LAYERS
 #else
 #define MAX_SCALABLE_LAYERS     1
 #endif
 
 #if ENABLE_ALPHA || ENABLE_MULTIVIEW
 #define MAX_LAYERS              2
+#define MAX_VPS_NUM_SCALABILITY_TYPES     16
+#define MAX_VPS_LAYER_ID_PLUS1            MAX_LAYERS
+
 #else
 #define MAX_LAYERS              1
 #endif
@@ -802,7 +803,7 @@ typedef struct x265_vmaf_commondata
     int subsample;
 }x265_vmaf_commondata;
 
-static x265_vmaf_commondata vcd[] = { { NULL, (char *)"/usr/local/share/model/vmaf_v0.6.1.json", NULL, NULL, 0, 0, 0, 0, 0, 0, 0, NULL, 0, 1} };
+static const x265_vmaf_commondata vcd[] = { { NULL, (char *)"/usr/local/share/model/vmaf_v0.6.1.json", NULL, NULL, 0, 0, 0, 0, 0, 0, 0, NULL, 0, 1} };
 
 typedef struct x265_temporal_layer {
     int poc_offset;      /* POC offset */
@@ -2307,6 +2308,9 @@ typedef struct x265_param
     /* Film Grain Characteristic file */
     char* filmGrain;
 
+    /* Aom Film Grain Characteristic file */
+    char* aomFilmGrain;
+
     /*Motion compensated temporal filter*/
     int      bEnableTemporalFilter;
     double   temporalFilterStrength;
@@ -2493,7 +2497,13 @@ int x265_encoder_headers(x265_encoder *, x265_nal **pp_nal, uint32_t *pi_nal);
  *      the payloads of all output NALs are guaranteed to be sequential in memory.
  *      To flush the encoder and retrieve delayed output pictures, pass pic_in as NULL.
  *      Once flushing has begun, all subsequent calls must pass pic_in as NULL. */
-int x265_encoder_encode(x265_encoder *encoder, x265_nal **pp_nal, uint32_t *pi_nal, x265_picture *pic_in, x265_picture **pic_out);
+int x265_encoder_encode(x265_encoder* encoder, x265_nal** pp_nal, uint32_t* pi_nal, x265_picture* pic_in, x265_picture* pic_out);
+
+/*
+x265_configure_vbv_end:
+* Set the Vbvend flag based on the totalstreamduration.
+*/
+void x265_configure_vbv_end(x265_encoder* enc, x265_picture* picture, double totalstreamduration);
 
 /* x265_encoder_reconfig:
  *      various parameters from x265_param are copied.
@@ -2647,7 +2657,8 @@ typedef struct x265_api
     int           (*encoder_reconfig)(x265_encoder*, x265_param*);
     int           (*encoder_reconfig_zone)(x265_encoder*, x265_zone*);
     int           (*encoder_headers)(x265_encoder*, x265_nal**, uint32_t*);
-    int           (*encoder_encode)(x265_encoder*, x265_nal**, uint32_t*, x265_picture*, x265_picture**);
+    void          (*configure_vbv_end)(x265_encoder*, x265_picture*, double );
+    int           (*encoder_encode)(x265_encoder*, x265_nal**, uint32_t*, x265_picture*, x265_picture*);
     void          (*encoder_get_stats)(x265_encoder*, x265_stats*, uint32_t);
     void          (*encoder_log)(x265_encoder*, int, char**);
     void          (*encoder_close)(x265_encoder*);

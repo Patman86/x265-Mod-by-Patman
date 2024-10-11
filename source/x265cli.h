@@ -395,6 +395,7 @@ static const struct option long_options[] =
     { "max-vbv-fullness", required_argument, NULL, 0 },
     { "scenecut-qp-config", required_argument, NULL, 0 },
     { "film-grain", required_argument, NULL, 0 },
+    { "aom-film-grain", required_argument, NULL, 0 },
     { 0, 0, 0, 0 },
     { 0, 0, 0, 0 },
     { 0, 0, 0, 0 },
