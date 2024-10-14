@@ -405,7 +405,6 @@ public:
 
 #if  ENABLE_SCC_EXT
     Frame*      m_lastEncPic;
-    bool        m_bLMvdL1Zero;
     bool        m_useIntegerMv;
 #endif
     bool        m_bTemporalMvp;

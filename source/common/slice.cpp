@@ -101,7 +101,7 @@ void Slice::setRefPicList(PicList& picList, int sLayerId)
     if (!checkNumPocTotalCurr && m_rps.numberOfPictures == 0)
     {
         Frame* prevPic = picList.getPOC(X265_MAX(0, m_poc - 1));
-        if (prevPic->m_poc != X265_MAX(0, m_poc - 1))
+        if (prevPic && prevPic->m_poc != X265_MAX(0, m_poc - 1))
         {
             prevPic = picList.getPOC(m_poc);
 
