@@ -331,7 +331,7 @@ if(GCC)
         if(CPU_HAS_SVE2)
             message(STATUS "Found SVE2")
             # SVE2 is only available from Armv9.0, and armv9-a implies +dotprod
-            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod+i8mm+sve)
+            set(ARM_ARGS -O3 -march=armv9-a+i8mm+sve2)
             add_definitions(-DHAVE_SVE2=1)
         endif()
         set(ARM_ARGS ${ARM_ARGS} -fPIC)
