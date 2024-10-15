@@ -832,7 +832,7 @@ function x265_count_nonzero_32_neon
 
     vmov.u32        r0, d0[0]
     uasx            r0, r0, r0
-    mov             r0, r0, lsr 16
+    lsr             r0, r0, #16
     rsb             r0, #1024
     bx              lr
 endfunc
