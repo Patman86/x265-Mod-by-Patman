@@ -698,7 +698,7 @@ bool RateControl::init(const SPS& sps)
                         char bUsed[40];
                         memset(deltaPOC, 0, sizeof(deltaPOC));
                         memset(bUsed, 0, sizeof(bUsed));
-                        e += sscanf(p, " in:%*d out:%*d type:%c q:%lf q-aq:%lf q-noVbv:%lf q-Rceq:%lf tex:%d mv:%d misc:%d icu:%lf pcu:%lf scu:%lf nump:%d numnegp:%d numposp:%d deltapoc:%s bused:%s",
+                        e += sscanf(p, " in:%*d out:%*d type:%c q:%lf q-aq:%lf q-noVbv:%lf q-Rceq:%lf tex:%d mv:%d misc:%d icu:%lf pcu:%lf scu:%lf nump:%d numnegp:%d numposp:%d deltapoc:%127s bused:%39s",
                             &picType, &qpRc, &qpAq, &qNoVbv, &qRceq, &rce->coeffBits,
                             &rce->mvBits, &rce->miscBits, &rce->iCuCount, &rce->pCuCount,
                             &rce->skipCuCount, &rce->rpsData.numberOfPictures, &rce->rpsData.numberOfNegativePictures, &rce->rpsData.numberOfPositivePictures, deltaPOC, bUsed);
