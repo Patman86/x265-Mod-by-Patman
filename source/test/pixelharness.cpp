@@ -3203,7 +3203,7 @@ void PixelHarness::measurePartition(int part, const EncoderPrimitives& ref, cons
     ALIGN_VAR_16(int, cres[16]);
     pixel *fref = pbuf2 + 2 * INCR;
     char header[128];
-#define HEADER(str, ...) sprintf(header, str, __VA_ARGS__); printf("%22s", header);
+#define HEADER(str, ...) snprintf(header, sizeof(header), str, __VA_ARGS__); printf("%22s", header);
 
     if (opt.pu[part].satd)
     {
@@ -3375,7 +3375,7 @@ void PixelHarness::measureSpeed(const EncoderPrimitives& ref, const EncoderPrimi
 {
     char header[128];
 
-#define HEADER(str, ...) sprintf(header, str, __VA_ARGS__); printf("%22s", header);
+#define HEADER(str, ...) snprintf(header, sizeof(header), str, __VA_ARGS__); printf("%22s", header);
 #define HEADER0(str) printf("%22s", str);
 
     for (int size = 4; size <= 64; size *= 2)

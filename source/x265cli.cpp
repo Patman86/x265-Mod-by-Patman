@@ -493,12 +493,12 @@ namespace X265_NS {
         if (framesToBeEncoded)
         {
             int eta = (int)(elapsed * (framesToBeEncoded - frameNum) / ((int64_t)frameNum * 1000000));
-            sprintf(buf, "x265 [%.1f%%] %d/%d frames, %.2f fps, %.2f kb/s, eta %d:%02d:%02d",
+            snprintf(buf, sizeof(buf), "x265 [%.1f%%] %d/%d frames, %.2f fps, %.2f kb/s, eta %d:%02d:%02d",
                 100. * frameNum / (param->chunkEnd ? param->chunkEnd : param->totalFrames), frameNum, (param->chunkEnd ? param->chunkEnd : param->totalFrames), fps, bitrate,
                 eta / 3600, (eta / 60) % 60, eta % 60);
         }
         else
-            sprintf(buf, "x265 %d frames: %.2f fps, %.2f kb/s", frameNum, fps, bitrate);
+            snprintf(buf, sizeof(buf), "x265 %d frames: %.2f fps, %.2f kb/s", frameNum, fps, bitrate);
 
         fprintf(stderr, "%s  \r", buf + 5);
         SetConsoleTitle(buf);
@@ -987,12 +987,12 @@ namespace X265_NS {
             int width, height;
             getParamAspectRatio(param, width, height);
             if (width && height)
-                p += sprintf(buf + p, " sar %d:%d", width, height);
+                p += snprintf(buf + p, sizeof(buf) - p, " sar %d:%d", width, height);
 
             if (framesToBeEncoded <= 0 || info[0].frameCount <= 0)
                 strcpy(buf + p, " unknown frame count");
             else
-                sprintf(buf + p, " frames %u - %d of %d", this->seek, this->seek + this->framesToBeEncoded - 1, info[0].frameCount);
+                snprintf(buf + p, sizeof(buf) - p, " frames %u - %d of %d", this->seek, this->seek + this->framesToBeEncoded - 1, info[0].frameCount);
 
             for (int view = 0; view < param->numViews - !!param->format; view++)
                 general_log(param, input[view]->getName(), X265_LOG_INFO, "%s\n", buf);

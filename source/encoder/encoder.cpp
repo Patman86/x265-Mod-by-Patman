@@ -295,11 +295,11 @@ void Encoder::create()
     char buf[128];
     int len = 0;
     if (p->bEnableWavefront)
-        len += sprintf(buf + len, "wpp(%d rows)", rows);
+        len += snprintf(buf + len, sizeof(buf) - len, "wpp(%d rows)", rows);
     if (p->bDistributeModeAnalysis)
-        len += sprintf(buf + len, "%spmode", len ? "+" : "");
+        len += snprintf(buf + len,  sizeof(buf) - len, "%spmode", len ? "+" : "");
     if (p->bDistributeMotionEstimation)
-        len += sprintf(buf + len, "%spme ", len ? "+" : "");
+        len += snprintf(buf + len, sizeof(buf) - len, "%spme ", len ? "+" : "");
     if (!len)
         strcpy(buf, "none");
 
@@ -2794,20 +2794,20 @@ char* Encoder::statsString(EncStats& stat, char* buffer)
     double fps = (double)m_param->fpsNum / m_param->fpsDenom;
     double scale = fps / 1000 / (double)stat.m_numPics;
 
-    int len = sprintf(buffer, "%6u, ", stat.m_numPics);
+    int len = snprintf(buffer, sizeof(buffer), "%6u, ", stat.m_numPics);
 
-    len += sprintf(buffer + len, "Avg QP:%2.2lf", stat.m_totalQp / (double)stat.m_numPics);
-    len += sprintf(buffer + len, "  kb/s: %-8.2lf", stat.m_accBits * scale);
+    len += snprintf(buffer + len, sizeof(buffer) - len, "Avg QP:%2.2lf", stat.m_totalQp / (double)stat.m_numPics);
+    len += snprintf(buffer + len, sizeof(buffer) - len, "  kb/s: %-8.2lf", stat.m_accBits * scale);
     if (m_param->bEnablePsnr)
     {
-        len += sprintf(buffer + len, "  PSNR Mean: Y:%.3lf U:%.3lf V:%.3lf",
+        len += snprintf(buffer + len, sizeof(buffer) - len,"  PSNR Mean: Y:%.3lf U:%.3lf V:%.3lf",
                        stat.m_psnrSumY / (double)stat.m_numPics,
                        stat.m_psnrSumU / (double)stat.m_numPics,
                        stat.m_psnrSumV / (double)stat.m_numPics);
     }
     if (m_param->bEnableSsim)
     {
-        sprintf(buffer + len, "  SSIM Mean: %.6lf (%.3lfdB)",
+        snprintf(buffer + len, sizeof(buffer) - len, "  SSIM Mean: %.6lf (%.3lfdB)",
                 stat.m_globalSsim / (double)stat.m_numPics,
                 x265_ssim2dB(stat.m_globalSsim / (double)stat.m_numPics));
     }
@@ -2864,19 +2864,19 @@ void Encoder::printSummary()
             double elapsedVideoTime = (double)m_analyzeAll[layer].m_numPics * m_param->fpsDenom / m_param->fpsNum;
             double bitrate = (0.001f * m_analyzeAll[layer].m_accBits) / elapsedVideoTime;
 
-            p += sprintf(buffer + p, "\nencoded %d frames in %.2fs (%.2f fps), %.2f kb/s, Avg QP:%2.2lf", m_analyzeAll[layer].m_numPics,
+            p += snprintf(buffer + p, sizeof(buffer) - p,"\nencoded %d frames in %.2fs (%.2f fps), %.2f kb/s, Avg QP:%2.2lf", m_analyzeAll[layer].m_numPics,
                 elapsedEncodeTime, m_analyzeAll[layer].m_numPics / elapsedEncodeTime, bitrate, m_analyzeAll[layer].m_totalQp / (double)m_analyzeAll[layer].m_numPics);
 
             if (m_param->bEnablePsnr)
             {
                 double globalPsnr = (m_analyzeAll[layer].m_psnrSumY * 6 + m_analyzeAll[layer].m_psnrSumU + m_analyzeAll[layer].m_psnrSumV) / (8 * m_analyzeAll[layer].m_numPics);
-                p += sprintf(buffer + p, ", Global PSNR: %.3f", globalPsnr);
+                p += snprintf(buffer + p, sizeof(buffer) - p, ", Global PSNR: %.3f", globalPsnr);
             }
 
             if (m_param->bEnableSsim)
-                p += sprintf(buffer + p, ", SSIM Mean Y: %.7f (%6.3f dB)", m_analyzeAll[layer].m_globalSsim / m_analyzeAll[layer].m_numPics, x265_ssim2dB(m_analyzeAll[layer].m_globalSsim / m_analyzeAll[layer].m_numPics));
+                p += snprintf(buffer + p, sizeof(buffer) - p, ", SSIM Mean Y: %.7f (%6.3f dB)", m_analyzeAll[layer].m_globalSsim / m_analyzeAll[layer].m_numPics, x265_ssim2dB(m_analyzeAll[layer].m_globalSsim / m_analyzeAll[layer].m_numPics));
 
-            sprintf(buffer + p, "\n");
+            snprintf(buffer + p, sizeof(buffer) - p, "\n");
             general_log(m_param, NULL, X265_LOG_INFO, buffer);
         }
         else
@@ -6209,7 +6209,7 @@ void Encoder::printReconfigureParams()
     x265_log(newParam, X265_LOG_DEBUG, "Reconfigured param options, input Frame: %d\n", m_pocLast + 1);
 
     char tmp[60];
-#define TOOLCMP(COND1, COND2, STR)  if (COND1 != COND2) { sprintf(tmp, STR, COND1, COND2); x265_log(newParam, X265_LOG_DEBUG, tmp); }
+#define TOOLCMP(COND1, COND2, STR)  if (COND1 != COND2) { snprintf(tmp, sizeof(tmp), STR, COND1, COND2); x265_log(newParam, X265_LOG_DEBUG, tmp); }
     TOOLCMP(oldParam->maxNumReferences, newParam->maxNumReferences, "ref=%d to %d\n");
     TOOLCMP(oldParam->bEnableFastIntra, newParam->bEnableFastIntra, "fast-intra=%d to %d\n");
     TOOLCMP(oldParam->bEnableEarlySkip, newParam->bEnableEarlySkip, "early-skip=%d to %d\n");
