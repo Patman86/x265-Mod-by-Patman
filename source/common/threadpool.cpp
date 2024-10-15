@@ -309,9 +309,9 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
          {
              char nextCount[10] = "";
              if (i)
-                 sprintf(nextCount, ",%d", cpusPerNode[i]);
+                 snprintf(nextCount, sizeof(nextCount), ",%d", cpusPerNode[i]);
              else
-                   sprintf(nextCount, "%d", cpusPerNode[i]);
+                   snprintf(nextCount, sizeof(nextCount), "%d", cpusPerNode[i]);
              strcat(poolString, nextCount);
          }
          x265_param_parse(p, "pools", poolString);
@@ -452,7 +452,7 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
                 int len = 0;
                 for (int j = 0; j < 64; j++)
                     if ((nodeMaskPerPool[node] >> j) & 1)
-                        len += sprintf(nodesstr + len, ",%d", j);
+                        len += snprintf(nodesstr + len, sizeof(nodesstr) - len, ",%d", j);
                 x265_log(p, X265_LOG_INFO, "Thread pool %d using %d threads on numa nodes %s\n", i, numThreads, nodesstr + 1);
                 delete[] nodesstr;
             }
