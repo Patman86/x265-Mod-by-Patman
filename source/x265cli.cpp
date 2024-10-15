@@ -981,7 +981,7 @@ namespace X265_NS {
         if (param->logLevel >= X265_LOG_INFO)
         {
             char buf[128];
-            int p = sprintf(buf, "%dx%d fps %d/%d %sp%d", param->sourceWidth, param->sourceHeight,
+            int p = snprintf(buf, sizeof(buf), "%dx%d fps %d/%d %sp%d", param->sourceWidth, param->sourceHeight,
                 param->fpsNum, param->fpsDenom, x265_source_csp_names[param->internalCsp], info[0].depth);
 
             int width, height;
