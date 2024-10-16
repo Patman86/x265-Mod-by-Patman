@@ -328,7 +328,7 @@ public:
 
     void printReconfigureParams();
 
-    char* statsString(EncStats&, char*);
+    char* statsString(EncStats&, char* , size_t bufferSize);
 
     void configure(x265_param *param);
 

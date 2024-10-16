@@ -2789,15 +2789,16 @@ void EncStats::addQP(double aveQp)
     m_totalQp += aveQp;
 }
 
-char* Encoder::statsString(EncStats& stat, char* buffer)
+char* Encoder::statsString(EncStats& stat, char* buffer, size_t bufferSize)
 {
     double fps = (double)m_param->fpsNum / m_param->fpsDenom;
     double scale = fps / 1000 / (double)stat.m_numPics;
 
-    int len = snprintf(buffer, sizeof(buffer), "%6u, ", stat.m_numPics);
+    int len = snprintf(buffer, bufferSize, "%6u, ", stat.m_numPics);
 
-    len += snprintf(buffer + len, sizeof(buffer) - len, "Avg QP:%2.2lf", stat.m_totalQp / (double)stat.m_numPics);
-    len += snprintf(buffer + len, sizeof(buffer) - len, "  kb/s: %-8.2lf", stat.m_accBits * scale);
+    len += snprintf(buffer + len, bufferSize - len, "Avg QP:%2.2lf", stat.m_totalQp / (double)stat.m_numPics);
+    len += snprintf(buffer + len, bufferSize - len, "  kb/s: %-8.2lf", stat.m_accBits * scale);
+
     if (m_param->bEnablePsnr)
     {
         len += snprintf(buffer + len, sizeof(buffer) - len,"  PSNR Mean: Y:%.3lf U:%.3lf V:%.3lf",
@@ -2823,11 +2824,11 @@ void Encoder::printSummary()
     {
         char buffer[200];
         if (m_analyzeI[layer].m_numPics)
-            x265_log(m_param, X265_LOG_INFO, "frame I: %s\n", statsString(m_analyzeI[layer], buffer));
+            x265_log(m_param, X265_LOG_INFO, "frame I: %s\n", statsString(m_analyzeI[layer], buffer, sizeof(buffer)));
         if (m_analyzeP[layer].m_numPics)
-            x265_log(m_param, X265_LOG_INFO, "frame P: %s\n", statsString(m_analyzeP[layer], buffer));
+            x265_log(m_param, X265_LOG_INFO, "frame P: %s\n", statsString(m_analyzeP[layer], buffer, sizeof(buffer)));
         if (m_analyzeB[layer].m_numPics)
-            x265_log(m_param, X265_LOG_INFO, "frame B: %s\n", statsString(m_analyzeB[layer], buffer));
+            x265_log(m_param, X265_LOG_INFO, "frame B: %s\n", statsString(m_analyzeB[layer], buffer, sizeof(buffer)));
         if (m_param->bEnableWeightedPred && m_analyzeP[layer].m_numPics)
         {
             x265_log(m_param, X265_LOG_INFO, "Weighted P-Frames: Y:%.1f%% UV:%.1f%%\n",
