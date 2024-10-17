@@ -141,7 +141,11 @@ public:
     void loadIntraDirModeLuma(const Entropy& src);
     void copyState(const Entropy& other);
 
+#if ENABLE_ALPHA || ENABLE_MULTIVIEW
     void codeVPS(const VPS& vps, const SPS& sps);
+#else
+    void codeVPS(const VPS& vps);
+#endif
     void codeSPS(const SPS& sps, const ScalingList& scalingList, const ProfileTierLevel& ptl, int layer = 0);
     void codePPS( const PPS& pps, bool filerAcross, int iPPSInitQpMinus26, int layer = 0);
     void codeVUI(const VUI& vui, int maxSubTLayers, bool bEmitVUITimingInfo, bool bEmitVUIHRDInfo, int layer = 0);

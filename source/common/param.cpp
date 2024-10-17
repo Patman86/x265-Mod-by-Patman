@@ -110,6 +110,33 @@ void x265_param_free(x265_param* p)
     x265_free(p);
 }
 
+#if ENABLE_SCC_EXT
+enum SCCProfileName
+{
+    NONE = 0,
+    // The following are SCC profiles, which would map to the MAINSCC profile idc.
+    // The enumeration indicates the bit-depth constraint in the bottom 2 digits
+    //                           the chroma format in the next digit
+    //                           the intra constraint in the next digit
+    //                           If it is a SCC profile there is a '2' for the next digit.
+    //                           If it is a highthroughput , there is a '2' for the top digit else '1' for the top digit
+    SCC_MAIN = 121108,
+    SCC_MAIN_10 = 121110,
+    SCC_MAIN_444 = 121308,
+    SCC_MAIN_444_10 = 121310,
+};
+
+static const SCCProfileName validSCCProfileNames[1][4/* bit depth constraint 8=0, 10=1, 12=2, 14=3*/][4/*chroma format*/] =
+{
+   {
+        { NONE,         SCC_MAIN,      NONE,      SCC_MAIN_444                     }, // 8-bit  intra for 400, 420, 422 and 444
+        { NONE,         SCC_MAIN_10,   NONE,      SCC_MAIN_444_10                  }, // 10-bit intra for 400, 420, 422 and 444
+        { NONE,         NONE,          NONE,      NONE                             }, // 12-bit intra for 400, 420, 422 and 444
+        { NONE,         NONE,          NONE,      NONE                             }  // 16-bit intra for 400, 420, 422 and 444
+    },
+};
+#endif
+
 void x265_param_default(x265_param* param)
 {
 #ifdef SVT_HEVC
@@ -1974,17 +2001,39 @@ int x265_check_params(x265_param* param)
     if (param->bEnableAlpha)
     {
         CHECK((param->internalCsp != X265_CSP_I420), "Alpha encode supported only with i420a colorspace");
+        CHECK((param->internalBitDepth > 10), "BitDepthConstraint must be 8 and 10  for Scalable main profile");
         CHECK((param->analysisMultiPassDistortion || param->analysisMultiPassRefine), "Alpha encode doesnot support multipass feature");
+        CHECK((param->analysisSave || param->analysisLoad), "Alpha encode doesnot support analysis save and load  feature");
     }
 #endif
 #if ENABLE_MULTIVIEW
     CHECK((param->numViews > 2), "Multi-View Encoding currently support only 2 views");
-    CHECK((param->numViews > 1) && (param->internalBitDepth != 8), "BitDepthConstraint must be 8 for Multiview main profile");
-    CHECK((param->numViews > 1) && (param->analysisMultiPassDistortion || param->analysisMultiPassRefine), "Multiview encode doesnot support multipass feature");
+    if (param->numViews > 1)
+    {
+        CHECK(param->internalBitDepth != 8, "BitDepthConstraint must be 8 for Multiview main profile");
+        CHECK(param->analysisMultiPassDistortion || param->analysisMultiPassRefine, "Multiview encode doesnot support multipass feature");
+        CHECK(param->analysisSave || param->analysisLoad, "Multiview encode doesnot support analysis save and load feature");
+    }
 #endif
 #if ENABLE_SCC_EXT
+    bool checkValid = false;
+
+    if (!!param->bEnableSCC)
+    {
+        checkValid = param->keyframeMax <= 1 || param->totalFrames == 1;
+        if (checkValid)     x265_log(param, X265_LOG_WARNING, "intra constraint flag must be 0 for SCC profiles. Disabling SCC  \n");
+        checkValid = param->totalFrames == 1;
+        if (checkValid)     x265_log(param, X265_LOG_WARNING, "one-picture-only constraint flag shall be 0 for SCC profiles. Disabling SCC  \n");
+        const uint32_t bitDepthIdx = (param->internalBitDepth == 8 ? 0 : (param->internalBitDepth == 10 ? 1 : (param->internalBitDepth == 12 ? 2 : (param->internalBitDepth == 16 ? 3 : 4))));
+        const uint32_t chromaFormatIdx = uint32_t(param->internalCsp);
+        checkValid = !((bitDepthIdx > 2 || chromaFormatIdx > 3) ? false : (validSCCProfileNames[0][bitDepthIdx][chromaFormatIdx] != NONE));
+        if (checkValid)     x265_log(param, X265_LOG_WARNING, "Invalid intra constraint flag, bit depth constraint flag and chroma format constraint flag combination for a RExt profile. Disabling SCC \n");
+        if (checkValid)
+            param->bEnableSCC = 0;
+    }
     CHECK(!!param->bEnableSCC&& param->rdLevel != 6, "Enabling scc extension in x265 requires rdlevel of 6 ");
 #endif
+
     return check_failed;
 }
 

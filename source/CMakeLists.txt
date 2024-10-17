@@ -321,12 +321,10 @@ if(GCC)
             endif()
         endif()
 
-        set(ARM64_ARCH_ARGS "-O3")
         if(CPU_HAS_NEON_DOTPROD)
             # Neon DotProd is mandatory from Armv8.4.
             message(STATUS "Found Neon DotProd")
-            set(ARM64_ARCH_ARGS -march=armv8.2-a+dotprod)
-            set(ARM_ARGS -O3)
+            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod)
             add_definitions(-DHAVE_NEON_DOTPROD=1)
         endif()
         if(CPU_HAS_NEON_I8MM)
@@ -336,8 +334,7 @@ if(GCC)
             if(NOT CPU_HAS_NEON_DOTPROD)
                 message(FATAL_ERROR "Unsupported AArch64 feature combination (Neon I8MM without Neon DotProd)")
             endif()
-            set(ARM64_ARCH_ARGS -march=armv8.2-a+dotprod+i8mm)
-            set(ARM_ARGS -O3)
+            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod+i8mm)
             add_definitions(-DHAVE_NEON_I8MM=1)
         endif()
         if(CPU_HAS_SVE)
@@ -346,15 +343,13 @@ if(GCC)
             if(NOT CPU_HAS_NEON_I8MM)
                 message(FATAL_ERROR "Unsupported AArch64 feature combination (SVE without Neon I8MM)")
             endif()
-            set(ARM64_ARCH_ARGS -march=armv8.2-a+dotprod+i8mm+sve)
-            set(ARM_ARGS -O3)
+            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod+i8mm+sve)
             add_definitions(-DHAVE_SVE=1)
         endif()
         if(CPU_HAS_SVE2)
             message(STATUS "Found SVE2")
             # SVE2 is only available from Armv9.0, and armv9-a implies +dotprod
-            set(ARM64_ARCH_ARGS -march=armv9-a+i8mm+sve2)
-            set(ARM_ARGS -O3)
+            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod+i8mm+sve)
             add_definitions(-DHAVE_SVE2=1)
         endif()
         set(ARM_ARGS ${ARM_ARGS} -fPIC)
@@ -724,7 +719,7 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
             add_custom_command(
                 OUTPUT ${ASM}.${SUFFIX}
                 COMMAND ${CMAKE_CXX_COMPILER}
-                ARGS ${ARM_ARGS} ${ARM64_ARCH_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                ARGS ${ARM_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                 DEPENDS ${ASM_SRC})
         endforeach()
         if(CPU_HAS_SVE2)
@@ -735,7 +730,7 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
                 add_custom_command(
                     OUTPUT ${ASM}.${SUFFIX}
                     COMMAND ${CMAKE_CXX_COMPILER}
-                    ARGS ${ARM_ARGS} ${ARM64_ARCH_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                    ARGS ${ARM_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                     DEPENDS ${ASM_SRC})
             endforeach()
         endif()
@@ -747,7 +742,7 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
                 add_custom_command(
                     OUTPUT ${ASM}.${SUFFIX}
                     COMMAND ${CMAKE_CXX_COMPILER}
-                    ARGS ${ARM_ARGS} ${ARM64_ARCH_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                    ARGS ${ARM_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                     DEPENDS ${ASM_SRC})
             endforeach()
         endif()
@@ -759,7 +754,7 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
                 add_custom_command(
                     OUTPUT ${ASM}.${SUFFIX}
                     COMMAND ${CMAKE_CXX_COMPILER}
-                    ARGS ${ARM_ARGS} ${ARM64_ARCH_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                    ARGS ${ARM_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                     DEPENDS ${ASM_SRC})
             endforeach()
         endif()

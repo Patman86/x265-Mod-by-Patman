@@ -391,8 +391,7 @@ uint32_t cpu_detect(bool benableavx512)
 
 #elif X265_ARCH_ARM64
 
-#if defined(_MSC_VER) || defined(__APPLE__)
-uint32_t cpu_detect(bool /*benableavx512*/)
+uint32_t cpu_detect(bool benableavx512)
 {
     int flags = 0;
 
@@ -416,88 +415,6 @@ uint32_t cpu_detect(bool /*benableavx512*/)
 
     return flags;
 }
-
-// TODO: Remove isOryonCPU() once Windows defines PF_ flag for I8MM on supported ARM64 devices
-#elif defined(__MINGW64__) // Windows+Aarch64
-
-#include <windows.h>
-#include <processthreadsapi.h>
-
-bool isOryonCPU()
-{
-
-    char processorName[128];
-    DWORD bufferSize = 128;
-
-    LONG result = RegGetValue(HKEY_LOCAL_MACHINE, "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0", "ProcessorNameString", RRF_RT_ANY, NULL, (PVOID)&processorName, &bufferSize);
-    if (strstr(processorName, "Oryon") != NULL)
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
-}
-uint32_t cpu_detect(bool /*benableavx512*/)
-{
-
-    int flags = 0;
-
-#ifdef ENABLE_ASSEMBLY
-    #if HAVE_NEON
-         flags |= X265_CPU_NEON;    // All of ARM64 has NEON
-    #endif
-    #if HAVE_NEON_DOTPROD && defined(PF_ARM_V82_DP_INSTRUCTIONS_AVAILABLE)
-         flags |= IsProcessorFeaturePresent(PF_ARM_V82_DP_INSTRUCTIONS_AVAILABLE) ? X265_CPU_NEON_DOTPROD : 0;
-    #endif
-    #if HAVE_NEON_I8MM
-         flags |= isOryonCPU() ? X265_CPU_NEON_I8MM : 0;
-    #endif
-    #if HAVE_SVE && defined(PF_ARM_SVE_INSTRUCTIONS_AVAILABLE)
-         flags |= IsProcessorFeaturePresent(PF_ARM_SVE_INSTRUCTIONS_AVAILABLE) ? X265_CPU_SVE : 0;
-    #endif
-    #if HAVE_SVE2 && defined(PF_ARM_SVE2_INSTRUCTIONS_AVAILABLE)
-         flags |= IsProcessorFeaturePresent(PF_ARM_SVE2_INSTRUCTIONS_AVAILABLE) ? X265_CPU_SVE2 : 0;
-    #endif
-#endif
-
-    return flags;
-} // end of Windows+Aarch64
-
-#else // Linux+Aarch64
-
-#include <asm/hwcap.h>
-#include <sys/auxv.h>
-
-uint32_t cpu_detect(bool /*benableavx512*/)
-{
-    unsigned long hwcaps = getauxval(AT_HWCAP);
-    unsigned long hwcaps2 = getauxval(AT_HWCAP2);
-
-    int flags = 0;
-
-#ifdef ENABLE_ASSEMBLY
-    #if HAVE_NEON
-         flags |= X265_CPU_NEON;    // All of ARM64 has NEON
-    #endif
-    #if HAVE_NEON_DOTPROD
-         flags |= (hwcaps & HWCAP_ASIMDDP ? X265_CPU_NEON_DOTPROD : 0);
-    #endif
-    #if HAVE_NEON_I8MM
-         flags |= (hwcaps2 & HWCAP2_I8MM ? X265_CPU_NEON_I8MM : 0);
-    #endif
-    #if HAVE_SVE
-         flags |= (hwcaps & HWCAP_SVE ? X265_CPU_SVE : 0);
-    #endif
-    #if HAVE_SVE2
-         flags |= (hwcaps2 & HWCAP2_SVE2 ? X265_CPU_SVE2 : 0);
-    #endif
-#endif
-
-    return flags;
-}
-#endif // end of Linux+AArch64
 
 #elif X265_ARCH_POWER8
 

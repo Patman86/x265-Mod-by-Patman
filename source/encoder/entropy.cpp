@@ -230,7 +230,11 @@ Entropy::Entropy()
     X265_CHECK(sizeof(m_contextState) >= sizeof(m_contextState[0]) * MAX_OFF_CTX_MOD, "context state table is too small\n");
 }
 
+#if ENABLE_ALPHA || ENABLE_MULTIVIEW
 void Entropy::codeVPS(const VPS& vps, const SPS& sps)
+#else
+void Entropy::codeVPS(const VPS& vps)
+#endif
 {
     int maxLayers = (vps.m_numLayers > 1 || vps.m_numViews > 1) + 1;
     WRITE_CODE(0,       4, "vps_video_parameter_set_id");
@@ -305,7 +309,7 @@ void Entropy::codeVPS(const VPS& vps, const SPS& sps)
             WRITE_CODE(vps.ptl.levelIdc, 8, "general_level_idc");
             if (vps.maxTempSubLayers > 1)
             {
-                for (int i = 0; i < vps.maxTempSubLayers - 1; i++)
+                for (uint32_t i = 0; i < vps.maxTempSubLayers - 1; i++)
                 {
                     WRITE_FLAG(0, "sub_layer_profile_present_flag[i]");
                     WRITE_FLAG(0, "sub_layer_level_present_flag[i]");
@@ -389,7 +393,7 @@ void Entropy::codeVPS(const VPS& vps, const SPS& sps)
                 for (int i = 1; i < vps.m_vpsNumLayerSetsMinus1 + 1; i++)
                 {
                     WRITE_FLAG(vps.maxTempSubLayers > 1, "sub_layer_flag_info_present_flag");
-                    for (int j = 0; j < vps.maxTempSubLayers ; j++)
+                    for (uint32_t j = 0; j < vps.maxTempSubLayers ; j++)
                     {
                         if(j > 0)
                         WRITE_FLAG(vps.maxTempSubLayers > 1, "sub_layer_dpb_info_present_flag");
@@ -474,7 +478,7 @@ void Entropy::codeVPS(const VPS& vps, const SPS& sps)
                 for (int i = 1; i < vps.m_vpsNumLayerSetsMinus1 + 1; i++)
                 {
                     WRITE_FLAG(vps.maxTempSubLayers > 1, "sub_layer_flag_info_present_flag");
-                    for (int j = 0; j < vps.maxTempSubLayers; j++)
+                    for (uint32_t j = 0; j < vps.maxTempSubLayers; j++)
                     {
                         if (j > 0)
                             WRITE_FLAG(vps.maxTempSubLayers > 1, "sub_layer_dpb_info_present_flag");

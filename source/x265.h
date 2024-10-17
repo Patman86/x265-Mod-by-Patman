@@ -638,8 +638,6 @@ typedef enum
 
 #if ENABLE_MULTIVIEW
 #define MAX_VIEWS 2
-#define MAX_VPS_NUM_SCALABILITY_TYPES     16
-#define MAX_VPS_LAYER_ID_PLUS1            MAX_VIEWS
 #define MULTIVIEW_SCALABILITY_IDX         1
 #else
 #define MAX_VIEWS 1
@@ -647,14 +645,15 @@ typedef enum
 
 #if ENABLE_ALPHA
 #define MAX_SCALABLE_LAYERS     2
-#define MAX_VPS_NUM_SCALABILITY_TYPES     16
-#define MAX_VPS_LAYER_ID_PLUS1            MAX_SCALABLE_LAYERS
 #else
 #define MAX_SCALABLE_LAYERS     1
 #endif
 
 #if ENABLE_ALPHA || ENABLE_MULTIVIEW
 #define MAX_LAYERS              2
+#define MAX_VPS_NUM_SCALABILITY_TYPES     16
+#define MAX_VPS_LAYER_ID_PLUS1            MAX_LAYERS
+
 #else
 #define MAX_LAYERS              1
 #endif

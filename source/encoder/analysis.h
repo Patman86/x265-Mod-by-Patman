@@ -195,11 +195,14 @@ protected:
 
     /* measure inter options */
     void checkInter_rd0_4(Mode& interMode, const CUGeom& cuGeom, PartSize partSize, uint32_t refmask[2]);
-    void checkInter_rd5_6(Mode& interMode, const CUGeom& cuGeom, PartSize partSize, uint32_t refmask[2], MV* iMVCandList = NULL);
-
+#if !ENABLE_SCC_EXT
+    void checkInter_rd5_6(Mode& interMode, const CUGeom& cuGeom, PartSize partSize, uint32_t refmask[2]);
+#endif
     void checkBidir2Nx2N(Mode& inter2Nx2N, Mode& bidir2Nx2N, const CUGeom& cuGeom);
 
 #if ENABLE_SCC_EXT
+    void checkInter_rd5_6(Mode& interMode, const CUGeom& cuGeom, PartSize partSize, uint32_t refmask[2], MV* iMVCandList = NULL);
+
     void checkRDCostIntraBCMerge2Nx2N(Mode& merge, const CUGeom& cuGeom);
     void checkIntraBC_rd5_6(Mode& intraBCMode, const CUGeom& cuGeom, PartSize ePartSize, bool testOnlyPred, bool bUse1DSearchFor8x8, IBC& ibc, MV* iMVCandList = NULL);
 #endif

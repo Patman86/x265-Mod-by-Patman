@@ -253,7 +253,9 @@ public:
     static void calcCTUGeoms(uint32_t ctuWidth, uint32_t ctuHeight, uint32_t maxCUSize, uint32_t minCUSize, CUGeom cuDataArray[CUGeom::MAX_GEOMS]);
 
     void     initCTU(const Frame& frame, uint32_t cuAddr, int qp, uint32_t firstRowInSlice, uint32_t lastRowInSlice, uint32_t lastCUInSlice);
-    void     initSubCU(const CUData& ctu, const CUGeom& cuGeom, int qp, MV lastIntraBCMv[2] = 0);
+#if !ENABLE_SCC_EXT
+    void     initSubCU(const CUData& ctu, const CUGeom& cuGeom, int qp);
+#endif
     void     initLosslessCU(const CUData& cu, const CUGeom& cuGeom);
 
     void     copyPartFrom(const CUData& cu, const CUGeom& childGeom, uint32_t subPartIdx);
@@ -289,7 +291,11 @@ public:
     int8_t   getRefQP(uint32_t currAbsIdxInCTU) const;
     uint32_t getInterMergeCandidates(uint32_t absPartIdx, uint32_t puIdx, MVField (*candMvField)[2], uint8_t* candDir) const;
     void     clipMv(MV& outMV) const;
+#if (ENABLE_MULTIVIEW || ENABLE_SCC_EXT)
     int      getPMV(InterNeighbourMV* neighbours, uint32_t reference_list, uint32_t refIdx, MV* amvpCand, MV* pmv, uint32_t puIdx = 0, uint32_t absPartIdx = 0) const;
+#else
+    int      getPMV(InterNeighbourMV* neighbours, uint32_t reference_list, uint32_t refIdx, MV* amvpCand, MV* pmv) const;
+#endif
     void     getNeighbourMV(uint32_t puIdx, uint32_t absPartIdx, InterNeighbourMV* neighbours) const;
     void     getIntraTUQtDepthRange(uint32_t tuDepthRange[2], uint32_t absPartIdx) const;
     void     getInterTUQtDepthRange(uint32_t tuDepthRange[2], uint32_t absPartIdx) const;
@@ -327,6 +333,8 @@ public:
     const CUData* getPUBelowLeftAdi(uint32_t& blPartUnitIdx, uint32_t curPartUnitIdx, uint32_t partUnitOffset) const;
 
 #if ENABLE_SCC_EXT
+    void     initSubCU(const CUData& ctu, const CUGeom& cuGeom, int qp, MV lastIntraBCMv[2] = 0);
+
     void getIntraBCMVPsEncOnly(uint32_t absPartIdx, MV* MvPred, int& nbPred, int puIdx);
     bool getDerivedBV(uint32_t absPartIdx, const MV& currentMv, MV& derivedMv, uint32_t width, uint32_t height);
     bool isIntraBC(const CUData* cu, uint32_t absPartIdx) const;

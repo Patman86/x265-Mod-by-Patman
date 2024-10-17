@@ -668,8 +668,8 @@ void FrameEncoder::compressFrame(int layer)
                 {
                     int numAQPartInWidth = (m_frame[0]->m_fencPic->m_picWidth + aqPartWidth - 1) / aqPartWidth;
                     int numAQPartInHeight = (m_frame[0]->m_fencPic->m_picHeight + aqPartHeight - 1) / aqPartHeight;
-                    memset(m_frame[layer]->m_lowres.pAQLayer[d].dQpOffset, 0.0, sizeof(double)*numAQPartInWidth* numAQPartInHeight);
-                    memset(m_frame[layer]->m_lowres.pAQLayer[d].dCuTreeOffset, 0.0, sizeof(double)* numAQPartInWidth* numAQPartInHeight);
+                    memset(m_frame[layer]->m_lowres.pAQLayer[d].dQpOffset, 0, sizeof(double)*numAQPartInWidth* numAQPartInHeight);
+                    memset(m_frame[layer]->m_lowres.pAQLayer[d].dCuTreeOffset, 0, sizeof(double)* numAQPartInWidth* numAQPartInHeight);
                 }
             }
         }
@@ -2348,6 +2348,7 @@ void FrameEncoder::readAomModel(AomFilmGrainCharacteristics* m_aomFilmGrain, FIL
 {
     char const* errorMessage = "Error reading Aom FilmGrain characteristics\n";
     AomFilmGrain m_afg;
+    m_afg.m_chroma_scaling_from_luma = 0;
     x265_fread((char*)&m_aomFilmGrain->m_apply_grain, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
     x265_fread((char*)&m_aomFilmGrain->m_grain_seed, sizeof(uint16_t), 1, Aomfilmgrain, errorMessage);
     x265_fread((char*)&m_aomFilmGrain->m_update_grain, sizeof(int32_t), 1, Aomfilmgrain, errorMessage);
@@ -2454,7 +2455,7 @@ void FrameEncoder::vmafFrameLevelScore()
 
 Frame** FrameEncoder::getEncodedPicture(NALList& output)
 {
-    if (m_frame && m_frame[0])
+    if (m_frame[0] && (m_param->numLayers <= 1 || m_frame[1]))
     {
         /* block here until worker thread completes */
         m_done.wait();

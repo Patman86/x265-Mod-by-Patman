@@ -63,7 +63,7 @@ namespace X265_NS {
             m_passEnc[i]->init(ret);
         }
 
-        m_numInputViews = m_passEnc[0]->m_param->numViews;
+        m_numInputViews = m_passEnc[0]->m_param->numViews - !!m_passEnc[0]->m_param->format;
         if (!allocBuffers())
         {
             x265_log(NULL, X265_LOG_ERROR, "Unable to allocate memory for buffers\n");
@@ -207,7 +207,7 @@ namespace X265_NS {
         m_parent = parent;
         if (!(m_cliopt.enableScaler && m_id))
         {
-            for (int view = 0; view < m_cliopt.param->numViews; view++)
+            for (int view = 0; view < m_cliopt.param->numViews - !!m_cliopt.param->format; view++)
                 m_input[view] = m_cliopt.input[view];
         }
         m_param = cliopt.param;
@@ -592,14 +592,14 @@ ret:
 
             x265_picture pic_orig[MAX_VIEWS];
             x265_picture *pic_in[MAX_VIEWS];
-            for (int view = 0; view < m_param->numViews; view++)
+            for (int view = 0; view < m_param->numViews - !!m_param->format; view++)
                 pic_in[view] = &pic_orig[view];
             /* Allocate recon picture if analysis save/load is enabled */
             std::priority_queue<int64_t>* pts_queue = m_cliopt.output->needPTS() ? new std::priority_queue<int64_t>() : NULL;
             x265_picture* pic_recon;
             x265_picture pic_out[MAX_LAYERS];
 
-            pic_recon = (m_cliopt.recon || m_param->analysisSave || m_param->analysisLoad || pts_queue || reconPlay || m_param->csvLogLevel) ? pic_out : NULL;
+            pic_recon = (m_cliopt.recon[0] || m_param->analysisSave || m_param->analysisLoad || pts_queue || reconPlay || m_param->csvLogLevel) ? pic_out : NULL;
             uint32_t inFrameCount = 0;
             uint32_t outFrameCount = 0;
             x265_nal *p_nal;
@@ -625,7 +625,7 @@ ret:
                     m_cliopt.totalbytes += m_cliopt.output->writeHeaders(p_nal, nal);
             }
 
-            for (int view = 0; view < m_param->numViews; view++)
+            for (int view = 0; view < m_param->numViews - !!m_param->format; view++)
             {
                 if (m_param->bField && m_param->interlaceMode)
                 {
@@ -639,7 +639,7 @@ ret:
                     api->picture_init(m_param, &pic_orig[view]);
             }
 
-            if (m_param->dolbyProfile && m_cliopt.dolbyVisionRpu)
+            if (m_param->dolbyProfile && m_cliopt.dolbyVisionRpu && pic_in[0])
             {
                 rpuPayload = X265_MALLOC(uint8_t, 1024);
                 pic_in[0]->rpu.payload = rpuPayload;
@@ -659,7 +659,7 @@ ret:
             // main encoder loop
             while (pic_in[0] && !b_ctrl_c)
             {
-                for (int view = 0; view < m_param->numViews; view++)
+                for (int view = 0; view < m_param->numViews - !!m_param->format; view++)
                 {
                     pic_orig[view].poc = (m_param->bField && m_param->interlaceMode) ? inFrameCount * 2 : inFrameCount;
                     if (m_cliopt.qpfile)
@@ -676,7 +676,7 @@ ret:
                     if (m_cliopt.framesToBeEncoded && inFrameCount >= m_cliopt.framesToBeEncoded)
                         pic_in[view] = NULL;
                     else if (readPicture(pic_in[view], view)){
-                        if(view == m_param->numViews - 1)
+                        if(view == m_param->numViews - !!m_param->format - 1)
                             inFrameCount++;
                     }
                     else
@@ -785,7 +785,7 @@ ret:
                 {
                     x265_picture* picInput = NULL;
                     if (inputPicNum == 2)
-                        picInput = pic_in ? (inputNum ? &picField2 : &picField1) : NULL;
+                        picInput = *pic_in ? (inputNum ? &picField2 : &picField1) : NULL;
                     else
                         picInput = *pic_in;
 
