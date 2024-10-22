@@ -28,7 +28,41 @@
 
 #if AARCH64_RUNTIME_CPU_DETECT
 
-#if defined(__linux__)
+#if defined(__APPLE__)
+
+#include <sys/sysctl.h>
+
+static inline bool have_feature(const char *feature)
+{
+    int64_t feature_present = 0;
+    size_t size = sizeof(feature_present);
+    if (sysctlbyname(feature, &feature_present, &size, NULL, 0) != 0)
+    {
+        return false;
+    }
+    return feature_present;
+}
+
+static inline int aarch64_get_cpu_flags()
+{
+    int flags = 0;
+
+#if HAVE_NEON
+    flags |= X265_CPU_NEON;
+#endif
+#if HAVE_NEON_DOTPROD
+    if (have_feature("hw.optional.arm.FEAT_DotProd"))
+        flags |= X265_CPU_NEON_DOTPROD;
+#endif
+#if HAVE_NEON_I8MM
+    if (have_feature("hw.optional.arm.FEAT_I8MM"))
+        flags |= X265_CPU_NEON_I8MM;
+#endif
+
+    return flags;
+}
+
+#elif defined(__linux__)
 
 #include <sys/auxv.h>
 
@@ -67,12 +101,12 @@ static inline int aarch64_get_cpu_flags()
     return flags;
 }
 
-#else // defined(__linux__)
+#else // defined(__APPLE__)
 #error                                                                 \
     "Run-time CPU feature detection selected, but no detection method" \
     "available for your platform. Rerun cmake configure with"          \
     "-DAARCH64_RUNTIME_CPU_DETECT=OFF."
-#endif // defined(__linux__)
+#endif // defined(__APPLE__)
 
 static inline int aarch64_cpu_detect()
 {

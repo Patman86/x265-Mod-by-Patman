@@ -88,7 +88,7 @@ elseif(ARM64MATCH GREATER "-1")
     option(AARCH64_WARNINGS_AS_ERRORS "Build with -Werror for AArch64 Intrinsics files" OFF)
 
     option(AARCH64_RUNTIME_CPU_DETECT "Enable AArch64 run-time CPU feature detection" ON)
-    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux")
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
         set(AARCH64_RUNTIME_CPU_DETECT OFF CACHE BOOL "" FORCE)
         message(STATUS "Run-time CPU feature detection unsupported on this platform")
     endif()
