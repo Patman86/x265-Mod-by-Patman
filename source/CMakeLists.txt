@@ -88,7 +88,7 @@ elseif(ARM64MATCH GREATER "-1")
     option(AARCH64_WARNINGS_AS_ERRORS "Build with -Werror for AArch64 Intrinsics files" OFF)
 
     option(AARCH64_RUNTIME_CPU_DETECT "Enable AArch64 run-time CPU feature detection" ON)
-    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin|Windows")
         set(AARCH64_RUNTIME_CPU_DETECT OFF CACHE BOOL "" FORCE)
         message(STATUS "Run-time CPU feature detection unsupported on this platform")
     endif()
@@ -306,6 +306,52 @@ if(GCC)
             endif()
         endif()
 
+        if(ENABLE_SVE OR ENABLE_SVE2)
+            set(OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
+            string(APPEND CMAKE_REQUIRED_FLAGS " ${AARCH64_SVE_FLAG}")
+            set(OLD_CMAKE_TRY_COMPILE_TARGET_TYPE ${CMAKE_TRY_COMPILE_TARGET_TYPE})
+            set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
+            # Check whether the compiler can compile SVE functions that require
+            # backup/restore of SVE registers according to AAPCS.
+            # https://github.com/llvm/llvm-project/issues/80009.
+            set(SVE_COMPILATION_TEST "
+#include <arm_sve.h>
+void other();
+svfloat32_t func(svfloat32_t a) {
+  other();
+  return a;
+}
+int main() { return 0; }")
+
+            check_c_source_compiles("${SVE_COMPILATION_TEST}" SVE_COMPILATION_C_TEST_COMPILED)
+            check_cxx_source_compiles("${SVE_COMPILATION_TEST}" SVE_COMPILATION_CXX_TEST_COMPILED)
+
+            # Check if arm_neon_sve_bridge.h is available.
+            set(SVE_HEADER_TEST "
+#ifndef __ARM_NEON_SVE_BRIDGE
+#error 1
+#endif
+#include <arm_sve.h>
+#include <arm_neon_sve_bridge.h>
+int main() { return 0; }")
+            check_c_source_compiles("${SVE_HEADER_TEST}" SVE_HEADER_C_TEST_COMPILED)
+            check_cxx_source_compiles("${SVE_HEADER_TEST}" SVE_HEADER_CXX_TEST_COMPILED)
+
+            set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQUIRED_FLAGS})
+            set(CMAKE_TRY_COMPILE_TARGET_TYPE ${OLD_CMAKE_TRY_COMPILE_TARGET_TYPE})
+            if (SVE_COMPILATION_C_TEST_COMPILED AND SVE_COMPILATION_CXX_TEST_COMPILED)
+                if (SVE_HEADER_C_TEST_COMPILED AND SVE_HEADER_CXX_TEST_COMPILED)
+                    add_definitions(-DHAVE_SVE_BRIDGE=1)
+                    set(HAVE_SVE_BRIDGE 1)
+                endif()
+            else()
+                set(ENABLE_SVE OFF CACHE BOOL "" FORCE)
+                set(ENABLE_SVE2 OFF CACHE BOOL "" FORCE)
+                message(STATUS "Disabling SVE and SVE2")
+            endif()
+        endif()
+
         # Impose constraint that disabling one extension disables all 'higher order' ones.
         if(NOT ENABLE_NEON)
             message(STATUS "Disabling Neon")
@@ -358,29 +404,6 @@ if(GCC)
         check_cxx_compiler_flag(-flax-vector-conversions=none CC_HAS_FLAX_VEC_CONV_NONE)
         if(CC_HAS_FLAX_VEC_CONV_NONE)
             set(ARM_ARGS ${ARM_ARGS} -flax-vector-conversions=none)
-        endif()
-        if(CPU_HAS_SVE)
-            set(SVE_HEADER_TEST "
-#ifndef __ARM_NEON_SVE_BRIDGE
-#error 1
-#endif
-#include <arm_sve.h>
-#include <arm_neon_sve_bridge.h>
-int main() { return 0; }")
-            set(OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
-            # CMAKE_REQUIRED_FLAGS requires a space-delimited string, whereas
-            # ARM_ARGS is defined and used elsewhere as a ;-list.
-            # Add `-march=...+sve` so the test functions correctly with Clang.
-            foreach(ARM_ARG ${ARM_ARGS} ${AARCH64_SVE_FLAG})
-                string(APPEND CMAKE_REQUIRED_FLAGS " ${ARM_ARG}")
-            endforeach()
-            check_c_source_compiles("${SVE_HEADER_TEST}" SVE_HEADER_C_TEST_COMPILED)
-            check_cxx_source_compiles("${SVE_HEADER_TEST}" SVE_HEADER_CXX_TEST_COMPILED)
-            set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQUIRED_FLAGS})
-            if(SVE_HEADER_C_TEST_COMPILED AND SVE_HEADER_CXX_TEST_COMPILED)
-                add_definitions(-DHAVE_SVE_BRIDGE=1)
-                set(HAVE_SVE_BRIDGE 1)
-            endif()
         endif()
     endif()
 	if(ENABLE_PIC)

@@ -62,6 +62,63 @@ static inline int aarch64_get_cpu_flags()
     return flags;
 }
 
+#elif defined(_WIN32)
+
+#include <windows.h>
+
+static inline int aarch64_get_cpu_flags()
+{
+    int flags = 0;
+// IsProcessorFeaturePresent() parameter documentation:
+// https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-isprocessorfeaturepresent#parameters
+#if HAVE_NEON
+    flags |= X265_CPU_NEON;
+#endif // HAVE_NEON
+#if HAVE_NEON_DOTPROD
+// Support for PF_ARM_V82_DP_INSTRUCTIONS_AVAILABLE was added in Windows SDK
+// 20348, supported by Windows 11 and Windows Server 2022.
+#if defined(PF_ARM_V82_DP_INSTRUCTIONS_AVAILABLE)
+    if (IsProcessorFeaturePresent(PF_ARM_V82_DP_INSTRUCTIONS_AVAILABLE))
+    {
+        flags |= X265_CPU_NEON_DOTPROD;
+    }
+#endif // defined(PF_ARM_V82_DP_INSTRUCTIONS_AVAILABLE)
+#endif // HAVE_NEON_DOTPROD
+#if HAVE_NEON_I8MM
+// Support for PF_ARM_SVE_I8MM_INSTRUCTIONS_AVAILABLE was added in Windows SDK
+// 26100.
+#if defined(PF_ARM_SVE_I8MM_INSTRUCTIONS_AVAILABLE)
+    // There's no PF_* flag yet that indicates whether Neon I8MM is available
+    // or not. But if SVE_I8MM is available, that also implies that Neon I8MM
+    // is available.
+    if (IsProcessorFeaturePresent(PF_ARM_SVE_I8MM_INSTRUCTIONS_AVAILABLE))
+    {
+        flags |= X265_CPU_NEON_I8MM;
+    }
+#endif  // defined(PF_ARM_SVE_I8MM_INSTRUCTIONS_AVAILABLE)
+#endif  // HAVE_NEON_I8MM
+#if HAVE_SVE
+// Support for PF_ARM_SVE_INSTRUCTIONS_AVAILABLE was added in Windows SDK 26100.
+#if defined(PF_ARM_SVE_INSTRUCTIONS_AVAILABLE)
+    if (IsProcessorFeaturePresent(PF_ARM_SVE_INSTRUCTIONS_AVAILABLE))
+    {
+        flags |= X265_CPU_SVE;
+    }
+#endif  // defined(PF_ARM_SVE_INSTRUCTIONS_AVAILABLE)
+#endif  // HAVE_SVE
+#if HAVE_SVE2
+// Support for PF_ARM_SVE2_INSTRUCTIONS_AVAILABLE was added in Windows SDK
+// 26100.
+#if defined(PF_ARM_SVE2_INSTRUCTIONS_AVAILABLE)
+    if (IsProcessorFeaturePresent(PF_ARM_SVE2_INSTRUCTIONS_AVAILABLE))
+    {
+        flags |= X265_CPU_SVE2;
+    }
+#endif  // defined(PF_ARM_SVE2_INSTRUCTIONS_AVAILABLE)
+#endif  // HAVE_SVE2
+    return flags;
+}
+
 #elif defined(__linux__)
 
 #include <sys/auxv.h>
