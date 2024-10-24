@@ -162,7 +162,7 @@ bool Lowres::create(x265_param* param, PicYuv *origPic, uint32_t qgSize)
     lowresPlane[2] = buffer[2] + padoffset;
     lowresPlane[3] = buffer[3] + padoffset;
 
-    if (bEnableHME)
+    if (bEnableHME || param->bEnableTemporalFilter)
     {
         intptr_t lumaStrideHalf = lumaStride / 2;
         if (lumaStrideHalf & 31)
@@ -375,7 +375,7 @@ void Lowres::init(PicYuv *origPic, int poc)
     extendPicBorder(lowresPlane[2], lumaStride, width, lines, origPic->m_lumaMarginX, origPic->m_lumaMarginY);
     extendPicBorder(lowresPlane[3], lumaStride, width, lines, origPic->m_lumaMarginX, origPic->m_lumaMarginY);
     
-    if (origPic->m_param->bEnableHME)
+    if (origPic->m_param->bEnableHME || origPic->m_param->bEnableTemporalFilter)
     {
         primitives.frameInitLowerRes(lowresPlane[0],
             lowerResPlane[0], lowerResPlane[1], lowerResPlane[2], lowerResPlane[3],
