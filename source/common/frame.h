@@ -148,6 +148,7 @@ public:
     Frame*                 m_prevMCSTF;
     int*                   m_isSubSampled;
     TemporalFilterRefPicInfo m_mcstfRefList[MAX_MCSTF_TEMPORAL_WINDOW_LENGTH];
+    PicYuv*                m_mcstffencPic;
 
     /*Vbv-End-Flag*/
     int vbvEndFlag;

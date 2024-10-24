@@ -1803,8 +1803,8 @@ void Lookahead::estimatelowresmotion(Frame* curframe)
 
         curframe->m_mcstf->motionEstimationLuma(ref->mvs0, ref->mvsStride0, curframe->m_lowres.lowerResPlane[0], (curframe->m_lowres.lumaStride / 2), (curframe->m_lowres.lines / 2), (curframe->m_lowres.width / 2), ref->lowerRes, 16);
         curframe->m_mcstf->motionEstimationLuma(ref->mvs1, ref->mvsStride1, curframe->m_lowres.lowresPlane[0], (curframe->m_lowres.lumaStride), (curframe->m_lowres.lines), (curframe->m_lowres.width), ref->lowres, 16, ref->mvs0, ref->mvsStride0, 2);
-        //curframe->m_mcstf->motionEstimationLuma(ref->mvs2, ref->mvsStride2, curframe->m_fencPic->m_picOrg[0], curframe->m_fencPic->m_stride, curframe->m_fencPic->m_picHeight, curframe->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, ref->mvs1, ref->mvsStride1, 2);
-        //curframe->m_mcstf->motionEstimationLumaDoubleRes(ref->mvs, ref->mvsStride, curframe->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error);
+        curframe->m_mcstf->motionEstimationLuma(ref->mvs2, ref->mvsStride2, curframe->m_fencPic->m_picOrg[0], curframe->m_fencPic->m_stride, curframe->m_fencPic->m_picHeight, curframe->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, ref->mvs1, ref->mvsStride1, 2);
+        curframe->m_mcstf->motionEstimationLumaDoubleRes(ref->mvs, ref->mvsStride, curframe->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error);
     }
 
 }
@@ -1813,7 +1813,7 @@ inline int enqueueRefFrame(Frame* iterFrame, Frame* curFrame, bool isPreFiltered
 {
     TemporalFilterRefPicInfo * temp = &curFrame->m_mcstfRefList[curFrame->m_mcstf->m_numRef];
     temp->poc = iterFrame->m_poc;
-    temp->picBuffer = iterFrame->m_fencPic;
+    temp->picBuffer = iterFrame->m_mcstffencPic;
     temp->lowres = iterFrame->m_lowres.lowresPlane[0];
     temp->lowerRes = iterFrame->m_lowres.lowerResPlane[0];
     temp->isFilteredFrame = isPreFiltered;

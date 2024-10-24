@@ -1409,7 +1409,7 @@ inline int enqueueRefFrame(FrameEncoder* curframeEncoder, Frame* iterFrame, Fram
 {
     TemporalFilterRefPicInfo* dest = &curframeEncoder->m_mcstfRefList[curFrame->m_mcstf->m_numRef];
     dest->poc = iterFrame->m_poc;
-    dest->picBuffer = iterFrame->m_fencPic;
+    dest->picBuffer = iterFrame->m_mcstffencPic;
     dest->picBufferSubSampled2 = iterFrame->m_fencPicSubsampled2;
     dest->picBufferSubSampled4 = iterFrame->m_fencPicSubsampled4;
     dest->isFilteredFrame = isPreFiltered;
@@ -1418,7 +1418,7 @@ inline int enqueueRefFrame(FrameEncoder* curframeEncoder, Frame* iterFrame, Fram
 
     TemporalFilterRefPicInfo* temp = &curFrame->m_mcstfRefList[curFrame->m_mcstf->m_numRef];
     temp->poc = iterFrame->m_poc;
-    temp->picBuffer = iterFrame->m_fencPic;
+    temp->picBuffer = iterFrame->m_mcstffencPic;
     temp->lowres = iterFrame->m_lowres.lowresPlane[0];
     temp->lowerRes = iterFrame->m_lowres.lowerResPlane[0];
     temp->isFilteredFrame = isPreFiltered;
@@ -1945,6 +1945,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             extendPicBorder(orig->m_picOrg[2], orig->m_strideC, orig->m_picWidth >> orig->m_hChromaShift, orig->m_picHeight >> orig->m_vChromaShift, orig->m_chromaMarginX, orig->m_chromaMarginY);
 
             //TODO: Add subsampling here if required
+            inFrame[0]->m_mcstffencPic->copyFromFrame(inFrame[0]->m_fencPic);
             m_lookahead->m_origPicBuf->addPicture(inFrame[0]);;
         }
 
@@ -2461,6 +2462,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
                 Frame* dupFrame = m_lookahead->m_origPicBuf->m_mcstfOrigPicFreeList.popBackMCSTF();
                 dupFrame->m_fencPic->copyFromFrame(frameEnc[0]->m_fencPic);
+                dupFrame->m_mcstffencPic->copyFromFrame(frameEnc[0]->m_mcstffencPic);
                 dupFrame->m_poc = frameEnc[0]->m_poc;
                 dupFrame->m_encodeOrder = frameEnc[0]->m_encodeOrder;
                 dupFrame->m_refPicCnt[1] = 2 * dupFrame->m_mcstf->m_range + 1;
@@ -2515,17 +2517,6 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                     x265_log(m_param, X265_LOG_ERROR, "Failed to initialize MCSTFReferencePicInfo at POC %d\n", frameEnc[0]->m_poc);
                     fflush(stderr);
                     return -1;
-                }
-
-                for (uint8_t i = 1; i <= frameEnc[0]->m_mcstf->m_numRef; i++)
-                {
-                    TemporalFilterRefPicInfo* ref = &frameEnc[0]->m_mcstfRefList[i - 1];
-                    Frame* curFrame = m_lookahead->m_origPicBuf->m_mcstfPicList.getPOCMCSTF(ref->poc);
-
-                    //curFrame->m_mcstf->motionEstimationLuma(ref->mvs0, ref->mvsStride0, frameEnc[0]->m_lowres.lowerResPlane[0], (curFrame->m_lowres.lumaStride / 2), (curFrame->m_lowres.lines / 2), (curFrame->m_lowres.width / 2), ref->lowerRes, 16);
-                    //curFrame->m_mcstf->motionEstimationLuma(ref->mvs1, ref->mvsStride1, frameEnc[0]->m_lowres.lowresPlane[0], (curFrame->m_lowres.lumaStride), (curFrame->m_lowres.lines), (curFrame->m_lowres.width), ref->lowres, 16, ref->mvs0, ref->mvsStride0, 2);
-                    curFrame->m_mcstf->motionEstimationLuma(ref->mvs2, ref->mvsStride2, frameEnc[0]->m_fencPic->m_picOrg[0], curFrame->m_fencPic->m_stride, curFrame->m_fencPic->m_picHeight, curFrame->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, ref->mvs1, ref->mvsStride1, 2);
-                    curFrame->m_mcstf->motionEstimationLumaDoubleRes(ref->mvs, ref->mvsStride, frameEnc[0]->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error);
                 }
 
                 for (int i = 0; i < frameEnc[0]->m_mcstf->m_numRef; i++)
