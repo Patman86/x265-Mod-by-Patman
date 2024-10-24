@@ -1801,9 +1801,9 @@ void Lookahead::estimatelowresmotion(Frame* curframe)
     {
         TemporalFilterRefPicInfo * ref = &curframe->m_mcstfRefList[i - 1];
 
-        curframe->m_mcstf->motionEstimationLuma(ref->mvs0, ref->mvsStride0, curframe->m_lowres.lowerResPlane[0], (curframe->m_lowres.lumaStride / 2), (curframe->m_lowres.lines / 2), (curframe->m_lowres.width / 2), ref->lowerRes, 16);
-        curframe->m_mcstf->motionEstimationLuma(ref->mvs1, ref->mvsStride1, curframe->m_lowres.lowresPlane[0], (curframe->m_lowres.lumaStride), (curframe->m_lowres.lines), (curframe->m_lowres.width), ref->lowres, 16, ref->mvs0, ref->mvsStride0, 2);
-        curframe->m_mcstf->motionEstimationLuma(ref->mvs2, ref->mvsStride2, curframe->m_fencPic->m_picOrg[0], curframe->m_fencPic->m_stride, curframe->m_fencPic->m_picHeight, curframe->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, ref->mvs1, ref->mvsStride1, 2);
+        curframe->m_mcstf->motionEstimationLuma(ref->mvs0, ref->mvsStride0, curframe->m_lowres.lowerResPlane[0], (curframe->m_lowres.lumaStride / 2), (curframe->m_lowres.lines / 2), (curframe->m_lowres.width / 2), ref->lowerRes, 16, m_param->searchRangeForLayer2);
+        curframe->m_mcstf->motionEstimationLuma(ref->mvs1, ref->mvsStride1, curframe->m_lowres.lowresPlane[0], (curframe->m_lowres.lumaStride), (curframe->m_lowres.lines), (curframe->m_lowres.width), ref->lowres, 16, m_param->searchRangeForLayer1, ref->mvs0, ref->mvsStride0, 2);
+        curframe->m_mcstf->motionEstimationLuma(ref->mvs2, ref->mvsStride2, curframe->m_fencPic->m_picOrg[0], curframe->m_fencPic->m_stride, curframe->m_fencPic->m_picHeight, curframe->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, m_param->searchRangeForLayer0, ref->mvs1, ref->mvsStride1, 2);
         curframe->m_mcstf->motionEstimationLumaDoubleRes(ref->mvs, ref->mvsStride, curframe->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error);
     }
 

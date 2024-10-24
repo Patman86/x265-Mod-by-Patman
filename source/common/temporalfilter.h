@@ -155,7 +155,7 @@ namespace X265_NS {
 
         void bilateralFilter(Frame* frame, TemporalFilterRefPicInfo* mctfRefList, double overallStrength);
 
-        void motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, pixel* buf, int bs,
+        void motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, pixel* buf, int bs, int sRange,
             MV *previous = 0, uint32_t prevmvStride = 0, int factor = 1);
 
         void motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, PicYuv *orig, PicYuv *buffer, int blockSize,
