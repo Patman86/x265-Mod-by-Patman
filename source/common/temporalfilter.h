@@ -152,13 +152,14 @@ namespace X265_NS {
 
         void bilateralFilter(Frame* frame, TemporalFilterRefPicInfo* mctfRefList, double overallStrength);
 
-        void motionEstimationLuma(MV *mvs, uint32_t mvStride, PicYuv *orig, PicYuv *buffer, int bs,
+        void motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, PicYuv *buffer, int bs,
             MV *previous = 0, uint32_t prevmvStride = 0, int factor = 1);
 
         void motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, PicYuv *orig, PicYuv *buffer, int blockSize,
             MV *previous, uint32_t prevMvStride, int factor, int* minError);
 
-        int motionErrorLumaSSD(PicYuv *orig,
+        int motionErrorLumaSSD(pixel* src,
+            int stride,
             PicYuv *buffer,
             int x,
             int y,
@@ -167,7 +168,8 @@ namespace X265_NS {
             int bs,
             int besterror = 8 * 8 * 1024 * 1024);
 
-        int motionErrorLumaSAD(PicYuv *orig,
+        int motionErrorLumaSAD(pixel* src,
+            int stride,
             PicYuv *buffer,
             int x,
             int y,
