@@ -2314,6 +2314,10 @@ typedef struct x265_param
     /*Motion compensated temporal filter*/
     int      bEnableTemporalFilter;
     double   temporalFilterStrength;
+    /*Search Range for L0, L1 and L2 in MCTF*/
+    int      searchRangeForLayer0;
+    int      searchRangeForLayer1;
+    int      searchRangeForLayer2;
 
     /*SBRC*/
     int      bEnableSBRC;

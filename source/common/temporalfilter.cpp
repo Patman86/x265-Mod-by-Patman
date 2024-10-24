@@ -649,10 +649,10 @@ void TemporalFilter::bilateralFilter(Frame* frame,
 }
 
 void TemporalFilter::motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src,int stride, int height, int width, pixel* buf, int blockSize,
-    MV *previous, uint32_t prevMvStride, int factor)
+    int sRange, MV* previous, uint32_t prevMvStride, int factor)
 {
 
-    int range = 5;
+    int range = sRange;
 
 
     const int stepSize = blockSize;
@@ -675,7 +675,7 @@ void TemporalFilter::motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src
 
             if (previous == NULL)
             {
-                range = 8;
+                range = sRange;
             }
             else
             {
@@ -893,7 +893,7 @@ void TemporalFilter::motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, P
             }
 
             prevBest = best;
-            int doubleRange = 3 * 4;
+            int doubleRange = 1 * 4;
             for (int y2 = prevBest.y - doubleRange; y2 <= prevBest.y + doubleRange; y2 += 4)
             {
                 for (int x2 = prevBest.x - doubleRange; x2 <= prevBest.x + doubleRange; x2 += 4)
