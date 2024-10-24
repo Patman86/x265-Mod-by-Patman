@@ -194,7 +194,7 @@ fail:
 int TemporalFilter::motionErrorLumaSAD(
     pixel* src,
     int stride,
-    PicYuv *buffer,
+    pixel* buf,
     int x,
     int y,
     int dx,
@@ -205,8 +205,8 @@ int TemporalFilter::motionErrorLumaSAD(
 
     pixel* origOrigin = src;
     intptr_t origStride = stride;
-    pixel *buffOrigin = buffer->m_picOrg[0];
-    intptr_t buffStride = buffer->m_stride;
+    pixel *buffOrigin = buf;
+    intptr_t buffStride = stride;
     int error = 0;// dx * 10 + dy * 10;
     if (((dx | dy) & 0xF) == 0)
     {
@@ -299,7 +299,7 @@ int TemporalFilter::motionErrorLumaSAD(
 int TemporalFilter::motionErrorLumaSSD(
     pixel* src,
     int stride,
-    PicYuv *buffer,
+    pixel* buf,
     int x,
     int y,
     int dx,
@@ -310,8 +310,8 @@ int TemporalFilter::motionErrorLumaSSD(
 
     pixel* origOrigin = src;
     intptr_t origStride = stride;
-    pixel *buffOrigin = buffer->m_picOrg[0];
-    intptr_t buffStride = buffer->m_stride;
+    pixel *buffOrigin = buf;
+    intptr_t buffStride = stride;
     int error = 0;// dx * 10 + dy * 10;
     if (((dx | dy) & 0xF) == 0)
     {
@@ -648,7 +648,7 @@ void TemporalFilter::bilateralFilter(Frame* frame,
     }
 }
 
-void TemporalFilter::motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src,int stride, int height, int width, PicYuv *buffer, int blockSize,
+void TemporalFilter::motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src,int stride, int height, int width, pixel* buf, int blockSize,
     MV *previous, uint32_t prevMvStride, int factor)
 {
 
@@ -694,9 +694,9 @@ void TemporalFilter::motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src
                             MV old = previous[mvIdx];
 
                             if (m_useSADinME)
-                                error = motionErrorLumaSAD(src, stride, buffer, blockX, blockY, old.x * factor, old.y * factor, blockSize, leastError);
+                                error = motionErrorLumaSAD(src, stride, buf, blockX, blockY, old.x * factor, old.y * factor, blockSize, leastError);
                             else
-                                error = motionErrorLumaSSD(src, stride, buffer, blockX, blockY, old.x * factor, old.y * factor, blockSize, leastError);
+                                error = motionErrorLumaSSD(src, stride, buf, blockX, blockY, old.x * factor, old.y * factor, blockSize, leastError);
 
                             if (error < leastError)
                             {
@@ -708,9 +708,9 @@ void TemporalFilter::motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src
                 }
 
                 if (m_useSADinME)
-                    error = motionErrorLumaSAD(src, stride, buffer, blockX, blockY, 0, 0, blockSize, leastError);
+                    error = motionErrorLumaSAD(src, stride, buf, blockX, blockY, 0, 0, blockSize, leastError);
                 else
-                    error = motionErrorLumaSSD(src, stride, buffer, blockX, blockY, 0, 0, blockSize, leastError);
+                    error = motionErrorLumaSSD(src, stride, buf, blockX, blockY, 0, 0, blockSize, leastError);
 
                 if (error < leastError)
                 {
@@ -726,9 +726,9 @@ void TemporalFilter::motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src
                 for (int x2 = prevBest.x / m_motionVectorFactor - range; x2 <= prevBest.x / m_motionVectorFactor + range; x2++)
                 {
                     if (m_useSADinME)
-                        error = motionErrorLumaSAD(src, stride, buffer, blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, leastError);
+                        error = motionErrorLumaSAD(src, stride, buf, blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, leastError);
                     else
-                        error = motionErrorLumaSSD(src, stride, buffer, blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, leastError);
+                        error = motionErrorLumaSSD(src, stride, buf, blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, leastError);
                     if (error < leastError)
                     {
                         best.set(x2 * m_motionVectorFactor, y2 * m_motionVectorFactor);
@@ -743,9 +743,9 @@ void TemporalFilter::motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src
                 MV aboveMV = mvs[idx];
 
                 if (m_useSADinME)
-                    error = motionErrorLumaSAD(src, stride, buffer, blockX, blockY, aboveMV.x, aboveMV.y, blockSize, leastError);
+                    error = motionErrorLumaSAD(src, stride, buf, blockX, blockY, aboveMV.x, aboveMV.y, blockSize, leastError);
                 else
-                    error = motionErrorLumaSSD(src, stride, buffer, blockX, blockY, aboveMV.x, aboveMV.y, blockSize, leastError);
+                    error = motionErrorLumaSSD(src, stride, buf, blockX, blockY, aboveMV.x, aboveMV.y, blockSize, leastError);
 
                 if (error < leastError)
                 {
@@ -760,9 +760,9 @@ void TemporalFilter::motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src
                 MV leftMV = mvs[idx];
 
                 if (m_useSADinME)
-                    error = motionErrorLumaSAD(src, stride, buffer, blockX, blockY, leftMV.x, leftMV.y, blockSize, leastError);
+                    error = motionErrorLumaSAD(src, stride, buf, blockX, blockY, leftMV.x, leftMV.y, blockSize, leastError);
                 else
-                    error = motionErrorLumaSSD(src, stride, buffer, blockX, blockY, leftMV.x, leftMV.y, blockSize, leastError);
+                    error = motionErrorLumaSSD(src, stride, buf, blockX, blockY, leftMV.x, leftMV.y, blockSize, leastError);
 
                 if (error < leastError)
                 {
@@ -848,9 +848,9 @@ void TemporalFilter::motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, P
                             MV old = previous[mvIdx];
 
                             if (m_useSADinME)
-                                error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, old.x * factor, old.y * factor, blockSize, leastError);
+                                error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, old.x * factor, old.y * factor, blockSize, leastError);
                             else
-                                error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, old.x * factor, old.y * factor, blockSize, leastError);
+                                error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, old.x * factor, old.y * factor, blockSize, leastError);
 
                             if (error < leastError)
                             {
@@ -862,9 +862,9 @@ void TemporalFilter::motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, P
                 }
 
                 if (m_useSADinME)
-                    error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, 0, 0, blockSize, leastError);
+                    error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, 0, 0, blockSize, leastError);
                 else
-                    error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, 0, 0, blockSize, leastError);
+                    error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, 0, 0, blockSize, leastError);
 
                 if (error < leastError)
                 {
@@ -880,9 +880,9 @@ void TemporalFilter::motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, P
                 for (int x2 = prevBest.x / m_motionVectorFactor - range; x2 <= prevBest.x / m_motionVectorFactor + range; x2++)
                 {
                     if (m_useSADinME)
-                        error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, leastError);
+                        error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, leastError);
                     else
-                        error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, leastError);
+                        error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, x2 * m_motionVectorFactor, y2 * m_motionVectorFactor, blockSize, leastError);
 
                     if (error < leastError)
                     {
@@ -899,9 +899,9 @@ void TemporalFilter::motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, P
                 for (int x2 = prevBest.x - doubleRange; x2 <= prevBest.x + doubleRange; x2 += 4)
                 {
                     if (m_useSADinME)
-                        error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, x2, y2, blockSize, leastError);
+                        error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, x2, y2, blockSize, leastError);
                     else
-                        error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, x2, y2, blockSize, leastError);
+                        error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, x2, y2, blockSize, leastError);
 
                     if (error < leastError)
                     {
@@ -918,9 +918,9 @@ void TemporalFilter::motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, P
                 for (int x2 = prevBest.x - doubleRange; x2 <= prevBest.x + doubleRange; x2++)
                 {
                     if (m_useSADinME)
-                        error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, x2, y2, blockSize, leastError);
+                        error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, x2, y2, blockSize, leastError);
                     else
-                        error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, x2, y2, blockSize, leastError);
+                        error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, x2, y2, blockSize, leastError);
 
                     if (error < leastError)
                     {
@@ -937,9 +937,9 @@ void TemporalFilter::motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, P
                 MV aboveMV = mvs[idx];
 
                 if (m_useSADinME)
-                    error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, aboveMV.x, aboveMV.y, blockSize, leastError);
+                    error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, aboveMV.x, aboveMV.y, blockSize, leastError);
                 else
-                    error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, aboveMV.x, aboveMV.y, blockSize, leastError);
+                    error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, aboveMV.x, aboveMV.y, blockSize, leastError);
 
                 if (error < leastError)
                 {
@@ -954,9 +954,9 @@ void TemporalFilter::motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, P
                 MV leftMV = mvs[idx];
 
                 if (m_useSADinME)
-                    error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, leftMV.x, leftMV.y, blockSize, leastError);
+                    error = motionErrorLumaSAD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, leftMV.x, leftMV.y, blockSize, leastError);
                 else
-                    error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer, blockX, blockY, leftMV.x, leftMV.y, blockSize, leastError);
+                    error = motionErrorLumaSSD(orig->m_picOrg[0], orig->m_stride, buffer->m_picOrg[0], blockX, blockY, leftMV.x, leftMV.y, blockSize, leastError);
 
                 if (error < leastError)
                 {

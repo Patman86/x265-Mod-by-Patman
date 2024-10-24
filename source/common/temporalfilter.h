@@ -104,6 +104,7 @@ namespace X265_NS {
         uint32_t   mvsStride2;
         int*       error;
         int*       noise;
+        int        poc;
 
         int16_t    origOffset;
         bool       isFilteredFrame;
@@ -152,7 +153,7 @@ namespace X265_NS {
 
         void bilateralFilter(Frame* frame, TemporalFilterRefPicInfo* mctfRefList, double overallStrength);
 
-        void motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, PicYuv *buffer, int bs,
+        void motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, pixel* buf, int bs,
             MV *previous = 0, uint32_t prevmvStride = 0, int factor = 1);
 
         void motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, PicYuv *orig, PicYuv *buffer, int blockSize,
@@ -160,7 +161,7 @@ namespace X265_NS {
 
         int motionErrorLumaSSD(pixel* src,
             int stride,
-            PicYuv *buffer,
+            pixel* buf,
             int x,
             int y,
             int dx,
@@ -170,7 +171,7 @@ namespace X265_NS {
 
         int motionErrorLumaSAD(pixel* src,
             int stride,
-            PicYuv *buffer,
+            pixel* buf,
             int x,
             int y,
             int dx,
