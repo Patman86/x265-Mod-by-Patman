@@ -1408,6 +1408,7 @@ bool Encoder::isFilterThisframe(uint8_t sliceTypeConfig, int curSliceType)
 inline int enqueueRefFrame(FrameEncoder* curframeEncoder, Frame* iterFrame, Frame* curFrame, bool isPreFiltered, int16_t i)
 {
     TemporalFilterRefPicInfo* dest = &curframeEncoder->m_mcstfRefList[curFrame->m_mcstf->m_numRef];
+    dest->poc = iterFrame->m_poc;
     dest->picBuffer = iterFrame->m_fencPic;
     dest->picBufferSubSampled2 = iterFrame->m_fencPicSubsampled2;
     dest->picBufferSubSampled4 = iterFrame->m_fencPicSubsampled4;
@@ -2510,23 +2511,11 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 for (uint8_t i = 1; i <= frameEnc[0]->m_mcstf->m_numRef; i++)
                 {
                     TemporalFilterRefPicInfo *ref = &curEncoder->m_mcstfRefList[i - 1];
-                    if (!*ref->isSubsampled)
-                    {
-                        primitives.frameSubSampleLuma((const pixel *)ref->picBuffer->m_picOrg[0], ref->picBufferSubSampled2->m_picOrg[0], ref->picBuffer->m_stride, ref->picBufferSubSampled2->m_stride, ref->picBufferSubSampled2->m_picWidth, ref->picBufferSubSampled2->m_picHeight);
-                        extendPicBorder(ref->picBufferSubSampled2->m_picOrg[0], ref->picBufferSubSampled2->m_stride, ref->picBufferSubSampled2->m_picWidth, ref->picBufferSubSampled2->m_picHeight, ref->picBufferSubSampled2->m_lumaMarginX, ref->picBufferSubSampled2->m_lumaMarginY);
-                        primitives.frameSubSampleLuma((const pixel *)ref->picBufferSubSampled2->m_picOrg[0],ref->picBufferSubSampled4->m_picOrg[0], ref->picBufferSubSampled2->m_stride, ref->picBufferSubSampled4->m_stride, ref->picBufferSubSampled4->m_picWidth, ref->picBufferSubSampled4->m_picHeight);
-                        extendPicBorder(ref->picBufferSubSampled4->m_picOrg[0], ref->picBufferSubSampled4->m_stride, ref->picBufferSubSampled4->m_picWidth, ref->picBufferSubSampled4->m_picHeight, ref->picBufferSubSampled4->m_lumaMarginX, ref->picBufferSubSampled4->m_lumaMarginY);
-                        *ref->isSubsampled = true;
-                    }
-                }
+                    Frame* curFrame = m_origPicBuffer->m_mcstfPicList.getPOCMCSTF(ref->poc);
 
-                for (uint8_t i = 1; i <= frameEnc[0]->m_mcstf->m_numRef; i++)
-                {
-                    TemporalFilterRefPicInfo *ref = &curEncoder->m_mcstfRefList[i - 1];
-
-                    curEncoder->m_frameEncTF->motionEstimationLuma(ref->mvs0, ref->mvsStride0, frameEnc[0]->m_lowres.lowerResPlane[0], (frameEnc[0]->m_lowres.lumaStride / 2), frameEnc[0]->m_fencPicSubsampled4->m_picHeight, frameEnc[0]->m_fencPicSubsampled4->m_picWidth, ref->picBufferSubSampled4, 16);
-                    curEncoder->m_frameEncTF->motionEstimationLuma(ref->mvs1, ref->mvsStride1, frameEnc[0]->m_lowres.lowresPlane[0], frameEnc[0]->m_lowres.lumaStride, frameEnc[0]->m_fencPicSubsampled2->m_picHeight, frameEnc[0]->m_fencPicSubsampled2->m_picWidth, ref->picBufferSubSampled2, 16, ref->mvs0, ref->mvsStride0, 2);
-                    curEncoder->m_frameEncTF->motionEstimationLuma(ref->mvs2, ref->mvsStride2, frameEnc[0]->m_fencPic->m_picOrg[0], frameEnc[0]->m_fencPic->m_stride, frameEnc[0]->m_fencPic->m_picHeight, frameEnc[0]->m_fencPic->m_picWidth, ref->picBuffer, 16, ref->mvs1, ref->mvsStride1, 2);
+                    curEncoder->m_frameEncTF->motionEstimationLuma(ref->mvs0, ref->mvsStride0, frameEnc[0]->m_lowres.lowerResPlane[0], (frameEnc[0]->m_lowres.lumaStride / 2), frameEnc[0]->m_fencPicSubsampled4->m_picHeight, frameEnc[0]->m_fencPicSubsampled4->m_picWidth, curFrame->m_lowres.lowerResPlane[0], 16);
+                    curEncoder->m_frameEncTF->motionEstimationLuma(ref->mvs1, ref->mvsStride1, frameEnc[0]->m_lowres.lowresPlane[0], frameEnc[0]->m_lowres.lumaStride, frameEnc[0]->m_fencPicSubsampled2->m_picHeight, frameEnc[0]->m_fencPicSubsampled2->m_picWidth, curFrame->m_lowres.lowresPlane[0], 16, ref->mvs0, ref->mvsStride0, 2);
+                    curEncoder->m_frameEncTF->motionEstimationLuma(ref->mvs2, ref->mvsStride2, frameEnc[0]->m_fencPic->m_picOrg[0], frameEnc[0]->m_fencPic->m_stride, frameEnc[0]->m_fencPic->m_picHeight, frameEnc[0]->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, ref->mvs1, ref->mvsStride1, 2);
                     curEncoder->m_frameEncTF->motionEstimationLumaDoubleRes(ref->mvs, ref->mvsStride, frameEnc[0]->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error);
                 }
 
