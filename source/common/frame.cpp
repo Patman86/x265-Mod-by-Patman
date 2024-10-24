@@ -91,6 +91,7 @@ bool Frame::create(x265_param *param, float* quantOffsets)
     if (m_param->bEnableTemporalFilter)
     {
         m_mcstf = new TemporalFilter;
+        m_mcstffencPic = new PicYuv;
         m_mcstf->m_range = param->mcstfFrameRange;
         m_mcstf->init(param);
 
@@ -105,6 +106,7 @@ bool Frame::create(x265_param *param, float* quantOffsets)
         if (!m_fencPicSubsampled4->createScaledPicYUV(param, 4))
             return false;
 
+        m_mcstffencPic->create(param, !!m_param->bCopyPicToFrame);
         CHECKED_MALLOC_ZERO(m_isSubSampled, int, 1);
     }
 
