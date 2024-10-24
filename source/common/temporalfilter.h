@@ -105,6 +105,8 @@ namespace X265_NS {
         int*       error;
         int*       noise;
         int        poc;
+        pixel*     lowres;
+        pixel*     lowerRes;
 
         int16_t    origOffset;
         bool       isFilteredFrame;

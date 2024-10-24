@@ -991,6 +991,7 @@ Lookahead::Lookahead(x265_param *param, ThreadPool* pool)
     m_isFadeIn = false;
     m_fadeCount = 0;
     m_fadeStart = -1;
+    m_origPicBuf = 0;
 
     /* Allow the strength to be adjusted via qcompress, since the two concepts
      * are very similar. */
@@ -1126,6 +1127,9 @@ bool Lookahead::create()
         m_tld[i].init(m_8x8Width, m_8x8Height, m_8x8Blocks);
     m_scratch = X265_MALLOC(int, m_tld[0].widthInCU);
 
+    if (m_param->bEnableTemporalFilter)
+        m_origPicBuf = new OrigPicBuffer();
+
     return m_tld && m_scratch;
 }
 
@@ -1164,6 +1168,9 @@ void Lookahead::destroy()
         curFrame->destroy();
         delete curFrame;
     }
+
+    if (m_param->bEnableTemporalFilter)
+        delete m_origPicBuf;
 
     X265_FREE(m_scratch);
     delete [] m_tld;
@@ -1787,6 +1794,108 @@ void Lookahead::compCostBref(Lowres **frames, int start, int end, int num)
     }
 }
 
+void Lookahead::estimatelowresmotion(Frame* curframe)
+{
+
+    for (int i = 1; i <= curframe->m_mcstf->m_numRef; i++)
+    {
+        TemporalFilterRefPicInfo * ref = &curframe->m_mcstfRefList[i - 1];
+
+        curframe->m_mcstf->motionEstimationLuma(ref->mvs0, ref->mvsStride0, curframe->m_lowres.lowerResPlane[0], (curframe->m_lowres.lumaStride / 2), (curframe->m_lowres.lines / 2), (curframe->m_lowres.width / 2), ref->lowerRes, 16);
+        curframe->m_mcstf->motionEstimationLuma(ref->mvs1, ref->mvsStride1, curframe->m_lowres.lowresPlane[0], (curframe->m_lowres.lumaStride), (curframe->m_lowres.lines), (curframe->m_lowres.width), ref->lowres, 16, ref->mvs0, ref->mvsStride0, 2);
+        //curframe->m_mcstf->motionEstimationLuma(ref->mvs2, ref->mvsStride2, curframe->m_fencPic->m_picOrg[0], curframe->m_fencPic->m_stride, curframe->m_fencPic->m_picHeight, curframe->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, ref->mvs1, ref->mvsStride1, 2);
+        //curframe->m_mcstf->motionEstimationLumaDoubleRes(ref->mvs, ref->mvsStride, curframe->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error);
+    }
+
+}
+
+inline int enqueueRefFrame(Frame* iterFrame, Frame* curFrame, bool isPreFiltered, int16_t i)
+{
+    TemporalFilterRefPicInfo * temp = &curFrame->m_mcstfRefList[curFrame->m_mcstf->m_numRef];
+    temp->poc = iterFrame->m_poc;
+    temp->picBuffer = iterFrame->m_fencPic;
+    temp->lowres = iterFrame->m_lowres.lowresPlane[0];
+    temp->lowerRes = iterFrame->m_lowres.lowerResPlane[0];
+    temp->isFilteredFrame = isPreFiltered;
+    temp->isSubsampled = iterFrame->m_isSubSampled;
+    temp->origOffset = i;
+    curFrame->m_mcstf->m_numRef++;
+
+     return 1;
+}
+
+bool Lookahead::isFilterThisframe(uint8_t sliceTypeConfig, int curSliceType)
+{
+    uint8_t newSliceType = 0;
+    switch (curSliceType)
+    {
+        case 1: newSliceType |= 1 << 0;
+               break;
+        case 2: newSliceType |= 1 << 0;
+               break;
+        case 3: newSliceType |= 1 << 1;
+               break;
+        case 4: newSliceType |= 1 << 2;
+               break;
+        case 5: newSliceType |= 1 << 3;
+               break;
+        default: return 0;
+    }
+     return ((sliceTypeConfig & newSliceType) != 0);
+}
+
+bool Lookahead::generatemcstf(Frame * frameEnc, PicList refPic, int poclast)
+ {
+     frameEnc->m_mcstf->m_numRef = 0;
+
+    for (int iterPOC = (frameEnc->m_poc - frameEnc->m_mcstf->m_range);
+            iterPOC <= (frameEnc->m_poc + frameEnc->m_mcstf->m_range); iterPOC++)
+    {
+         bool isFound = false;
+        if (iterPOC != frameEnc->m_poc)
+        {
+                //search for the reference frame in the Original Picture Buffer
+            if (!isFound)
+                {
+                for (int j = 0; j < (2 * frameEnc->m_mcstf->m_range); j++)
+                {
+                    if (iterPOC < 0)
+                         continue;
+                    if (iterPOC >= poclast)
+                         {
+
+                    TemporalFilter * mcstf = frameEnc->m_mcstf;
+                    while (mcstf->m_numRef)
+                    {
+                        memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs0, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
+                        memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs1, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
+                        memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs2, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
+                        memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
+                        memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].noise, 0, sizeof(int) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
+                        memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].error, 0, sizeof(int) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
+
+                        mcstf->m_numRef--;
+                    }
+
+                    break;
+                    }
+                    Frame * iterFrame = refPic.getPOCMCSTF(iterPOC);
+                    if (iterFrame->m_poc == iterPOC)
+                    {
+                        if (!enqueueRefFrame(iterFrame, frameEnc, false, (int16_t)(iterPOC - frameEnc->m_poc)))
+                        {
+                            return false;
+                        };
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    return true;
+}
+
 /* called by API thread or worker thread with inputQueueLock acquired */
 void Lookahead::slicetypeDecide()
 {
@@ -2045,6 +2154,22 @@ void Lookahead::slicetypeDecide()
             if (!IS_X265_TYPE_B(frm.sliceType))
                 break;
         }
+    }
+
+    Frame* frameEnc = m_inputQueue.first();
+    for (int i = 0; i < m_inputQueue.size(); i++)
+    {
+        if (m_param->bEnableTemporalFilter && isFilterThisframe(frameEnc->m_mcstf->m_sliceTypeConfig, frameEnc->m_lowres.sliceType))
+        {
+            if (!generatemcstf(frameEnc, m_origPicBuf->m_mcstfPicList, m_inputQueue.last()->m_poc))
+            {
+                x265_log(m_param, X265_LOG_ERROR, "Failed to initialize MCSTFReferencePicInfo at POC %d\n", frameEnc->m_poc);
+                fflush(stderr);
+            }
+
+            estimatelowresmotion(frameEnc);
+        }
+         frameEnc = frameEnc->m_next;
     }
 
     if (m_param->bEnableTemporalSubLayers > 2)
