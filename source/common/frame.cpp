@@ -94,6 +94,9 @@ bool Frame::create(x265_param *param, float* quantOffsets)
         m_mcstf->m_range = param->mcstfFrameRange;
         m_mcstf->init(param);
 
+        for (int i = 0; i < (m_mcstf->m_range << 1); i++)
+            m_mcstf->createRefPicInfo(&m_mcstfRefList[i], m_param);
+
         m_fencPicSubsampled2 = new PicYuv;
         m_fencPicSubsampled4 = new PicYuv;
 

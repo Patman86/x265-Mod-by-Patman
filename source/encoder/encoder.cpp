@@ -1415,6 +1415,15 @@ inline int enqueueRefFrame(FrameEncoder* curframeEncoder, Frame* iterFrame, Fram
     dest->isFilteredFrame = isPreFiltered;
     dest->isSubsampled = iterFrame->m_isSubSampled;
     dest->origOffset = i;
+
+    TemporalFilterRefPicInfo* temp = &curFrame->m_mcstfRefList[curFrame->m_mcstf->m_numRef];
+    temp->poc = iterFrame->m_poc;
+    temp->picBuffer = iterFrame->m_fencPic;
+    temp->lowres = iterFrame->m_lowres.lowresPlane[0];
+    temp->lowerRes = iterFrame->m_lowres.lowerResPlane[0];
+    temp->isFilteredFrame = isPreFiltered;
+    temp->origOffset = i;
+
     curFrame->m_mcstf->m_numRef++;
 
     return 1;
@@ -1443,12 +1452,12 @@ bool Encoder::generateMcstfRef(Frame* frameEnc, FrameEncoder* currEncoder)
                         TemporalFilter* mcstf = frameEnc->m_mcstf;
                         while (mcstf->m_numRef)
                         {
-                            memset(currEncoder->m_mcstfRefList[mcstf->m_numRef].mvs0,  0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
-                            memset(currEncoder->m_mcstfRefList[mcstf->m_numRef].mvs1,  0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
-                            memset(currEncoder->m_mcstfRefList[mcstf->m_numRef].mvs2,  0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
-                            memset(currEncoder->m_mcstfRefList[mcstf->m_numRef].mvs,   0, sizeof(MV) * ((mcstf->m_sourceWidth /  4) * (mcstf->m_sourceHeight /  4)));
-                            memset(currEncoder->m_mcstfRefList[mcstf->m_numRef].noise, 0, sizeof(int) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
-                            memset(currEncoder->m_mcstfRefList[mcstf->m_numRef].error, 0, sizeof(int) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
+                            memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs0, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
+                            memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs1, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
+                            memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs2, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
+                            memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
+                            memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].noise, 0, sizeof(int) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
+                            memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].error, 0, sizeof(int) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
 
                             mcstf->m_numRef--;
                         }
@@ -1513,7 +1522,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
         m_dpb->recycleUnreferenced();
 
         if (m_param->bEnableTemporalFilter)
-            m_origPicBuffer->recycleOrigPicList();
+            m_lookahead->m_origPicBuf->recycleOrigPicList();
     }
 
     if ((pic_in && (!m_param->chunkEnd || (m_encodedFrameNum < m_param->chunkEnd))) || (m_param->bEnableFrameDuplication && !pic_in && (read < written)))
@@ -1917,7 +1926,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                                 dupFrame->m_fencPic->m_cuOffsetC = m_sps.cuOffsetC;
                                 dupFrame->m_fencPic->m_buOffsetC = m_sps.buOffsetC;
                             }
-                            m_origPicBuffer->addEncPicture(dupFrame);
+                            m_lookahead->m_origPicBuf->addEncPicture(dupFrame);
                         }
                     }
                 }
@@ -1936,7 +1945,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             extendPicBorder(orig->m_picOrg[2], orig->m_strideC, orig->m_picWidth >> orig->m_hChromaShift, orig->m_picHeight >> orig->m_vChromaShift, orig->m_chromaMarginX, orig->m_chromaMarginY);
 
             //TODO: Add subsampling here if required
-            m_origPicBuffer->addPicture(inFrame[0]);
+            m_lookahead->m_origPicBuf->addPicture(inFrame[0]);;
         }
 
         m_lookahead->addPicture(*inFrame[0], sliceType);
@@ -2188,11 +2197,11 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
                 if (m_param->bEnableTemporalFilter)
                 {
-                    Frame* curFrame = m_origPicBuffer->m_mcstfPicList.getPOCMCSTF(outFrame->m_poc);
+                    Frame* curFrame = m_lookahead->m_origPicBuf->m_mcstfPicList.getPOCMCSTF(outFrame->m_poc);
                     X265_CHECK(curFrame, "Outframe not found in DPB's mcstfPicList");
                     curFrame->m_refPicCnt[0]--;
                     curFrame->m_refPicCnt[1]--;
-                    curFrame = m_origPicBuffer->m_mcstfOrigPicList.getPOCMCSTF(outFrame->m_poc);
+                    curFrame = m_lookahead->m_origPicBuf->m_mcstfOrigPicList.getPOCMCSTF(outFrame->m_poc);
                     X265_CHECK(curFrame, "Outframe not found in OPB's mcstfOrigPicList");
                     curFrame->m_refPicCnt[1]--;
                 }
@@ -2203,7 +2212,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                     ATOMIC_DEC(&outFrame->m_countRefEncoders);
                     m_dpb->recycleUnreferenced();
                     if (m_param->bEnableTemporalFilter)
-                        m_origPicBuffer->recycleOrigPicList();
+                        m_lookahead->m_origPicBuf->recycleOrigPicList();
                 }
                 else
                     m_exportedPic[sLayer] = outFrame;
@@ -2448,9 +2457,9 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
             if (m_param->bEnableTemporalFilter)
             {
-                X265_CHECK(!m_origPicBuffer->m_mcstfOrigPicFreeList.empty(), "Frames not available in Encoded OPB");
+                X265_CHECK(!m_lookahead->m_origPicBuf->m_mcstfOrigPicFreeList.empty(), "Frames not available in Encoded OPB");
 
-                Frame *dupFrame = m_origPicBuffer->m_mcstfOrigPicFreeList.popBackMCSTF();
+                Frame* dupFrame = m_lookahead->m_origPicBuf->m_mcstfOrigPicFreeList.popBackMCSTF();
                 dupFrame->m_fencPic->copyFromFrame(frameEnc[0]->m_fencPic);
                 dupFrame->m_poc = frameEnc[0]->m_poc;
                 dupFrame->m_encodeOrder = frameEnc[0]->m_encodeOrder;
@@ -2461,8 +2470,8 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 if (m_param->totalFrames && (dupFrame->m_poc >= (m_param->totalFrames - dupFrame->m_mcstf->m_range)))
                     dupFrame->m_refPicCnt[1] -= (uint8_t)(dupFrame->m_poc + dupFrame->m_mcstf->m_range - m_param->totalFrames + 1);
 
-                m_origPicBuffer->addEncPictureToPicList(dupFrame);
-                m_origPicBuffer->setOrigPicList(frameEnc[0], m_pocLast);
+                m_lookahead->m_origPicBuf->addEncPictureToPicList(dupFrame);
+                m_lookahead->m_origPicBuf->setOrigPicList(frameEnc[0], m_pocLast);
             }
 
             for (int layer = 0; layer < m_param->numLayers; layer++)
@@ -2510,18 +2519,18 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
                 for (uint8_t i = 1; i <= frameEnc[0]->m_mcstf->m_numRef; i++)
                 {
-                    TemporalFilterRefPicInfo *ref = &curEncoder->m_mcstfRefList[i - 1];
-                    Frame* curFrame = m_origPicBuffer->m_mcstfPicList.getPOCMCSTF(ref->poc);
+                    TemporalFilterRefPicInfo* ref = &frameEnc[0]->m_mcstfRefList[i - 1];
+                    Frame* curFrame = m_lookahead->m_origPicBuf->m_mcstfPicList.getPOCMCSTF(ref->poc);
 
-                    curEncoder->m_frameEncTF->motionEstimationLuma(ref->mvs0, ref->mvsStride0, frameEnc[0]->m_lowres.lowerResPlane[0], (frameEnc[0]->m_lowres.lumaStride / 2), frameEnc[0]->m_fencPicSubsampled4->m_picHeight, frameEnc[0]->m_fencPicSubsampled4->m_picWidth, curFrame->m_lowres.lowerResPlane[0], 16);
-                    curEncoder->m_frameEncTF->motionEstimationLuma(ref->mvs1, ref->mvsStride1, frameEnc[0]->m_lowres.lowresPlane[0], frameEnc[0]->m_lowres.lumaStride, frameEnc[0]->m_fencPicSubsampled2->m_picHeight, frameEnc[0]->m_fencPicSubsampled2->m_picWidth, curFrame->m_lowres.lowresPlane[0], 16, ref->mvs0, ref->mvsStride0, 2);
-                    curEncoder->m_frameEncTF->motionEstimationLuma(ref->mvs2, ref->mvsStride2, frameEnc[0]->m_fencPic->m_picOrg[0], frameEnc[0]->m_fencPic->m_stride, frameEnc[0]->m_fencPic->m_picHeight, frameEnc[0]->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, ref->mvs1, ref->mvsStride1, 2);
-                    curEncoder->m_frameEncTF->motionEstimationLumaDoubleRes(ref->mvs, ref->mvsStride, frameEnc[0]->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error);
+                    //curFrame->m_mcstf->motionEstimationLuma(ref->mvs0, ref->mvsStride0, frameEnc[0]->m_lowres.lowerResPlane[0], (curFrame->m_lowres.lumaStride / 2), (curFrame->m_lowres.lines / 2), (curFrame->m_lowres.width / 2), ref->lowerRes, 16);
+                    //curFrame->m_mcstf->motionEstimationLuma(ref->mvs1, ref->mvsStride1, frameEnc[0]->m_lowres.lowresPlane[0], (curFrame->m_lowres.lumaStride), (curFrame->m_lowres.lines), (curFrame->m_lowres.width), ref->lowres, 16, ref->mvs0, ref->mvsStride0, 2);
+                    curFrame->m_mcstf->motionEstimationLuma(ref->mvs2, ref->mvsStride2, frameEnc[0]->m_fencPic->m_picOrg[0], curFrame->m_fencPic->m_stride, curFrame->m_fencPic->m_picHeight, curFrame->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, ref->mvs1, ref->mvsStride1, 2);
+                    curFrame->m_mcstf->motionEstimationLumaDoubleRes(ref->mvs, ref->mvsStride, frameEnc[0]->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error);
                 }
 
                 for (int i = 0; i < frameEnc[0]->m_mcstf->m_numRef; i++)
                 {
-                    TemporalFilterRefPicInfo *ref = &curEncoder->m_mcstfRefList[i];
+                    TemporalFilterRefPicInfo* ref = &frameEnc[0]->m_mcstfRefList[i];
                     ref->slicetype = m_lookahead->findSliceType(frameEnc[0]->m_poc + ref->origOffset);
                     Frame* dpbframePtr = m_dpb->m_picList.getPOC(frameEnc[0]->m_poc + ref->origOffset, 0);
                     if (dpbframePtr != NULL)

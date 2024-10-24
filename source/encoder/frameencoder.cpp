@@ -677,7 +677,7 @@ void FrameEncoder::compressFrame(int layer)
     if (m_param->bEnableTemporalFilter)
     {
         m_frameEncTF->m_QP = qp;
-        m_frameEncTF->bilateralFilter(m_frame[layer], m_mcstfRefList, m_param->temporalFilterStrength);
+        m_frameEncTF->bilateralFilter(m_frame[layer], m_frame[layer]->m_mcstfRefList, m_param->temporalFilterStrength);
     }
 
     if (m_nr)
