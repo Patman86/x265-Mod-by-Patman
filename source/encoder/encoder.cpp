@@ -171,7 +171,6 @@ Encoder::Encoder()
     m_startPoint = 0;
     m_saveCTUSize = 0;
     m_zoneIndex = 0;
-    m_origPicBuffer = 0;
 }
 
 inline char *strcatFilename(const char *input, const char *suffix)
@@ -361,9 +360,6 @@ void Encoder::create()
             lookAheadThreadPool[i].start();
     m_lookahead->m_numPools = pools;
     m_dpb = new DPB(m_param);
-
-    if (m_param->bEnableTemporalFilter)
-        m_origPicBuffer = new OrigPicBuffer();
 
     m_rateControl = new RateControl(*m_param, this);
     if (!m_param->bResetZoneConfig)
@@ -938,9 +934,6 @@ void Encoder::destroy()
         delete[] zoneWriteCount;
     }
 
-    if (m_param->bEnableTemporalFilter)
-        delete m_origPicBuffer;
-
     if (m_rateControl)
     {
         m_rateControl->destroy();
@@ -1403,82 +1396,6 @@ bool Encoder::isFilterThisframe(uint8_t sliceTypeConfig, int curSliceType)
     default: return 0;
     }
     return ((sliceTypeConfig & newSliceType) != 0);
-}
-
-inline int enqueueRefFrame(FrameEncoder* curframeEncoder, Frame* iterFrame, Frame* curFrame, bool isPreFiltered, int16_t i)
-{
-    TemporalFilterRefPicInfo* dest = &curframeEncoder->m_mcstfRefList[curFrame->m_mcstf->m_numRef];
-    dest->poc = iterFrame->m_poc;
-    dest->picBuffer = iterFrame->m_mcstffencPic;
-    dest->picBufferSubSampled2 = iterFrame->m_fencPicSubsampled2;
-    dest->picBufferSubSampled4 = iterFrame->m_fencPicSubsampled4;
-    dest->isFilteredFrame = isPreFiltered;
-    dest->isSubsampled = iterFrame->m_isSubSampled;
-    dest->origOffset = i;
-
-    TemporalFilterRefPicInfo* temp = &curFrame->m_mcstfRefList[curFrame->m_mcstf->m_numRef];
-    temp->poc = iterFrame->m_poc;
-    temp->picBuffer = iterFrame->m_mcstffencPic;
-    temp->lowres = iterFrame->m_lowres.lowresPlane[0];
-    temp->lowerRes = iterFrame->m_lowres.lowerResPlane[0];
-    temp->isFilteredFrame = isPreFiltered;
-    temp->origOffset = i;
-
-    curFrame->m_mcstf->m_numRef++;
-
-    return 1;
-}
-
-bool Encoder::generateMcstfRef(Frame* frameEnc, FrameEncoder* currEncoder)
-{
-    frameEnc->m_mcstf->m_numRef = 0;
-
-    for (int iterPOC = (frameEnc->m_poc - frameEnc->m_mcstf->m_range);
-        iterPOC <= (frameEnc->m_poc + frameEnc->m_mcstf->m_range); iterPOC++)
-    {
-        bool isFound = false;
-        if (iterPOC != frameEnc->m_poc)
-        {
-            //search for the reference frame in the Original Picture Buffer
-            if (!isFound)
-            {
-                for (int j = 0; j < (2 * frameEnc->m_mcstf->m_range); j++)
-                {
-                    if (iterPOC < 0)
-                        continue;
-                    if (iterPOC >= m_pocLast)
-                    {
-
-                        TemporalFilter* mcstf = frameEnc->m_mcstf;
-                        while (mcstf->m_numRef)
-                        {
-                            memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs0, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
-                            memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs1, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
-                            memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs2, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
-                            memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
-                            memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].noise, 0, sizeof(int) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
-                            memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].error, 0, sizeof(int) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
-
-                            mcstf->m_numRef--;
-                        }
-
-                        break;
-                    }
-                    Frame* iterFrame = frameEnc->m_encData->m_slice->m_mcstfRefFrameList[1][j];
-                    if (iterFrame->m_poc == iterPOC)
-                    {
-                        if (!enqueueRefFrame(currEncoder, iterFrame, frameEnc, false, (int16_t)(iterPOC - frameEnc->m_poc)))
-                        {
-                            return false;
-                        };
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    return true;
 }
 
 /**
@@ -2510,18 +2427,14 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             // Generate MCSTF References and perform HME
             if (m_param->bEnableTemporalFilter && isFilterThisframe(frameEnc[0]->m_mcstf->m_sliceTypeConfig, frameEnc[0]->m_lowres.sliceType))
             {
-
-                if (!generateMcstfRef(frameEnc[0], curEncoder))
-                {
-                    m_aborted = true;
-                    x265_log(m_param, X265_LOG_ERROR, "Failed to initialize MCSTFReferencePicInfo at POC %d\n", frameEnc[0]->m_poc);
-                    fflush(stderr);
-                    return -1;
-                }
-
                 for (int i = 0; i < frameEnc[0]->m_mcstf->m_numRef; i++)
                 {
                     TemporalFilterRefPicInfo* ref = &frameEnc[0]->m_mcstfRefList[i];
+
+                    //Resetting the reference picture buffer from mcstfpiclist
+                    Frame* iterFrame = frameEnc[0]->m_encData->m_slice->m_mcstfRefFrameList[1][i];
+                    ref->picBuffer = iterFrame->m_mcstffencPic;
+
                     ref->slicetype = m_lookahead->findSliceType(frameEnc[0]->m_poc + ref->origOffset);
                     Frame* dpbframePtr = m_dpb->m_picList.getPOC(frameEnc[0]->m_poc + ref->origOffset, 0);
                     if (dpbframePtr != NULL)

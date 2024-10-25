@@ -315,6 +315,17 @@ void Frame::destroy()
             delete m_fencPicSubsampled4;
             m_fencPicSubsampled4 = NULL;
         }
+
+        for (int i = 0; i < (m_mcstf->m_range << 1); i++)
+            m_mcstf->destroyRefPicInfo(&m_mcstfRefList[i]);
+
+        if (m_mcstffencPic)
+        {
+            m_mcstffencPic->destroy();
+            delete m_mcstffencPic;
+            m_mcstffencPic = NULL;
+        }
+
         delete m_mcstf;
         X265_FREE(m_isSubSampled);
     }
