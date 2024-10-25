@@ -287,7 +287,6 @@ public:
     FILE* m_filmGrainIn;
     /* Aom film grain model file*/
     FILE* m_aomFilmGrainIn;
-    OrigPicBuffer*          m_origPicBuffer;
 
     Encoder();
     ~Encoder()
