@@ -265,10 +265,6 @@ public:
     FrameFilter              m_frameFilter;
     NALList                  m_nalList;
 
-    // initialization for mcstf
-    TemporalFilter*          m_frameEncTF;
-    TemporalFilterRefPicInfo m_mcstfRefList[MAX_MCSTF_TEMPORAL_WINDOW_LENGTH];
-
     int                      m_sLayerId;
 
     class WeightAnalysis : public BondedTaskGroup

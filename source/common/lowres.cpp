@@ -253,7 +253,7 @@ fail:
 void Lowres::destroy(x265_param* param)
 {
     X265_FREE(buffer[0]);
-    if(bEnableHME)
+    if(bEnableHME || param->bEnableTemporalFilter)
         X265_FREE(lowerResBuffer[0]);
     X265_FREE(intraCost);
     X265_FREE(intraMode);

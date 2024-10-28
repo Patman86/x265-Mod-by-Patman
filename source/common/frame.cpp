@@ -316,6 +316,7 @@ void Frame::destroy()
             m_fencPicSubsampled4 = NULL;
         }
 
+        delete m_mcstf->m_metld;
         for (int i = 0; i < (m_mcstf->m_range << 1); i++)
             m_mcstf->destroyRefPicInfo(&m_mcstfRefList[i]);
 
