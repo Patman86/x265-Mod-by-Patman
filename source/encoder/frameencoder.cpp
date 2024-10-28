@@ -106,16 +106,6 @@ void FrameEncoder::destroy()
         delete m_rce.picTimingSEI;
         delete m_rce.hrdTiming;
     }
-
-    if (m_param->bEnableTemporalFilter)
-    {
-        delete m_frameEncTF->m_metld;
-
-        for (int i = 0; i < (m_frameEncTF->m_range << 1); i++)
-            m_frameEncTF->destroyRefPicInfo(&m_mcstfRefList[i]);
-
-        delete m_frameEncTF;
-    }
 }
 
 bool FrameEncoder::init(Encoder *top, int numRows, int numCols)
@@ -208,16 +198,6 @@ bool FrameEncoder::init(Encoder *top, int numRows, int numCols)
         unsigned long tmp;
         CLZ(tmp, (numRows * numCols - 1));
         m_sliceAddrBits = (uint16_t)(tmp + 1);
-    }
-
-    if (m_param->bEnableTemporalFilter)
-    {
-        m_frameEncTF = new TemporalFilter();
-        if (m_frameEncTF)
-            m_frameEncTF->init(m_param);
-
-        for (int i = 0; i < (m_frameEncTF->m_range << 1); i++)
-            ok &= !!m_frameEncTF->createRefPicInfo(&m_mcstfRefList[i], m_param);
     }
 
     m_retFrameBuffer = X265_MALLOC(Frame*, m_param->numLayers);
@@ -676,8 +656,8 @@ void FrameEncoder::compressFrame(int layer)
     }
     if (m_param->bEnableTemporalFilter)
     {
-        m_frameEncTF->m_QP = qp;
-        m_frameEncTF->bilateralFilter(m_frame[layer], m_frame[layer]->m_mcstfRefList, m_param->temporalFilterStrength);
+        m_frame[layer]->m_mcstf->m_QP = qp;
+        m_frame[layer]->m_mcstf->bilateralFilter(m_frame[layer], m_frame[layer]->m_mcstfRefList, m_param->temporalFilterStrength);
     }
 
     if (m_nr)
@@ -1071,14 +1051,14 @@ void FrameEncoder::compressFrame(int layer)
     if (m_param->bEnableTemporalFilter && m_top->isFilterThisframe(m_frame[layer]->m_mcstf->m_sliceTypeConfig, m_frame[layer]->m_lowres.sliceType))
     {
         //Reset the MCSTF context in Frame Encoder and Frame
-        for (int i = 0; i < (m_frameEncTF->m_range << 1); i++)
+        for (int i = 0; i < (m_frame[layer]->m_mcstf->m_range << 1); i++)
         {
-            memset(m_mcstfRefList[i].mvs0, 0, sizeof(MV) * ((m_param->sourceWidth / 16) * (m_param->sourceHeight / 16)));
-            memset(m_mcstfRefList[i].mvs1, 0, sizeof(MV) * ((m_param->sourceWidth / 16) * (m_param->sourceHeight / 16)));
-            memset(m_mcstfRefList[i].mvs2, 0, sizeof(MV) * ((m_param->sourceWidth / 16) * (m_param->sourceHeight / 16)));
-            memset(m_mcstfRefList[i].mvs,  0, sizeof(MV) * ((m_param->sourceWidth / 4) * (m_param->sourceHeight / 4)));
-            memset(m_mcstfRefList[i].noise, 0, sizeof(int) * ((m_param->sourceWidth / 4) * (m_param->sourceHeight / 4)));
-            memset(m_mcstfRefList[i].error, 0, sizeof(int) * ((m_param->sourceWidth / 4) * (m_param->sourceHeight / 4)));
+            memset(m_frame[layer]->m_mcstfRefList[i].mvs0, 0, sizeof(MV) * ((m_param->sourceWidth / 16) * (m_param->sourceHeight / 16)));
+            memset(m_frame[layer]->m_mcstfRefList[i].mvs1, 0, sizeof(MV) * ((m_param->sourceWidth / 16) * (m_param->sourceHeight / 16)));
+            memset(m_frame[layer]->m_mcstfRefList[i].mvs2, 0, sizeof(MV) * ((m_param->sourceWidth / 16) * (m_param->sourceHeight / 16)));
+            memset(m_frame[layer]->m_mcstfRefList[i].mvs,  0, sizeof(MV) * ((m_param->sourceWidth / 4) * (m_param->sourceHeight / 4)));
+            memset(m_frame[layer]->m_mcstfRefList[i].noise, 0, sizeof(int) * ((m_param->sourceWidth / 4) * (m_param->sourceHeight / 4)));
+            memset(m_frame[layer]->m_mcstfRefList[i].error, 0, sizeof(int) * ((m_param->sourceWidth / 4) * (m_param->sourceHeight / 4)));
 
             m_frame[layer]->m_mcstf->m_numRef = 0;
         }
