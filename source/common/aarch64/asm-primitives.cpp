@@ -526,6 +526,7 @@ void setupNeonPrimitives(EncoderPrimitives &p)
 
     // sad
     ALL_LUMA_PU(sad, pixel_sad, neon);
+    ALL_LUMA_PU(sad_x3, sad_x3, neon);
 
 #if !HIGH_BIT_DEPTH
     // pixel_avg_pp
@@ -541,7 +542,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     ALL_CHROMA_422_PU(addAvg[ALIGNED], addAvg, neon);
 
     // sad
-    ALL_LUMA_PU(sad_x3, sad_x3, neon);
     ALL_LUMA_PU(sad_x4, sad_x4, neon);
 
     // sse_pp
