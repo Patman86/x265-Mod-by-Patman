@@ -591,7 +591,7 @@ ret:
                     strerror(errno), profileName);
 
             x265_picture pic_orig[MAX_VIEWS];
-            x265_picture *pic_in[MAX_VIEWS];
+            x265_picture *pic_in[MAX_VIEWS] = { NULL };
             for (int view = 0; view < m_param->numViews - !!m_param->format; view++)
                 pic_in[view] = &pic_orig[view];
             /* Allocate recon picture if analysis save/load is enabled */

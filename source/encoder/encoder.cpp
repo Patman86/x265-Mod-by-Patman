@@ -3449,11 +3449,12 @@ void Encoder::getStreamHeaders(NALList& list, Entropy& sbacCoder, Bitstream& bs)
         char *opts = x265_param2string(m_param, m_sps.conformanceWindow.rightOffset, m_sps.conformanceWindow.bottomOffset);
         if (opts)
         {
-            int len = strlen(opts) + strlen(PFX(version_str)) + strlen(PFX(build_info_str)) + 200;
-            char *buffer = X265_MALLOC(char, len);
+            char *buffer = X265_MALLOC(char, strlen(opts) + strlen(PFX(version_str)) +
+                strlen(PFX(build_info_str)) + 200);
             if (buffer)
             {
-                snprintf(buffer, len, "x265 (build %d) - %s:%s - H.265/HEVC codec - "
+                snprintf(buffer, strlen(opts) + strlen(PFX(version_str)) + strlen(PFX(build_info_str)) + 200,
+                    "x265 (build %d) - %s:%s - H.265/HEVC codec - "
                     "Copyright 2013-2018 (c) Multicoreware, Inc - "
                     "http://x265.org - options: %s",
                     X265_BUILD, PFX(version_str), PFX(build_info_str), opts);

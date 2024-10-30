@@ -1902,9 +1902,9 @@ int compute_vmaf(double* vmaf_score, char* fmt, int width, int height, int bitde
 
 	VmafConfiguration cfg = {
 		.log_level = VMAF_LOG_LEVEL_INFO,
-		.n_threads = n_thread,
-		.n_subsample = n_subsample,
-		.cpumask = disable_avx ? -1 : 0,
+		.n_threads = static_cast<unsigned int>(n_thread),
+		.n_subsample = static_cast<unsigned int>(n_subsample),
+		.cpumask = static_cast<uint64_t>(disable_avx),
 		.gpumask = 0,
 	};
 
