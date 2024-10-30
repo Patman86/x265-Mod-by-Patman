@@ -73,7 +73,7 @@ inline bool isEqualRow(int addrA, int addrB)
 /* Check whether 2 addresses point to the same row or column */
 inline bool isEqualRowOrCol(int addrA, int addrB)
 {
-    return isEqualCol(addrA, addrB) | isEqualRow(addrA, addrB);
+    return isEqualCol(addrA, addrB) || isEqualRow(addrA, addrB);
 }
 
 /* Check whether one address points to the first column */

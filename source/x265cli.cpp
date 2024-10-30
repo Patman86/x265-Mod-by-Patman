@@ -1014,7 +1014,7 @@ namespace X265_NS {
                 for (int view = 0; view < param->numLayers; view++)
                 {
                     char* buf = new char[strlen(temp) + 7];
-                    sprintf(buf, "%s-%d.yuv", token, view);
+                    snprintf(buf, strlen(temp) + 7, "%s-%d.yuv", token, view);
                     reconfn[view] = buf;
                 }
             }
@@ -1037,7 +1037,7 @@ namespace X265_NS {
             }
         }
 #if ENABLE_LIBVMAF
-        if (!reconfn)
+        if (!reconfn[0])
         {
             x265_log(param, X265_LOG_ERROR, "recon file must be specified to get VMAF score, try --help for help\n");
             return true;

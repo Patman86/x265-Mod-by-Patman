@@ -156,7 +156,10 @@ static bool parseAbrConfig(FILE* abrConfig, CLIOptions cliopt[], uint8_t numEnco
 
     for (uint32_t i = 0; i < numEncodes; i++)
     {
-        fgets(line, sizeof(line), abrConfig);
+        if (fgets(line, sizeof(line), abrConfig) == NULL) {
+            fprintf(stderr, "Error reading line from configuration file.\n");
+            return false;
+        }
         if (*line == '#' || (strcmp(line, "\r\n") == 0))
             continue;
         int index = (int)strcspn(line, "\r\n");

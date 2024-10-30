@@ -3250,8 +3250,8 @@ int RateControl::writeRateControlFrameStats(Frame* curFrame, RateControlEntry* r
 
         for (i = 0; i < num; i++)
         {
-            snprintf(deltaPOC, sizeof(deltaPOC), "%s%d~", deltaPOC, rpsWriter->deltaPOC[i]);
-            snprintf(bUsed, sizeof(bUsed), "%s%d~", bUsed, rpsWriter->bUsed[i]);
+            snprintf(deltaPOC + strlen(deltaPOC), sizeof(deltaPOC) - strlen(deltaPOC), "%d~", rpsWriter->deltaPOC[i]);
+            snprintf(bUsed + strlen(bUsed), sizeof(bUsed) - strlen(bUsed), "%d~", rpsWriter->bUsed[i]);
         }
 
         if (fprintf(m_statFileOut,
