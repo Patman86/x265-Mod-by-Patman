@@ -157,9 +157,9 @@ Mode& Analysis::compressCTU(CUData& ctu, Frame& frame, const CUGeom& cuGeom, con
         calculateNormFactor(ctu, qp);
 
     uint32_t numPartition = ctu.m_numPartitions;
-    if (m_param->bCTUInfo && (*m_frame->m_ctuInfo + ctu.m_cuAddr))
+    if (m_param->bCTUInfo && m_frame->m_ctuInfo && m_frame->m_ctuInfo[ctu.m_cuAddr])
     {
-        x265_ctu_info_t* ctuTemp = *m_frame->m_ctuInfo + ctu.m_cuAddr;
+        x265_ctu_info_t* ctuTemp = m_frame->m_ctuInfo[ctu.m_cuAddr];
         int32_t depthIdx = 0;
         uint32_t maxNum8x8Partitions = 64;
         uint8_t* depthInfoPtr = m_frame->m_addOnDepth[ctu.m_cuAddr];
