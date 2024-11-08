@@ -316,6 +316,8 @@ typedef struct x265_frame_stats
     double           unclippedBufferFillFinal;
     uint8_t          tLayer;
     int64_t          currTrBitrate;
+    double           currTrCRF;
+    int              currTrQP;
 } x265_frame_stats;
 
 typedef struct x265_ctu_info_t
@@ -2338,6 +2340,9 @@ typedef struct x265_param
 
     /*Screen Content Coding*/
     int     bEnableSCC;
+
+    /*Frame level RateControl Configuration*/
+    int     bConfigRCFrame;
 } x265_param;
 
 /* x265_param_alloc:

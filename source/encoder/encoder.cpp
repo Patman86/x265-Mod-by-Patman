@@ -1522,7 +1522,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 inputPic[view] = pic_in + view;
         }
 
-        x265_param* p = (m_reconfigure || m_reconfigureRc) ? m_latestParam : m_param;
+        x265_param* p = (m_reconfigure || m_reconfigureRc || m_param->bConfigRCFrame) ? m_latestParam : m_param;
         Frame* inFrame[MAX_LAYERS];
         for (int layer = 0; layer < m_param->numLayers; layer++)
         {
@@ -1664,8 +1664,17 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             }
 
             inFrame[layer]->m_forceqp = inputPic[0]->forceqp;
-            inFrame[layer]->m_param = (m_reconfigure || m_reconfigureRc) ? m_latestParam : m_param;
+            inFrame[layer]->m_param = (m_reconfigure || m_reconfigureRc || m_param->bConfigRCFrame) ? m_latestParam : m_param;
             inFrame[layer]->m_picStruct = inputPic[0]->picStruct;
+
+            /*Copy reconfigured RC parameters to frame*/
+            if (m_param->rc.rateControlMode == X265_RC_ABR)
+                inFrame[layer]->m_targetBitrate = inFrame[layer]->m_param->rc.bitrate;
+            else if (m_param->rc.rateControlMode == X265_RC_CRF)
+                inFrame[layer]->m_targetCrf = inFrame[layer]->m_param->rc.rfConstant;
+            else if (m_param->rc.rateControlMode == X265_RC_CQP)
+                inFrame[layer]->m_targetQp = inFrame[layer]->m_param->rc.qp;
+
             if (m_param->bField && m_param->interlaceMode)
                 inFrame[layer]->m_fieldNum = inputPic[0]->fieldNum;
 
@@ -1802,26 +1811,8 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             }
         }
 
-        if (m_reconfigureRc)
-        {
-            if (m_param->rc.rateControlMode == X265_RC_ABR)
-                inFrame[0]->m_targetBitrate = m_latestParam->rc.bitrate;
-            else if (m_param->rc.rateControlMode == X265_RC_CRF)
-                inFrame[0]->m_targetCrf = (int)m_latestParam->rc.rfConstant;
-            else if (m_param->rc.rateControlMode == X265_RC_CQP)
-                inFrame[0]->m_targetQp = m_latestParam->rc.qp;
+        if (m_reconfigureRc || m_param->bConfigRCFrame)
             inFrame[0]->m_reconfigureRc = true;
-            m_reconfigureRc = false;
-        }
-        else
-        {
-            if (m_param->rc.rateControlMode == X265_RC_ABR)
-                inFrame[0]->m_targetBitrate = m_latestParam->rc.bitrate;
-            else if (m_param->rc.rateControlMode == X265_RC_CRF)
-                inFrame[0]->m_targetCrf = (int)m_latestParam->rc.rfConstant;
-            else if (m_param->rc.rateControlMode == X265_RC_CQP)
-                inFrame[0]->m_targetQp = m_latestParam->rc.qp;
-        }
 
         if (m_param->bEnableTemporalFilter)
         {
@@ -2005,16 +1996,6 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                         if (m_param->bUseAnalysisFile)
                             x265_free_analysis_data(m_param, &pic_out[sLayer].analysisData);
                     }
-                    if (sLayer == 0)
-                    {
-                        if (outFrame->m_targetBitrate && m_param->rc.rateControlMode == X265_RC_ABR)
-                            pic_out[sLayer].frameData.currTrBitrate = outFrame->m_targetBitrate;
-                        else
-                            pic_out[sLayer].frameData.currTrBitrate = 0;
-                    }
-                    else
-                        x265_log(m_param, X265_LOG_WARNING, "Frame wise bitrate reconfigure are not supported for enhancement layers\n");
-
                 }
                 if (m_param->rc.bStatWrite && (m_param->analysisMultiPassRefine || m_param->analysisMultiPassDistortion))
                 {
@@ -2230,26 +2211,30 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
             if (frameEnc[0]->m_reconfigureRc)
             {
-                m_rateControl->m_bRcReConfig = true;
-                if (m_param->rc.rateControlMode == X265_RC_ABR)
+                if (m_reconfigureRc)
+                    x265_copy_params(m_param, m_latestParam);
+                else if (m_param->bConfigRCFrame)
                 {
-                    m_param->rc.bitrate = (int)frameEnc[0]->m_targetBitrate;
-                    m_rateControl->m_param->rc.bitrate = (int)frameEnc[0]->m_targetBitrate;
-                }
-                else if (m_param->rc.rateControlMode == X265_RC_CRF)
-                {
-                    m_param->rc.rfConstant = (double)frameEnc[0]->m_targetCrf;
-                    m_rateControl->m_param->rc.rfConstant = frameEnc[0]->m_targetCrf;
-                }
-                else if (m_param->rc.rateControlMode == X265_RC_CQP)
-                {
-                    m_param->rc.qp = frameEnc[0]->m_targetQp;
-                    m_rateControl->m_param->rc.qp = frameEnc[0]->m_targetQp;
+                    m_rateControl->m_bRcReConfig = true;
+                    if (m_param->rc.rateControlMode == X265_RC_ABR)
+                    {
+                        m_param->rc.bitrate = (int)frameEnc[0]->m_targetBitrate;
+                        m_rateControl->m_param->rc.bitrate = (int)frameEnc[0]->m_targetBitrate;
+                    }
+                    else if (m_param->rc.rateControlMode == X265_RC_CRF)
+                    {
+                        m_param->rc.rfConstant = (double)frameEnc[0]->m_targetCrf;
+                        m_rateControl->m_param->rc.rfConstant = frameEnc[0]->m_targetCrf;
+                    }
+                    else if (m_param->rc.rateControlMode == X265_RC_CQP)
+                    {
+                        m_param->rc.qp = frameEnc[0]->m_targetQp;
+                        m_rateControl->m_param->rc.qp = frameEnc[0]->m_targetQp;
+                    }
                 }
                 m_rateControl->reconfigureRC();
                 m_reconfigureRc = false;
             }
-
             if (frameEnc[0]->m_reconfigureRc && !m_reconfigureRc)
                 frameEnc[0]->m_reconfigureRc = false;
             if (curEncoder->m_reconfigure)
@@ -2522,6 +2507,10 @@ int Encoder::reconfigureParam(x265_param* encParam, x265_param* param)
         encParam->rc.rfConstant = param->rc.rfConstant;
         m_reconfigureRc |= encParam->rc.qp != param->rc.qp;
         encParam->rc.qp = param->rc.qp;
+
+        /*Allow encoder to reconfigure RC for each input frame*/
+        if (encParam->bConfigRCFrame)
+            m_reconfigureRc = false;
     }
     else
     {
@@ -3204,6 +3193,9 @@ void Encoder::finishFrameStats(Frame* curFrame, FrameEncoder *curEncoder, x265_f
                     }
                 }
             }
+            frameStats->currTrBitrate = curFrame->m_targetBitrate;
+            frameStats->currTrCRF = curFrame->m_targetCrf;
+            frameStats->currTrQP = curFrame->m_targetQp;
         }
 
         if (m_param->csvLogLevel >= 1)

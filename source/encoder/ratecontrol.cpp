@@ -1935,11 +1935,13 @@ double RateControl::rateEstimateQscale(Frame* curFrame, RateControlEntry *rce)
         if (m_param->rc.rateControlMode == X265_RC_ABR)
             m_bitrate = (double)curFrame->m_targetBitrate * 1000;
         else if (m_param->rc.rateControlMode == X265_RC_CRF)
-            m_param->rc.rfConstant = (double)curFrame->m_targetCrf;
-        else if (m_param->rc.rateControlMode == X265_RC_CQP)
-            m_param->rc.qp = curFrame->m_targetQp;
+        {
+            double mbtree_offset = m_param->rc.cuTree ? (1.0 - m_param->rc.qCompress) * 13.5 : 0;
+            double qComp = (m_param->rc.cuTree && !m_param->rc.hevcAq) ? 0.99 : m_param->rc.qCompress;
+            m_rateFactorConstant = pow(m_currentSatd, 1.0 - qComp) /
+                x265_qp2qScale(curFrame->m_targetCrf + mbtree_offset);
+        }
     }
-
     if ((m_param->bliveVBV2pass && m_param->rc.rateControlMode == X265_RC_ABR) || m_isAbr)
     {
         int pos = m_sliderPos % s_slidingWindowFrames;
@@ -2021,11 +2023,6 @@ double RateControl::rateEstimateQscale(Frame* curFrame, RateControlEntry *rce)
 
         if (m_bRcReConfig && m_param->rc.rateControlMode == X265_RC_CRF)
         {
-            double rfConstant = m_param->rc.rfConstant;
-            double mbtree_offset = m_param->rc.cuTree ? (1.0 - m_param->rc.qCompress) * 13.5 : 0;
-            double qComp = (m_param->rc.cuTree && !m_param->rc.hevcAq) ? 0.99 : m_param->rc.qCompress;
-            m_rateFactorConstant = pow(m_currentSatd, 1.0 - qComp) /
-                x265_qp2qScale(rfConstant + mbtree_offset);
             double qScale = getQScale(rce, m_rateFactorConstant);
             q = x265_qScale2qp(qScale);
         }
@@ -2272,14 +2269,6 @@ double RateControl::rateEstimateQscale(Frame* curFrame, RateControlEntry *rce)
                     double ipOffset = (curFrame->m_lowres.bScenecut ? m_ipOffset : m_ipOffset / 2.0);
                     rfConstant = (rce->sliceType == I_SLICE ? rfConstant - ipOffset :
                         (rce->sliceType == B_SLICE ? rfConstant + m_pbOffset : rfConstant));
-                    double mbtree_offset = m_param->rc.cuTree ? (1.0 - m_param->rc.qCompress) * 13.5 : 0;
-                    double qComp = (m_param->rc.cuTree && !m_param->rc.hevcAq) ? 0.99 : m_param->rc.qCompress;
-                    m_rateFactorConstant = pow(m_currentSatd, 1.0 - qComp) /
-                        x265_qp2qScale(rfConstant + mbtree_offset);
-                }
-                if (m_bRcReConfig)
-                {
-                    double rfConstant = m_param->rc.rfConstant;
                     double mbtree_offset = m_param->rc.cuTree ? (1.0 - m_param->rc.qCompress) * 13.5 : 0;
                     double qComp = (m_param->rc.cuTree && !m_param->rc.hevcAq) ? 0.99 : m_param->rc.qCompress;
                     m_rateFactorConstant = pow(m_currentSatd, 1.0 - qComp) /
@@ -2596,34 +2585,36 @@ double RateControl::tuneQscaleForSBRC(Frame* curFrame, double q)
 double RateControl::tuneQscaleToUpdatedBitrate(Frame* curFrame, double q)
 {
     int depth = 18;
-
-    for (int iterations = 0; iterations < 100; iterations++)
+    if (m_isVbv && m_currentSatd > 0 && curFrame)
     {
-        int i;
-        double frameBitsTotal = m_fps * predictSize(&m_pred[m_predType], q, (double)m_currentSatd);
-        for (i = 0; i < depth; i++)
+        for (int iterations = 0; iterations < 100; iterations++)
         {
-            int type = curFrame->m_lowres.plannedType[i];
-            if (type == X265_TYPE_AUTO)
+            int i;
+            double frameBitsTotal = m_fps * predictSize(&m_pred[m_predType], q, (double)m_currentSatd);
+            for (i = 0; i < depth; i++)
+            {
+                int type = curFrame->m_lowres.plannedType[i];
+                if (type == X265_TYPE_AUTO)
+                    break;
+                int64_t satd = curFrame->m_lowres.plannedSatd[i] >> (X265_DEPTH - 8);
+                type = IS_X265_TYPE_I(curFrame->m_lowres.plannedType[i]) ? I_SLICE : IS_X265_TYPE_B(curFrame->m_lowres.plannedType[i]) ? B_SLICE : P_SLICE;
+                int predType = getPredictorType(curFrame->m_lowres.plannedType[i], type);
+                double curBits = m_fps * predictSize(&m_pred[predType], q, (double)satd);
+                frameBitsTotal += curBits;
+            }
+            frameBitsTotal /= i;
+            double allowedSize = (double)(curFrame->m_targetBitrate * 1000);
+            if (frameBitsTotal >= 1.1 * allowedSize)
+                q = q * 1.1;
+            else if (frameBitsTotal >= 1.05 * allowedSize)
+                q = q * 1.05;
+            else if (frameBitsTotal <= 0.9 * allowedSize)
+                q = q / 1.1;
+            else if (frameBitsTotal <= 0.95 * allowedSize)
+                q = q / 1.05;
+            else
                 break;
-            int64_t satd = curFrame->m_lowres.plannedSatd[i] >> (X265_DEPTH - 8);
-            type = IS_X265_TYPE_I(curFrame->m_lowres.plannedType[i]) ? I_SLICE : IS_X265_TYPE_B(curFrame->m_lowres.plannedType[i]) ? B_SLICE : P_SLICE;
-            int predType = getPredictorType(curFrame->m_lowres.plannedType[i], type);
-            double curBits = m_fps * predictSize(&m_pred[predType], q, (double)satd);
-            frameBitsTotal += curBits;
         }
-        frameBitsTotal /= i;
-        double allowedSize = (double)(curFrame->m_targetBitrate * 1000);
-        if (frameBitsTotal >= 1.1 * allowedSize)
-            q = q * 1.1;
-        else if (frameBitsTotal >= 1.05 * allowedSize)
-            q = q * 1.05;
-        else if (frameBitsTotal <= 0.9 * allowedSize)
-            q = q / 1.1;
-        else if (frameBitsTotal <= 0.95 * allowedSize)
-            q = q / 1.05;
-        else
-            break;
     }
     return q;
 }

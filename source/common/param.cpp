@@ -444,6 +444,8 @@ void x265_param_default(x265_param* param)
 
     /* SCC */
     param->bEnableSCC = 0;
+
+    param->bConfigRCFrame = 0;
 }
 
 int x265_param_default_preset(x265_param* param, const char* preset, const char* tune)
@@ -1517,6 +1519,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
                 p->bEnableWeightedPred = false;
         }
 #endif
+        OPT("frame-rc") p->bConfigRCFrame = atobool(value);
         else
             return X265_PARAM_BAD_NAME;
     }
@@ -2472,6 +2475,7 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     s += snprintf(s, bufSize - (s - buf), "scc=%d", p->bEnableSCC);
 #endif
     BOOL(p->bEnableSBRC, "sbrc");
+    BOOL(p->bConfigRCFrame, "frame-rc");
 #undef BOOL
     return buf;
 }
@@ -3020,6 +3024,7 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     if (src->aomFilmGrain)
         dst->aomFilmGrain = src->aomFilmGrain;
     dst->bEnableSBRC = src->bEnableSBRC;
+    dst->bConfigRCFrame = src->bConfigRCFrame;
 }
 
 #ifdef SVT_HEVC
