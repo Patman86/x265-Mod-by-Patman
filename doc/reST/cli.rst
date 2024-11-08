@@ -2102,7 +2102,14 @@ Quality, rate control and rate distortion options
 	Used to trigger encoding of selective GOPs; Disabled by default.
 	
 	**API ONLY**
-	
+
+.. option:: --frame-rc, --no-frame-rc
+
+    This option allows configuring Rate control parameter of the chosen Rate Control
+    mode(CRF or QP or Bitrate) at frame level.
+    This option is recommended to be enabled only when planning to invoke the API function
+    x265_encoder_reconfig() to configure Rate control parameter value for each frame.
+    Default: disabled.
 
 Quantization Options
 ====================

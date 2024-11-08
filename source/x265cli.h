@@ -396,6 +396,8 @@ static const struct option long_options[] =
     { "scenecut-qp-config", required_argument, NULL, 0 },
     { "film-grain", required_argument, NULL, 0 },
     { "aom-film-grain", required_argument, NULL, 0 },
+    { "frame-rc",no_argument, NULL, 0 },
+    { "no-frame-rc",no_argument, NULL, 0 },
     { 0, 0, 0, 0 },
     { 0, 0, 0, 0 },
     { 0, 0, 0, 0 },

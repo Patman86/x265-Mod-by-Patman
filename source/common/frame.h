@@ -175,10 +175,10 @@ public:
     Frame*                 m_nextSubDPB;           // PicList doubly linked list pointers
     Frame*                 m_prevSubDPB;
 
-    /*Target bitrate*/
+    /*Target bitrate for this picture*/
     int64_t                m_targetBitrate;
     /* target CRF for this picture.*/
-    int                    m_targetCrf;
+    double                 m_targetCrf;
     /* target QP for this picture.*/
     int                    m_targetQp;
 

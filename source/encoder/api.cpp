@@ -358,7 +358,7 @@ int x265_encoder_reconfig(x265_encoder* enc, x265_param* param_in)
         }
         if (!isReconfigureRc)
             encoder->m_reconfigure = true;
-        else if (encoder->m_reconfigureRc)
+        else if (encoder->m_reconfigureRc || encoder->m_latestParam->bConfigRCFrame)
         {
             VPS saveVPS;
             memcpy(&saveVPS.ptl, &encoder->m_vps.ptl, sizeof(saveVPS.ptl));
@@ -1408,7 +1408,15 @@ FILE* x265_csvlog_open(const x265_param* param)
 #if ENABLE_LIBVMAF
                     fprintf(csvfp, ", VMAF Frame Score");
 #endif
-                    fprintf(csvfp, ", Target bitrate");
+                    if (param->bConfigRCFrame)
+                    {
+                        if (param->rc.rateControlMode == X265_RC_ABR)
+                            fprintf(csvfp, ", Target bitrate");
+                        else if (param->rc.rateControlMode == X265_RC_CRF)
+                            fprintf(csvfp, ", Target CRF");
+                        else if (param->rc.rateControlMode == X265_RC_CQP)
+                            fprintf(csvfp, ", Target QP");
+                    }
                 }
                 fprintf(csvfp, "\n");
             }
@@ -1536,7 +1544,15 @@ void x265_csvlog_frame(const x265_param* param, const x265_picture* pic)
 #if ENABLE_LIBVMAF
         fprintf(param->csvfpt, ", %lf", frameStats->vmafFrameScore);
 #endif
-        fprintf(param->csvfpt, ", %I64d", frameStats->currTrBitrate);
+        if (param->bConfigRCFrame)
+        {
+            if(param->rc.rateControlMode == X265_RC_ABR)
+                fprintf(param->csvfpt, ", %ld", (long)frameStats->currTrBitrate);
+            else if (param->rc.rateControlMode == X265_RC_CRF)
+                fprintf(param->csvfpt, ", %f", frameStats->currTrCRF);
+            else if (param->rc.rateControlMode == X265_RC_CQP)
+                fprintf(param->csvfpt, ", %d", frameStats->currTrQP);
+        }
     }
     fprintf(param->csvfpt, "\n");
     fflush(stderr);
