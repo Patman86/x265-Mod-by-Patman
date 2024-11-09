@@ -6127,7 +6127,9 @@ void Encoder::readUserSeiFile(x265_sei_payload& seiMsg, int curPoc)
         int payloadType = atoi(strtok(NULL, " "));
         char *base64Encode = strtok(NULL, "\n");
         int base64EncodeLength = (int)strlen(base64Encode);
-        char *base64Decode = SEI::base64Decode(base64Encode, base64EncodeLength);
+        char* decodedString;
+	    decodedString = (char*)malloc(sizeof(char) * (base64EncodeLength));
+        char *base64Decode = SEI::base64Decode(base64Encode, base64EncodeLength, decodedString);
         if (nalType == NAL_UNIT_PREFIX_SEI && (!strcmp(prefix, "PREFIX")))
         {
             int currentPOC = curPoc;
@@ -6150,6 +6152,7 @@ void Encoder::readUserSeiFile(x265_sei_payload& seiMsg, int curPoc)
                     break;
                 }
                 memcpy(seiMsg.payload, base64Decode, seiMsg.payloadSize);
+                free(decodedString);
                 break;
             }
         }
