@@ -191,6 +191,7 @@ struct Lowres : public ReferencePlanes
     uint16_t* lowresCosts[X265_BFRAME_MAX + 2][X265_BFRAME_MAX + 2];
     int32_t*  lowresMvCosts[2][X265_BFRAME_MAX + 2];
     MV*       lowresMvs[2][X265_BFRAME_MAX + 2];
+    MV*       lowresMcstfMvs[2][4];
     uint32_t  maxBlocksInRow;
     uint32_t  maxBlocksInCol;
     uint32_t  maxBlocksInRowFullRes;
