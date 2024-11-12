@@ -35,7 +35,18 @@ class BitCost
 {
 public:
 
-    BitCost() : m_cost_mvx(0), m_cost_mvy(0), m_cost(0), m_mvp(0) {}
+    BitCost()
+        : m_cost_mvx(0)
+        , m_cost_mvy(0)
+        , m_cost(0)
+        , m_mvp(0)
+        , s_bitsizes(NULL)
+    {
+        memset(m_fpelMvCosts, 0, sizeof(m_fpelMvCosts));
+        memset(s_costs, 0, sizeof(s_costs));
+        memset(s_fpelMvCosts, 0, sizeof(s_fpelMvCosts));
+    }
+    ~BitCost() { destroy(); }
 
     void setQP(unsigned int qp);
 
@@ -51,13 +62,13 @@ public:
                           s_bitsizes[mv.y - m_mvp.y] + 0.5f);
     }
 
-    static inline uint32_t bitcost(const MV& mv, const MV& mvp)
+    inline uint32_t bitcost(const MV& mv, const MV& mvp) const
     {
         return (uint32_t)(s_bitsizes[mv.x - mvp.x] +
                           s_bitsizes[mv.y - mvp.y] + 0.5f);
     }
 
-    static void destroy();
+    void destroy();
 
 protected:
 
@@ -82,15 +93,15 @@ private:
 
     enum { BC_MAX_QP = 82 };
 
-    static float *s_bitsizes;
+    float *s_bitsizes;
 
-    static uint16_t *s_costs[BC_MAX_QP];
+    uint16_t *s_costs[BC_MAX_QP];
 
-    static uint16_t *s_fpelMvCosts[BC_MAX_QP][4];
+    uint16_t *s_fpelMvCosts[BC_MAX_QP][4];
 
-    static Lock s_costCalcLock;
+    Lock s_costCalcLock;
 
-    static void CalculateLogs();
+    void CalculateLogs();
 };
 }
 
