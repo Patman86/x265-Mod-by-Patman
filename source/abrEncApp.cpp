@@ -282,8 +282,8 @@ namespace X265_NS {
 
         m_param->analysisLoadReuseLevel = m_cliopt.loadLevel;
         m_param->analysisSaveReuseLevel = m_cliopt.saveLevel;
-        m_param->analysisSave = m_cliopt.saveLevel ? "save.dat" : NULL;
-        m_param->analysisLoad = m_cliopt.loadLevel ? "load.dat" : NULL;
+        strcpy(m_param->analysisSave, m_cliopt.saveLevel ? "save.dat" : "");
+        strcpy(m_param->analysisLoad, m_cliopt.loadLevel ? "load.dat" : "");
         m_param->bUseAnalysisFile = 0;
 
         if (m_cliopt.loadLevel)
@@ -599,7 +599,7 @@ ret:
             x265_picture* pic_recon;
             x265_picture pic_out[MAX_LAYERS];
 
-            pic_recon = (m_cliopt.recon[0] || m_param->analysisSave || m_param->analysisLoad || pts_queue || reconPlay || m_param->csvLogLevel) ? pic_out : NULL;
+            pic_recon = (m_cliopt.recon[0] || strlen(m_param->analysisSave) || strlen(m_param->analysisLoad) || pts_queue || reconPlay || m_param->csvLogLevel) ? pic_out : NULL;
             uint32_t inFrameCount = 0;
             uint32_t outFrameCount = 0;
             x265_nal *p_nal;
@@ -895,7 +895,7 @@ ret:
             delete reconPlay;
 
             api->encoder_get_stats(m_encoder, &stats, sizeof(stats));
-            if (m_param->csvfn && !b_ctrl_c)
+            if (strlen(m_param->csvfn) && !b_ctrl_c)
 #if ENABLE_LIBVMAF
                 api->vmaf_encoder_log(m_encoder, m_cliopt.argCnt, m_cliopt.argString, m_cliopt.param, vmafdata);
 #else

@@ -1207,7 +1207,7 @@ void Lookahead::destroy()
 /* Called by API thread */
 void Lookahead::addPicture(Frame& curFrame, int sliceType)
 {
-    if (m_param->analysisLoad && m_param->bDisableLookahead)
+    if (strlen(m_param->analysisLoad) && m_param->bDisableLookahead)
     {
         if (!m_filled)
             m_filled = true;
@@ -1308,7 +1308,7 @@ Frame* Lookahead::getDecidedPicture()
             return out;
         }
 
-        if (m_param->analysisLoad && m_param->bDisableLookahead)
+        if (strlen(m_param->analysisLoad) && m_param->bDisableLookahead)
             return NULL;
 
         findJob(-1); /* run slicetypeDecide() if necessary */
@@ -1378,14 +1378,14 @@ void Lookahead::getEstimatedPictureCost(Frame *curFrame)
     default:
         return;
     }
-    if (!curFrame->m_param->analysisLoad || !curFrame->m_param->bDisableLookahead)
+    if (!strlen(curFrame->m_param->analysisLoad) || !curFrame->m_param->bDisableLookahead)
     {
         X265_CHECK(curFrame->m_lowres.costEst[b - p0][p1 - b] > 0, "Slice cost not estimated\n")
 
         if (curFrame->m_param->rc.cuTree && !curFrame->m_param->rc.bStatRead)
             /* update row satds based on cutree offsets */
             curFrame->m_lowres.satdCost = frameCostRecalculate(frames, p0, p1, b);
-        else if (!curFrame->m_param->analysisLoad || curFrame->m_param->scaleFactor || curFrame->m_param->bAnalysisType == HEVC_INFO)
+        else if (!strlen(curFrame->m_param->analysisLoad) || curFrame->m_param->scaleFactor || curFrame->m_param->bAnalysisType == HEVC_INFO)
         {
             if (curFrame->m_param->rc.aqMode)
                 curFrame->m_lowres.satdCost = curFrame->m_lowres.costEstAq[b - p0][p1 - b];
@@ -2022,7 +2022,7 @@ void Lookahead::slicetypeDecide()
         if (!m_param->rc.bStatRead)
             slicetypeAnalyse(frames, false);
         bool bIsVbv = m_param->rc.vbvBufferSize > 0 && m_param->rc.vbvMaxBitrate > 0;
-        if ((m_param->analysisLoad && m_param->scaleFactor && bIsVbv) || m_param->bliveVBV2pass)
+        if ((strlen(m_param->analysisLoad) && m_param->scaleFactor && bIsVbv) || m_param->bliveVBV2pass)
         {
             int numFrames;
             for (numFrames = 0; numFrames < maxSearch; numFrames++)
@@ -2036,7 +2036,7 @@ void Lookahead::slicetypeDecide()
     }
 
     int bframes, brefs;
-    if (!m_param->analysisLoad || m_param->bAnalysisType == HEVC_INFO)
+    if (!strlen(m_param->analysisLoad) || m_param->bAnalysisType == HEVC_INFO)
     {
         bool isClosedGopRadl = m_param->radl && (m_param->keyframeMax != m_param->keyframeMin);
         for (bframes = 0, brefs = 0;; bframes++)
@@ -2488,7 +2488,7 @@ void Lookahead::slicetypeDecide()
             if (!m_param->rc.bStatRead)
                 slicetypeAnalyse(frames, true);
             bool bIsVbv = m_param->rc.vbvBufferSize > 0 && m_param->rc.vbvMaxBitrate > 0;
-            if ((m_param->analysisLoad && m_param->scaleFactor && bIsVbv) || m_param->bliveVBV2pass)
+            if ((strlen(m_param->analysisLoad) && m_param->scaleFactor && bIsVbv) || m_param->bliveVBV2pass)
             {
                 int numFrames;
                 for (numFrames = 0; numFrames < maxSearch; numFrames++)
@@ -2633,7 +2633,7 @@ void Lookahead::slicetypeDecide()
             if (!m_param->rc.bStatRead)
                 slicetypeAnalyse(frames, true);
             bool bIsVbv = m_param->rc.vbvBufferSize > 0 && m_param->rc.vbvMaxBitrate > 0;
-            if ((m_param->analysisLoad && m_param->scaleFactor && bIsVbv) || m_param->bliveVBV2pass)
+            if ((strlen(m_param->analysisLoad) && m_param->scaleFactor && bIsVbv) || m_param->bliveVBV2pass)
             {
                 int numFrames;
                 for (numFrames = 0; numFrames < maxSearch; numFrames++)
