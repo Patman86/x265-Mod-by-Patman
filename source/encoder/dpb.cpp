@@ -53,8 +53,11 @@ DPB::~DPB()
         FrameData* next = m_frameDataFreeList->m_freeListNext;
         m_frameDataFreeList->destroy();
 
-        m_frameDataFreeList->m_reconPic[0]->destroy();
-        delete m_frameDataFreeList->m_reconPic[0];
+        for (int i = 0; i < !!m_frameDataFreeList->m_param->bEnableSCC + 1; i++)
+        {
+            m_frameDataFreeList->m_reconPic[i]->destroy();
+            delete m_frameDataFreeList->m_reconPic[i];
+        }
 
         delete m_frameDataFreeList;
         m_frameDataFreeList = next;

@@ -474,6 +474,10 @@ namespace X265_NS {
         if (dolbyVisionRpu)
             fclose(dolbyVisionRpu);
         dolbyVisionRpu = NULL;
+#if ENABLE_MULTIVIEW
+        if (multiViewConfig)
+            fclose(multiViewConfig);
+#endif
         if (output)
             output->release();
         output = NULL;

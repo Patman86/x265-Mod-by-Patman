@@ -949,6 +949,10 @@ void Encoder::destroy()
 
         PARAM_NS::x265_param_free(m_latestParam);
     }
+
+    if (m_zoneParam != NULL && m_zoneParam != m_param)
+        PARAM_NS::x265_param_free(m_zoneParam);
+
     if (m_analysisFileIn)
         fclose(m_analysisFileIn);
 
