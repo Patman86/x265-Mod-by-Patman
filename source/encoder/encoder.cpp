@@ -6167,7 +6167,7 @@ void Encoder::readUserSeiFile(x265_sei_payload& seiMsg, int curPoc)
         char *base64Encode = strtok(NULL, "\n");
         int base64EncodeLength = (int)strlen(base64Encode);
         char* decodedString;
-	    decodedString = (char*)malloc(sizeof(char) * (base64EncodeLength));
+        decodedString = (char*)malloc(sizeof(char) * (base64EncodeLength));
         char *base64Decode = SEI::base64Decode(base64Encode, base64EncodeLength, decodedString);
         if (nalType == NAL_UNIT_PREFIX_SEI && (!strcmp(prefix, "PREFIX")))
         {

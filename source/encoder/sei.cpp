@@ -94,52 +94,52 @@ void SEI::setSize(uint32_t size)
 
 char* SEI::base64Decode(char encodedString[], int base64EncodeLength, char* decodedString)
 {
-	int i, j, k = 0;
-	// stores the bitstream
-	int bitstream = 0;
-	// countBits stores the current number of bits in bitstream
-	int countBits = 0;
+    int i, j, k = 0;
+    // stores the bitstream
+    int bitstream = 0;
+    // countBits stores the current number of bits in bitstream
+    int countBits = 0;
 
-	for (i = 0; i < base64EncodeLength; i += 4)
-	{
-		bitstream = 0;
-		countBits = 0;
+    for (i = 0; i < base64EncodeLength; i += 4)
+    {
+        bitstream = 0;
+        countBits = 0;
 
-		for (j = 0; j < 4; j++)
-		{
-			if (encodedString[i + j] != '=')
-			{
-				int value = 0;
-				if (encodedString[i + j] >= 'A' && encodedString[i + j] <= 'Z')
-					value = encodedString[i + j] - 'A';
-				else if (encodedString[i + j] >= 'a' && encodedString[i + j] <= 'z')
-					value = encodedString[i + j] - 'a' + 26;
-				else if (encodedString[i + j] >= '0' && encodedString[i + j] <= '9')
-					value = encodedString[i + j] - '0' + 52;
-				else if (encodedString[i + j] == '+')
-					value = 62;
-				else if (encodedString[i + j] == '/')
-					value = 63;
-				else
-					value = 0;
+        for (j = 0; j < 4; j++)
+        {
+            if (encodedString[i + j] != '=')
+            {
+                int value = 0;
+                if (encodedString[i + j] >= 'A' && encodedString[i + j] <= 'Z')
+                    value = encodedString[i + j] - 'A';
+                else if (encodedString[i + j] >= 'a' && encodedString[i + j] <= 'z')
+                    value = encodedString[i + j] - 'a' + 26;
+                else if (encodedString[i + j] >= '0' && encodedString[i + j] <= '9')
+                    value = encodedString[i + j] - '0' + 52;
+                else if (encodedString[i + j] == '+')
+                    value = 62;
+                else if (encodedString[i + j] == '/')
+                    value = 63;
+                else
+                    value = 0;
 
-				bitstream = (bitstream << 6) | value;
-				countBits += 6;
-			}
-		}
+                bitstream = (bitstream << 6) | value;
+                countBits += 6;
+            }
+        }
 
-		while (countBits >= 8)
-		{
-			countBits -= 8;
-			decodedString[k++] = (bitstream >> countBits) & 0xFF;
-		}
-	}
+        while (countBits >= 8)
+        {
+            countBits -= 8;
+            decodedString[k++] = (bitstream >> countBits) & 0xFF;
+        }
+    }
 
-	if (k < base64EncodeLength)
-	{
-		decodedString[k] = '\0';
-	}
+    if (k < base64EncodeLength)
+    {
+        decodedString[k] = '\0';
+    }
 
-	return decodedString;
+    return decodedString;
 }
 
