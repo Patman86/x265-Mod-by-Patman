@@ -203,7 +203,7 @@ Mode& Analysis::compressCTU(CUData& ctu, Frame& frame, const CUGeom& cuGeom, con
     }
     
     int reuseLevel = X265_MAX(m_param->analysisSaveReuseLevel, m_param->analysisLoadReuseLevel);
-    if ((m_param->analysisSave || m_param->analysisLoad) && m_slice->m_sliceType != I_SLICE && reuseLevel > 1 && reuseLevel < 10)
+    if ((strlen(m_param->analysisSave) || strlen(m_param->analysisLoad)) && m_slice->m_sliceType != I_SLICE && reuseLevel > 1 && reuseLevel < 10)
     {
         int numPredDir = m_slice->isInterP() ? 1 : 2;
         m_reuseInterDataCTU = m_frame->m_analysisData.interData;
@@ -217,7 +217,7 @@ Mode& Analysis::compressCTU(CUData& ctu, Frame& frame, const CUGeom& cuGeom, con
             m_reusePartSize = &m_reuseInterDataCTU->partSize[ctu.m_cuAddr * ctu.m_numPartitions];
             m_reuseMergeFlag = &m_reuseInterDataCTU->mergeFlag[ctu.m_cuAddr * ctu.m_numPartitions];
         }
-        if (m_param->analysisSave && !m_param->analysisLoad)
+        if (strlen(m_param->analysisSave) && !strlen(m_param->analysisLoad))
             for (int i = 0; i < X265_MAX_PRED_MODE_PER_CTU * numPredDir; i++)
                 m_reuseRef[i] = -1;
     }
@@ -4130,7 +4130,7 @@ int Analysis::calculateQpforCuSize(const CUData& ctu, const CUGeom& cuGeom, int3
     double qp = baseQp >= 0 ? baseQp : curEncData.m_cuStat[ctu.m_cuAddr].baseQp;
     bool bCuTreeOffset = IS_REFERENCED(m_frame) && m_param->rc.cuTree && !complexCheck;
 
-    if ((m_param->analysisMultiPassDistortion && m_param->rc.bStatRead) || (m_param->ctuDistortionRefine && m_param->analysisLoad))
+    if ((m_param->analysisMultiPassDistortion && m_param->rc.bStatRead) || (m_param->ctuDistortionRefine && strlen(m_param->analysisLoad)))
     {
         x265_analysis_distortion_data* distortionData = m_frame->m_analysisData.distortionData;
         if ((distortionData->threshold[ctu.m_cuAddr] < 0.9 || distortionData->threshold[ctu.m_cuAddr] > 1.1)

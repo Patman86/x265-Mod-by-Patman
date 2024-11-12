@@ -2135,7 +2135,7 @@ void Search::singleMotionEstimation(Search& master, Mode& interMode, const Predi
     bool bLowresMVP = false;
     MV mvmin, mvmax, outmv, mvp = amvp[mvpIdx], mvp_lowres;
 
-    if (!m_param->analysisSave && !m_param->analysisLoad) /* Prevents load/save outputs from diverging if lowresMV is not available */
+    if (!strlen(m_param->analysisSave) && !strlen(m_param->analysisLoad)) /* Prevents load/save outputs from diverging if lowresMV is not available */
     {
         MV lmv = getLowresMV(interMode.cu, pu, list, ref);
         int layer = m_param->numViews > 1 ? m_frame->m_viewId : (m_param->numScalableLayers > 1) ? m_frame->m_sLayerId : 0;
@@ -2476,7 +2476,7 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
                     MV mvmin, mvmax, outmv, mvp = amvp[mvpIdx], mvp_lowres;
                     bool bLowresMVP = false;
 
-                    if (!m_param->analysisSave && !m_param->analysisLoad) /* Prevents load/save outputs from diverging when lowresMV is not available */
+                    if (!strlen(m_param->analysisSave) && !strlen(m_param->analysisLoad)) /* Prevents load/save outputs from diverging when lowresMV is not available */
                     {
                         MV lmv = getLowresMV(cu, pu, list, ref);
                         int layer = m_param->numViews > 1 ? m_frame->m_viewId : (m_param->numScalableLayers > 1) ? m_frame->m_sLayerId : 0;

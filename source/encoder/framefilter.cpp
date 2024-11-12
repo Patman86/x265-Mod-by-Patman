@@ -162,12 +162,9 @@ void FrameFilter::destroy()
 
     if (m_parallelFilter)
     {
-        if (m_useSao)
-        {
-            for(int row = 0; row < m_numRows; row++)
-                m_parallelFilter[row].m_sao.destroy((row == 0 ? 1 : 0));
-        }
-
+        // NOTE: don't check m_useSao because it is dynamic controllable
+        for(int row = 0; row < m_numRows; row++)
+            m_parallelFilter[row].m_sao.destroy((row == 0 ? 1 : 0));
         delete[] m_parallelFilter;
         m_parallelFilter = NULL;
     }

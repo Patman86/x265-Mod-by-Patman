@@ -154,6 +154,9 @@ static bool parseAbrConfig(FILE* abrConfig, CLIOptions cliopt[], uint8_t numEnco
     char line[1024];
     char* argLine;
 
+    char **argv = (char**)alloca(256 * sizeof(char *));
+    char *strPool = (char*)alloca(256 * X265_MAX_STRING_SIZE * sizeof(char));
+    int strPoolSize = 256 * X265_MAX_STRING_SIZE;
     for (uint32_t i = 0; i < numEncodes; i++)
     {
         if (fgets(line, sizeof(line), abrConfig) == NULL) {
@@ -168,7 +171,6 @@ static bool parseAbrConfig(FILE* abrConfig, CLIOptions cliopt[], uint8_t numEnco
         char* start = strchr(argLine, ' ');
         while (isspace((unsigned char)*start)) start++;
         int argc = 0;
-        char **argv = (char**)malloc(256 * sizeof(char *));
         // Adding a dummy string to avoid file parsing error
         argv[argc++] = (char *)"x265";
 
@@ -193,15 +195,18 @@ static bool parseAbrConfig(FILE* abrConfig, CLIOptions cliopt[], uint8_t numEnco
         }
         else
         {
-            cliopt[i].encName = strdup(head[0]);
+            snprintf(cliopt[i].encName, X265_MAX_STRING_SIZE, "%s", head[0]);
             cliopt[i].loadLevel = atoi(head[1]);
-            cliopt[i].reuseName = strdup(head[2]);
+            snprintf(cliopt[i].reuseName, X265_MAX_STRING_SIZE, "%s", head[2]);
         }
 
         char* token = strtok(start, " ");
         while (token)
         {
-            argv[argc++] = strdup(token);
+            argv[argc++] = strPool;
+            strPool += strlen(token);
+            strPoolSize -= strlen(token);
+            strcpy(argv[argc++], token);
             token = strtok(NULL, " ");
         }
         argv[argc] = NULL;
@@ -213,6 +218,7 @@ static bool parseAbrConfig(FILE* abrConfig, CLIOptions cliopt[], uint8_t numEnco
             exit(1);
         }
     }
+    X265_CHECK(strPoolSize >= 0, "string pool broken!");
     return true;
 }
 
