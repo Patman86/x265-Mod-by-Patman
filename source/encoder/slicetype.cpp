@@ -1178,6 +1178,12 @@ void Lookahead::destroy()
         delete[] m_metld;
     }
 
+    X265_FREE(m_accHistDiffRunningAvgCb[0]);
+    X265_FREE(m_accHistDiffRunningAvgCb);
+    X265_FREE(m_accHistDiffRunningAvgCr[0]);
+    X265_FREE(m_accHistDiffRunningAvgCr);
+    X265_FREE(m_accHistDiffRunningAvg[0]);
+    X265_FREE(m_accHistDiffRunningAvg);
     X265_FREE(m_scratch);
     delete [] m_tld;
     if (m_param->lookaheadThreads > 0)

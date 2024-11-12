@@ -222,6 +222,7 @@ x265_encoder *x265_encoder_open(x265_param *p)
     }
 
     encoder->m_latestParam = latestParam;
+    encoder->m_zoneParam = zoneParam;
     x265_copy_params(latestParam, param);
     if (encoder->m_aborted)
         goto fail;
