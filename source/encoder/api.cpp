@@ -993,7 +993,6 @@ void x265_free_analysis_data(x265_param *param, x265_analysis_data* analysis)
 
 void x265_cleanup(void)
 {
-    BitCost::destroy();
 }
 
 x265_picture *x265_picture_alloc()
