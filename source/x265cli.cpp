@@ -1132,7 +1132,7 @@ namespace X265_NS {
 
         rewind(zoneFile);
         char **args = (char**)alloca(256 * sizeof(char *));
-        param->rc.zones = X265_MALLOC(x265_zone, param->rc.zonefileCount);
+        param->rc.zones = x265_zone_alloc(param->rc.zonefileCount, 1);;
         for (int i = 0; i < param->rc.zonefileCount; i++)
         {
             param->rc.zones[i].startFrame = -1;
@@ -1140,7 +1140,6 @@ namespace X265_NS {
             {
                 if (*line == '#' || (strcmp(line, "\r\n") == 0))
                     continue;
-                param->rc.zones[i].zoneParam = X265_MALLOC(x265_param, 1);
                 int index = (int)strcspn(line, "\r\n");
                 line[index] = '\0';
                 argLine = line;
