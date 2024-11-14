@@ -91,10 +91,14 @@ x265_encoder *x265_encoder_open(x265_param *p)
         return NULL;
     }
 
-    Encoder* encoder = NULL;
-    x265_param* param = PARAM_NS::x265_param_alloc();
-    x265_param* latestParam = PARAM_NS::x265_param_alloc();
-    x265_param* zoneParam = PARAM_NS::x265_param_alloc();
+    Encoder* encoder = new Encoder;
+    encoder->m_paramBase[0] = PARAM_NS::x265_param_alloc();
+    encoder->m_paramBase[1] = PARAM_NS::x265_param_alloc();
+    encoder->m_paramBase[2] = PARAM_NS::x265_param_alloc();
+
+    x265_param* param = encoder->m_paramBase[0];
+    x265_param* latestParam = encoder->m_paramBase[1];
+    x265_param* zoneParam = encoder->m_paramBase[2];
 
     if(param) PARAM_NS::x265_param_default(param);
     if(latestParam) PARAM_NS::x265_param_default(latestParam);
@@ -115,8 +119,6 @@ x265_encoder *x265_encoder_open(x265_param *p)
     x265_copy_params(zoneParam, p);
     x265_log(param, X265_LOG_INFO, "HEVC encoder version %s\n", PFX(version_str));
     x265_log(param, X265_LOG_INFO, "build info %s\n", PFX(build_info_str));
-
-    encoder = new Encoder;
 
 #ifdef SVT_HEVC
 
@@ -195,18 +197,16 @@ x265_encoder *x265_encoder_open(x265_param *p)
 
     if (!param->bResetZoneConfig)
     {
-        param->rc.zones = X265_MALLOC(x265_zone, param->rc.zonefileCount);
+        // TODO: Memory pointer broken if both (p->rc.zoneCount || p->rc.zonefileCount) and (!param->bResetZoneConfig)
+        param->rc.zones = x265_zone_alloc(param->rc.zonefileCount, 1);
         for (int i = 0; i < param->rc.zonefileCount; i++)
         {
-            param->rc.zones[i].zoneParam = X265_MALLOC(x265_param, 1);
             memcpy(param->rc.zones[i].zoneParam, param, sizeof(x265_param));
             param->rc.zones[i].relativeComplexity = X265_MALLOC(double, param->reconfigWindowSize);
         }
     }
 
-    // Need free zone because follow up Memcpy will broken all of pointer
-    x265_zone_free(zoneParam);
-    memcpy(zoneParam, param, sizeof(x265_param));
+    x265_copy_params(zoneParam, param);
     for (int i = 0; i < param->rc.zonefileCount; i++)
     {
         encoder->configureZone(zoneParam, param->rc.zones[i].zoneParam);
@@ -223,7 +223,6 @@ x265_encoder *x265_encoder_open(x265_param *p)
         }
     }
 
-    encoder->m_templateParam = param;
     encoder->m_latestParam = latestParam;
     encoder->m_zoneParam = zoneParam;
     x265_copy_params(latestParam, param);

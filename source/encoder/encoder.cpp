@@ -138,7 +138,6 @@ Encoder::Encoder()
     m_outputCount = 0;
     m_param = NULL;
     m_latestParam = NULL;
-    m_templateParam = NULL;
     m_threadPool = NULL;
     m_analysisFileIn = NULL;
     m_analysisFileOut = NULL;
@@ -943,18 +942,6 @@ void Encoder::destroy()
 
     X265_FREE(m_offsetEmergency);
 
-    if (m_latestParam != NULL && m_latestParam != m_param)
-        PARAM_NS::x265_param_free(m_latestParam);
-
-    if (m_zoneParam != NULL && m_zoneParam != m_param)
-        PARAM_NS::x265_param_free(m_zoneParam);
-
-    if (m_templateParam != NULL && m_templateParam != m_param){
-        // TODO: we don't free zone here because it is overwrite into m_zoneParam in x265_encoder_open
-        m_templateParam->rc.zonefileCount = m_templateParam->rc.zoneCount = 0;
-        PARAM_NS::x265_param_free(m_templateParam);
-    }
-
     if (m_analysisFileIn)
         fclose(m_analysisFileIn);
 
@@ -987,12 +974,17 @@ void Encoder::destroy()
 #ifdef SVT_HEVC
     X265_FREE(m_svtAppData);
 #endif
+
     if (m_param)
     {
         if (m_param->csvfpt)
             fclose(m_param->csvfpt);
-        PARAM_NS::x265_param_free(m_param);
     }
+
+    // Need not check anymore since all pointer is alias to base[]
+    PARAM_NS::x265_param_free(m_paramBase[0]);
+    PARAM_NS::x265_param_free(m_paramBase[1]);
+    PARAM_NS::x265_param_free(m_paramBase[2]);
 }
 
 void Encoder::updateVbvPlan(RateControl* rc)
