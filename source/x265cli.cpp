@@ -1480,6 +1480,7 @@ namespace X265_NS {
             free(args);
             exit(1);
         }
+        free(args);
         return 1;
     }
 
