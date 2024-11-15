@@ -78,10 +78,11 @@ namespace X265_NS {
     bool AbrEncoder::allocBuffers()
     {
 #if ENABLE_MULTIVIEW
-        m_inputPicBuffer = X265_MALLOC(x265_picture**, MAX_VIEWS);
-#else
-        m_inputPicBuffer = X265_MALLOC(x265_picture**, m_numEncodes);
+        if(m_numInputViews > 1)
+            m_inputPicBuffer = X265_MALLOC(x265_picture**, MAX_VIEWS);
+        else
 #endif
+            m_inputPicBuffer = X265_MALLOC(x265_picture**, m_numEncodes);
         m_analysisBuffer = X265_MALLOC(x265_analysis_data*, m_numEncodes);
 
         m_picWriteCnt = new ThreadSafeInteger[m_numEncodes];
@@ -145,17 +146,42 @@ namespace X265_NS {
     {
         x265_cleanup(); /* Free library singletons */
 #if ENABLE_MULTIVIEW
-        for (uint8_t pass = 0; pass < m_numInputViews; pass++)
+        if(m_numInputViews > 1)
         {
-            for (uint32_t index = 0; index < m_queueSize; index++)
+            for (uint8_t pass = 0; pass < m_numInputViews; pass++)
             {
-                X265_FREE(m_inputPicBuffer[pass][index]->planes[0]);
-                x265_picture_free(m_inputPicBuffer[pass][index]);
-            }
-            X265_FREE(m_inputPicBuffer[pass]);
+                for (uint32_t index = 0; index < m_queueSize; index++)
+                {
+                    X265_FREE(m_inputPicBuffer[pass][index]->planes[0]);
+                    x265_picture_free(m_inputPicBuffer[pass][index]);
+                }
+                X265_FREE(m_inputPicBuffer[pass]);
 
-            if (pass == 0)
+                if (pass == 0)
+                {
+                    X265_FREE(m_analysisBuffer[pass]);
+                    X265_FREE(m_readFlag[pass]);
+                    delete[] m_picIdxReadCnt[pass];
+                    delete[] m_analysisWrite[pass];
+                    delete[] m_analysisRead[pass];
+                    m_passEnc[pass]->destroy();
+                    delete m_passEnc[pass];
+                }
+            }
+        }
+        else
+        {
+#endif
+            for (uint8_t pass = 0; pass < m_numEncodes; pass++)
             {
+                for (uint32_t index = 0; index < m_queueSize; index++)
+                {
+                    X265_FREE(m_inputPicBuffer[pass][index]->planes[0]);
+                    x265_picture_free(m_inputPicBuffer[pass][index]);
+                    X265_FREE(m_analysisBuffer[pass][index].wt);
+                }
+                X265_FREE(m_inputPicBuffer[pass]);
+
                 X265_FREE(m_analysisBuffer[pass]);
                 X265_FREE(m_readFlag[pass]);
                 delete[] m_picIdxReadCnt[pass];
@@ -164,25 +190,7 @@ namespace X265_NS {
                 m_passEnc[pass]->destroy();
                 delete m_passEnc[pass];
             }
-        }
-#else
-        for (uint8_t pass = 0; pass < m_numEncodes; pass++)
-        {
-            for (uint32_t index = 0; index < m_queueSize; index++)
-            {
-                X265_FREE(m_inputPicBuffer[pass][index]->planes[0]);
-                x265_picture_free(m_inputPicBuffer[pass][index]);
-                X265_FREE(m_analysisBuffer[pass][index].wt);
-            }
-            X265_FREE(m_inputPicBuffer[pass]);
-
-            X265_FREE(m_analysisBuffer[pass]);
-            X265_FREE(m_readFlag[pass]);
-            delete[] m_picIdxReadCnt[pass];
-            delete[] m_analysisWrite[pass];
-            delete[] m_analysisRead[pass];
-            m_passEnc[pass]->destroy();
-            delete m_passEnc[pass];
+#if ENABLE_MULTIVIEW
         }
 #endif
         X265_FREE(m_inputPicBuffer);
@@ -1158,7 +1166,7 @@ ret:
 
             for (int view = 0; view < m_parentEnc->m_param->numViews - !!m_parentEnc->m_param->format; view++)
             {
-                x265_picture* dest = m_parentEnc->m_parent->m_inputPicBuffer[view][writeIdx];
+                x265_picture* dest = (m_parentEnc->m_param->numViews > 1) ? m_parentEnc->m_parent->m_inputPicBuffer[view][writeIdx] : m_parentEnc->m_parent->m_inputPicBuffer[m_id][writeIdx];
                 src->format = m_parentEnc->m_param->format;
                 if (m_input[view]->readPicture(*src))
                 {
