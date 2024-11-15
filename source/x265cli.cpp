@@ -447,12 +447,10 @@ namespace X265_NS {
 
     void CLIOptions::destroy()
     {
-        if (isAbrLadderConfig)
-        {
-            for (int idx = 1; idx < argCnt; idx++)
-                free(argString[idx]);
+        if(argString && argString != orgArgv)
             free(argString);
-        }
+        if (stringPool)
+            free(stringPool);
 
         for (int i = 0; i < MAX_VIEWS; i++)
         {
@@ -637,7 +635,6 @@ namespace X265_NS {
         const char *profile = NULL;
         int svtEnabled = 0;
         argCnt = argc;
-        argString = argv;
 
         if (argc <= 1)
         {

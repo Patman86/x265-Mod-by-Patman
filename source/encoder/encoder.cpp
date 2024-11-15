@@ -2361,6 +2361,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             if (strlen(m_param->analysisSave) && !strlen(m_param->analysisLoad))
             {
                 x265_analysis_data* analysis = &frameEnc[0]->m_analysisData;
+                memset(analysis, 0, sizeof(x265_analysis_data));
                 analysis->poc = frameEnc[0]->m_poc;
                 analysis->sliceType = frameEnc[0]->m_lowres.sliceType;
                 uint32_t widthInCU       = (m_param->sourceWidth  + m_param->maxCUSize - 1) >> m_param->maxLog2CUSize;

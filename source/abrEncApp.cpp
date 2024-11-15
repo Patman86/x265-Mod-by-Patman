@@ -172,6 +172,7 @@ namespace X265_NS {
             {
                 X265_FREE(m_inputPicBuffer[pass][index]->planes[0]);
                 x265_picture_free(m_inputPicBuffer[pass][index]);
+                X265_FREE(m_analysisBuffer[pass][index].wt);
             }
             X265_FREE(m_inputPicBuffer[pass]);
 
@@ -388,6 +389,7 @@ namespace X265_NS {
 
         x265_free_analysis_data(m_param, m_analysisInfo);
         memcpy(m_analysisInfo, src, sizeof(x265_analysis_data));
+        m_analysisInfo->wt = NULL;
         x265_alloc_analysis_data(m_param, m_analysisInfo);
 
         bool isVbv = m_param->rc.vbvBufferSize && m_param->rc.vbvMaxBitrate;
