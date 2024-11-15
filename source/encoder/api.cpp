@@ -933,7 +933,7 @@ void x265_free_analysis_data(x265_param *param, x265_analysis_data* analysis)
 
     /* Early exit freeing weights alone if level is 1 (when there is no analysis inter/intra) */
     if (!isMultiPassOpt && analysis->wt && !(param->bAnalysisType == AVC_INFO))
-        X265_FREE(analysis->wt);
+        X265_FREE_ZERO(analysis->wt);
 
     //Free memory for intraData pointers
     if (analysis->intraData)

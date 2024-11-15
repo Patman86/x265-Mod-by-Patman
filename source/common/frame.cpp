@@ -132,7 +132,7 @@ bool Frame::create(x265_param *param, float* quantOffsets)
         }
     }
 
-    if (param->bAnalysisType == AVC_INFO)
+    //if (param->bAnalysisType == AVC_INFO)
     {
         m_analysisData.wt = NULL;
         m_analysisData.intraData = NULL;
