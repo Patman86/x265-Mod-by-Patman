@@ -321,6 +321,7 @@ void Frame::destroy()
         }
 
         delete m_mcstf->m_metld;
+        m_mcstf->m_metld = NULL;
         for (int i = 0; i < (m_mcstf->m_range << 1); i++)
             m_mcstf->destroyRefPicInfo(&m_mcstfRefList[i]);
 
