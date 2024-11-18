@@ -4036,7 +4036,7 @@ void Encoder::configure(x265_param *p)
     if (strlen(p->analysisLoad) && !p->analysisLoadReuseLevel)
         p->analysisLoadReuseLevel = 5;
 
-    if ((strlen(p->analysisLoad) || p->analysisSave) && (p->bDistributeModeAnalysis || p->bDistributeMotionEstimation))
+    if ((strlen(p->analysisLoad) || strlen(p->analysisSave)) && (p->bDistributeModeAnalysis || p->bDistributeMotionEstimation))
     {
         x265_log(p, X265_LOG_WARNING, "Analysis load/save options incompatible with pmode/pme, Disabling pmode/pme\n");
         p->bDistributeMotionEstimation = p->bDistributeModeAnalysis = 0;
