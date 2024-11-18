@@ -784,6 +784,16 @@ namespace X265_NS {
                     if (!this->qpfile)
                         x265_log_file(param, X265_LOG_ERROR, "%s qpfile not found or error in opening qp file\n", optarg);
                 }
+                OPT("pme")
+                {
+                    x265_log_file(param, X265_LOG_ERROR, " pme feature is deprecated from release 4.1 \n", optarg);
+                    return true;
+                }
+                OPT("pmode")
+                {
+                    x265_log_file(param, X265_LOG_ERROR, " pmode feature is deprecated from release 4.1 \n", optarg);
+                    return true;
+                }
                 OPT("dolby-vision-rpu")
                 {
                     this->dolbyVisionRpu = x265_fopen(optarg, "rb");

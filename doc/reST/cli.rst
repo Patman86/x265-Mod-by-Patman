@@ -301,8 +301,8 @@ Performance Options
 	in the system doesn't obey this constraint, we may spawn fewer threads
 	than cores which has been empirically shown to be better for performance. 
 
-	If the four pool features: :option:`--wpp`, :option:`--pmode`,
-	:option:`--pme` and :option:`--lookahead-slices` are all disabled,
+	If the four pool features: :option:`--wpp`, :option:`--pmode(deprecated)`,
+	:option:`--pme(deprecated)` and :option:`--lookahead-slices` are all disabled,
 	then :option:`--pools` is ignored and no thread pools are created.
 
 	If "none" is specified, then all four of the thread pool features are
@@ -344,7 +344,7 @@ Performance Options
 
 	Default: Enabled
 
-.. option:: --pmode, --no-pmode
+.. option:: --pmode, --no-pmode ( deprecated from release 4.1 )
 
 	Parallel mode decision, or distributed mode analysis. When enabled
 	the encoder will distribute the analysis work of each CU (merge,
@@ -354,31 +354,31 @@ Performance Options
 	6 there is generally always enough work to distribute to warrant the
 	overhead, assuming your CPUs are not already saturated.
 	
-	--pmode will increase utilization without reducing compression
+	--pmode(deprecated) will increase utilization without reducing compression
 	efficiency. In fact, since the modes are all measured in parallel it
 	makes certain early-outs impractical and thus you usually get
 	slightly better compression when it is enabled (at the expense of
 	not skipping improbable modes). This bypassing of early-outs can
-	cause pmode to slow down encodes, especially at faster presets.
+	cause pmode(deprecated) to slow down encodes, especially at faster presets.
 
 	This feature is implicitly disabled when no thread pool is present.
 
 	Default disabled
 
-.. option:: --pme, --no-pme
+.. option:: --pme, --no-pme ( deprecated from release 4.1 )
 
 	Parallel motion estimation. When enabled the encoder will distribute
 	motion estimation across multiple worker threads when more than two
 	references require motion searches for a given CU. Only recommended
-	if x265 is not already saturating CPU cores. :option:`--pmode` is
+	if x265 is not already saturating CPU cores. :option:`--pmode(deprecated)` is
 	much more effective than this option, since the amount of work it
-	distributes is substantially higher. With --pme it is not unusual
+	distributes is substantially higher. With --pme(deprecated) it is not unusual
 	for the overhead of distributing the work to outweigh the
 	parallelism benefits.
 	
 	This feature is implicitly disabled when no thread pool is present.
 
-	--pme will increase utilization on many core systems with no effect
+	--pme(deprecated) will increase utilization on many core systems with no effect
 	on the output bitstream.
 	
 	Default disabled
@@ -932,14 +932,14 @@ will not reuse analysis if slice type parameters do not match.
 .. option:: --analysis-save <filename>
 
 	Encoder outputs analysis information of each frame. Analysis data from save mode is
-	written to the file specified. Requires cutree, pmode to be off. Default disabled.
+	written to the file specified. Requires cutree, pmode(deprecated) to be off. Default disabled.
 	
 	The amount of analysis data stored is determined by :option:`--analysis-save-reuse-level`.
 	
 .. option:: --analysis-load <filename>
 
 	Encoder reuses analysis information from the file specified. By reading the analysis data written by
-	an earlier encode of the same sequence, substantial redundant work may be avoided. Requires cutree, pmode
+	an earlier encode of the same sequence, substantial redundant work may be avoided. Requires cutree, pmode(deprecated)
 	to be off. Default disabled.
 
 	The amount of analysis data reused is determined by :option:`--analysis-load-reuse-level`.
@@ -1845,8 +1845,8 @@ Quality, rate control and rate distortion options
 	In pass 1 analysis information like motion vector, depth, reference and prediction
 	modes of the final best CTU partition is stored for each CTU.
 	Multipass analysis refinement cannot be enabled when :option:`--analysis-save`/:option:`--analysis-load`
-	is enabled and both will be disabled when enabled together. This feature requires :option:`--pmode`/:option:`--pme`
-	to be disabled and hence pmode/pme will be disabled when enabled at the same time.
+	is enabled and both will be disabled when enabled together. This feature requires :option:`--pmode(deprecated)`/:option:`--pme(deprecated)`
+	to be disabled and hence pmode/pme(deprecated) will be disabled when enabled at the same time.
 
 	Default: disabled.
 
@@ -1857,8 +1857,8 @@ Quality, rate control and rate distortion options
 	distortion get lower(negative)qp offsets and vice-versa for low distortion CTUs in pass 2.
 	This helps to improve the subjective quality.
 	Multipass refinement of qp cannot be enabled when :option:`--analysis-save`/:option:`--analysis-load`
-	is enabled and both will be disabled when enabled together. It requires :option:`--pmode`/:option:`--pme` to be
-	disabled and hence pmode/pme will be disabled when enabled along with it.
+	is enabled and both will be disabled when enabled together. It requires :option:`--pmode`(deprecated)/:option:`--pme(deprecated)` to be
+	disabled and hence pmode/pme(deprecated) will be disabled when enabled along with it.
 
 	Default: disabled.
 
