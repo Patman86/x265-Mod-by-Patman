@@ -51,6 +51,7 @@ namespace X265_NS {
         m_numActiveEncodes.set(numEncodes);
         m_queueSize = (numEncodes > 1) ? X265_INPUT_QUEUE_SIZE : 1;
         m_passEnc = X265_MALLOC(PassEncoder*, m_numEncodes);
+        m_param = X265_MALLOC(x265_param, m_numEncodes);
 
         for (uint8_t i = 0; i < m_numEncodes; i++)
         {
@@ -178,7 +179,7 @@ namespace X265_NS {
                 {
                     X265_FREE(m_inputPicBuffer[pass][index]->planes[0]);
                     x265_picture_free(m_inputPicBuffer[pass][index]);
-                    X265_FREE(m_analysisBuffer[pass][index].wt);
+                    x265_free_analysis_data(&m_param[pass], &m_analysisBuffer[pass][index]);
                 }
                 X265_FREE(m_inputPicBuffer[pass]);
 
@@ -207,6 +208,7 @@ namespace X265_NS {
         X265_FREE(m_analysisRead);
 
         X265_FREE(m_passEnc);
+        X265_FREE_ZERO(m_param);
     }
 
     PassEncoder::PassEncoder(uint32_t id, CLIOptions cliopt, AbrEncoder *parent)
@@ -588,6 +590,7 @@ ret:
 #if ENABLE_LIBVMAF
             x265_vmaf_data* vmafdata = m_cliopt.vmafData;
 #endif
+            memcpy(&m_parent->m_param[m_id], m_param, sizeof(x265_param));
             /* This allows muxers to modify bitstream format */
             m_cliopt.output->setParam(m_param);
             const x265_api* api = m_cliopt.api;

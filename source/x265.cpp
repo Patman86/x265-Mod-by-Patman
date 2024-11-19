@@ -154,13 +154,14 @@ static bool parseAbrConfig(FILE* abrConfig, CLIOptions cliopt[], uint8_t numEnco
     char line[1024];
     char* argLine;
 
-    char **argv = (char**)malloc(256 * sizeof(char *));
     char *strPool = (char*)malloc(256 * X265_MAX_STRING_SIZE * sizeof(char));
     int strPoolSize = 256 * X265_MAX_STRING_SIZE;
     for (uint32_t i = 0; i < numEncodes; i++)
     {
+        char **argv = (char**)malloc(256 * sizeof(char *));
         cliopt[i].stringPool = (i == 0 ? strPool : NULL);
-        cliopt[i].argString = (i == 0 ? argv : NULL);
+        cliopt[i].argString = argv;
+        cliopt[i].orgArgv = NULL;
         if (fgets(line, sizeof(line), abrConfig) == NULL) {
             fprintf(stderr, "Error reading line from configuration file.\n");
             return false;
