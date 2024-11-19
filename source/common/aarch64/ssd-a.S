@@ -3,6 +3,7 @@
  *
  * Authors: Sebastian Pop <spop@amazon.com>
  *          Hari Limaye <hari.limaye@arm.com>
+ *          Gerda Zsejke More <gerdazsejke.more@arm.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -35,6 +36,7 @@
 
 .text
 
+#if !HIGH_BIT_DEPTH
 // Fully unrolled.
 .macro SSE_PP_4xN h
 function PFX(pixel_sse_pp_4x\h\()_neon)
@@ -403,3 +405,204 @@ function PFX(pixel_ssd_s_32x32_neon)
     add             v0.4s, v0.4s, v1.4s
     ret_v0_w0
 endfunc
+
+#else // HIGH_BIT_DEPTH
+
+.macro SSE_PP_4x2
+    ldr             d16, [x0]
+    ldr             d17, [x2]
+    ldr             d18, [x0, x1]
+    ldr             d19, [x2, x3]
+    uabd            v2.4h, v16.4h, v17.4h
+    uabd            v3.4h, v18.4h, v19.4h
+    umlal           v0.4s, v2.4h, v2.4h
+    umlal           v0.4s, v3.4h, v3.4h
+.endm
+
+.macro SSE_PP_4xN h
+function PFX(pixel_sse_pp_4x\h\()_neon)
+    movi            v0.4s, #0
+    add             x1, x1, x1
+    add             x3, x3, x3
+
+.rept (\h / 2) - 1
+    SSE_PP_4x2
+    add             x0, x0, x1, lsl #1
+    add             x2, x2, x3, lsl #1
+.endr
+    SSE_PP_4x2
+
+    ret_v0_w0
+endfunc
+.endm
+
+SSE_PP_4xN 4
+SSE_PP_4xN 8
+
+.macro SSE_PP_8xN h
+function PFX(pixel_sse_pp_8x\h\()_neon)
+    movi            v0.4s, #0
+    movi            v1.4s, #0
+    add             x1, x1, x1
+    add             x3, x3, x3
+.rept \h
+    ld1             {v16.8h}, [x0], x1
+    ld1             {v17.8h}, [x2], x3
+    uabd            v2.8h, v16.8h, v17.8h
+    umlal           v0.4s, v2.4h, v2.4h
+    umlal2          v1.4s, v2.8h, v2.8h
+.endr
+    add             v0.4s, v0.4s, v1.4s
+
+    ret_v0_w0
+endfunc
+.endm
+
+SSE_PP_8xN 8
+SSE_PP_8xN 16
+
+.macro SSE_PP_16xN h
+function PFX(pixel_sse_pp_16x\h\()_neon)
+    movi            v0.4s, #0
+    movi            v1.4s, #0
+    add             x1, x1, x1
+    add             x3, x3, x3
+.rept \h
+    ld1             {v16.8h-v17.8h}, [x0], x1
+    ld1             {v18.8h-v19.8h}, [x2], x3
+    uabd            v2.8h, v16.8h, v18.8h
+    umlal           v0.4s, v2.4h, v2.4h
+    umlal2          v1.4s, v2.8h, v2.8h
+    uabd            v3.8h, v17.8h, v19.8h
+    umlal           v0.4s, v3.4h, v3.4h
+    umlal2          v1.4s, v3.8h, v3.8h
+.endr
+
+.if \h == 16
+    add             v0.4s, v0.4s, v1.4s
+    addv            s0, v0.4s
+    fmov            w0, s0
+.else
+    uaddlv          d0, v0.4s
+    uaddlv          d1, v1.4s
+    add             d0, d0, d1
+    fmov            x0, d0
+.endif
+
+    ret
+endfunc
+.endm
+
+SSE_PP_16xN 16
+SSE_PP_16xN 32
+
+.macro SSE_PP_32xN h
+function  PFX(pixel_sse_pp_32x\h\()_neon)
+    movi            v0.4s, #0
+    movi            v1.4s, #0
+    add             x1, x1, x1
+    add             x3, x3, x3
+
+    mov             w12, \h
+.Loop_sse_pp_32x\h:
+    sub             w12, w12, #1
+
+    ld1             {v16.8h-v17.8h}, [x0]
+    ld1             {v20.8h-v21.8h}, [x2]
+    uabd            v2.8h, v16.8h, v20.8h
+    umlal           v0.4s, v2.4h, v2.4h
+    umlal2          v1.4s, v2.8h, v2.8h
+    uabd            v3.8h, v17.8h, v21.8h
+    umlal           v0.4s, v3.4h, v3.4h
+    umlal2          v1.4s, v3.8h, v3.8h
+
+    ldp             q18, q19, [x0, #32]
+    ldp             q22, q23, [x2, #32]
+    uabd            v2.8h, v18.8h, v22.8h
+    umlal           v0.4s, v2.4h, v2.4h
+    umlal2          v1.4s, v2.8h, v2.8h
+    uabd            v3.8h, v19.8h, v23.8h
+    umlal           v0.4s, v3.4h, v3.4h
+    umlal2          v1.4s, v3.8h, v3.8h
+
+    add             x0, x0, x1
+    add             x2, x2, x3
+    cbnz            w12, .Loop_sse_pp_32x\h
+
+    uaddlv          d0, v0.4s
+    uaddlv          d1, v1.4s
+    add             d0, d0, d1
+    fmov            x0, d0
+    ret
+endfunc
+.endm
+
+SSE_PP_32xN 32
+SSE_PP_32xN 64
+
+function PFX(pixel_sse_pp_64x64_neon)
+    mov             w12, #64
+
+    movi            v0.4s, #0
+    movi            v1.4s, #0
+    movi            v2.4s, #0
+    movi            v3.4s, #0
+
+    add             x1, x1, x1
+    add             x3, x3, x3
+.Loop_sse_pp_64x1:
+    sub             w12, w12, #1
+
+    ld1             {v16.8h-v17.8h}, [x0]
+    ld1             {v20.8h-v21.8h}, [x2]
+    uabd            v4.8h, v16.8h, v20.8h
+    umlal           v0.4s, v4.4h, v4.4h
+    umlal2          v1.4s, v4.8h, v4.8h
+    uabd            v5.8h, v17.8h, v21.8h
+    umlal           v0.4s, v5.4h, v5.4h
+    umlal2          v1.4s, v5.8h, v5.8h
+
+    ldp             q18, q19, [x0, #32]
+    ldp             q22, q23, [x2, #32]
+    uabd            v6.8h, v18.8h, v22.8h
+    umlal           v2.4s, v6.4h, v6.4h
+    umlal2          v3.4s, v6.8h, v6.8h
+    uabd            v7.8h, v19.8h, v23.8h
+    umlal           v2.4s, v7.4h, v7.4h
+    umlal2          v3.4s, v7.8h, v7.8h
+
+    ldp             q16, q17, [x0, #64]
+    ldp             q20, q21, [x2, #64]
+    uabd            v4.8h, v16.8h, v20.8h
+    umlal           v0.4s, v4.4h, v4.4h
+    umlal2          v1.4s, v4.8h, v4.8h
+    uabd            v5.8h, v17.8h, v21.8h
+    umlal           v0.4s, v5.4h, v5.4h
+    umlal2          v1.4s, v5.8h, v5.8h
+
+    ldp             q18, q19, [x0, #96]
+    ldp             q22, q23, [x2, #96]
+    uabd            v6.8h, v18.8h, v22.8h
+    umlal           v2.4s, v6.4h, v6.4h
+    umlal2          v3.4s, v6.8h, v6.8h
+    uabd            v7.8h, v19.8h, v23.8h
+    umlal           v2.4s, v7.4h, v7.4h
+    umlal2          v3.4s, v7.8h, v7.8h
+
+    add             x0, x0, x1
+    add             x2, x2, x3
+    cbnz            w12, .Loop_sse_pp_64x1
+
+    uaddlv          d0, v0.4s
+    uaddlv          d1, v1.4s
+    add             d0, d0, d1
+    uaddlv          d2, v2.4s
+    uaddlv          d3, v3.4s
+    add             d2, d2, d3
+
+    add             d0, d0, d2
+    fmov            x0, d0
+    ret
+endfunc
+
+#endif // !HIGH_BIT_DEPTH

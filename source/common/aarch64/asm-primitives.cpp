@@ -529,19 +529,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     ALL_LUMA_PU(sad_x3, sad_x3, neon);
     ALL_LUMA_PU(sad_x4, sad_x4, neon);
 
-#if !HIGH_BIT_DEPTH
-    // pixel_avg_pp
-    ALL_LUMA_PU(pixelavg_pp[NONALIGNED], pixel_avg_pp, neon);
-    ALL_LUMA_PU(pixelavg_pp[ALIGNED], pixel_avg_pp, neon);
-
-    // addAvg
-    ALL_LUMA_PU(addAvg[NONALIGNED], addAvg, neon);
-    ALL_LUMA_PU(addAvg[ALIGNED], addAvg, neon);
-    ALL_CHROMA_420_PU(addAvg[NONALIGNED], addAvg, neon);
-    ALL_CHROMA_422_PU(addAvg[NONALIGNED], addAvg, neon);
-    ALL_CHROMA_420_PU(addAvg[ALIGNED], addAvg, neon);
-    ALL_CHROMA_422_PU(addAvg[ALIGNED], addAvg, neon);
-
     // sse_pp
     p.cu[BLOCK_4x4].sse_pp   = PFX(pixel_sse_pp_4x4_neon);
     p.cu[BLOCK_8x8].sse_pp   = PFX(pixel_sse_pp_8x8_neon);
@@ -557,6 +544,19 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sse_pp  = PFX(pixel_sse_pp_8x16_neon);
     p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].sse_pp = PFX(pixel_sse_pp_16x32_neon);
     p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].sse_pp = PFX(pixel_sse_pp_32x64_neon);
+
+#if !HIGH_BIT_DEPTH
+    // pixel_avg_pp
+    ALL_LUMA_PU(pixelavg_pp[NONALIGNED], pixel_avg_pp, neon);
+    ALL_LUMA_PU(pixelavg_pp[ALIGNED], pixel_avg_pp, neon);
+
+    // addAvg
+    ALL_LUMA_PU(addAvg[NONALIGNED], addAvg, neon);
+    ALL_LUMA_PU(addAvg[ALIGNED], addAvg, neon);
+    ALL_CHROMA_420_PU(addAvg[NONALIGNED], addAvg, neon);
+    ALL_CHROMA_422_PU(addAvg[NONALIGNED], addAvg, neon);
+    ALL_CHROMA_420_PU(addAvg[ALIGNED], addAvg, neon);
+    ALL_CHROMA_422_PU(addAvg[ALIGNED], addAvg, neon);
 
     // sse_ss
     p.cu[BLOCK_4x4].sse_ss   = PFX(pixel_sse_ss_4x4_neon);
