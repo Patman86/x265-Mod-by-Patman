@@ -1906,7 +1906,7 @@ int x265_check_params(x265_param* param)
         CHECK((param->internalBitDepth != 10), "Dolby Vision profile - 5, profile - 8.1, profile - 8.2 and profile - 8.4 are Main10 only\n");
         CHECK((param->internalCsp != X265_CSP_I420), "Dolby Vision profile - 5, profile - 8.1, profile - 8.2 and profile - 8.4 requires YCbCr 4:2:0 color space\n");
         if (param->dolbyProfile == 81)
-            CHECK(!(param->masteringDisplayColorVolume), "Dolby Vision profile - 8.1 requires Mastering display color volume information\n");
+            CHECK(param->masteringDisplayColorVolume[0] == 0, "Dolby Vision profile - 8.1 requires Mastering display color volume information\n");
     }
     if (param->bField && param->interlaceMode)
     {
@@ -2970,7 +2970,7 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->bSingleSeiNal = src->bSingleSeiNal;
     dst->chunkStart = src->chunkStart;
     dst->chunkEnd = src->chunkEnd;
-    if (src->naluFile) snprintf(dst->naluFile, X265_MAX_STRING_SIZE, "%s", src->naluFile);
+    if (src->naluFile[0]) snprintf(dst->naluFile, X265_MAX_STRING_SIZE, "%s", src->naluFile);
     else dst->naluFile[0] = 0;
     dst->scaleFactor = src->scaleFactor;
     dst->ctuDistortionRefine = src->ctuDistortionRefine;

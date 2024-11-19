@@ -594,7 +594,7 @@ ret:
             ReconPlay* reconPlay = NULL;
             if (m_cliopt.reconPlayCmd)
                 reconPlay = new ReconPlay(m_cliopt.reconPlayCmd, *m_param);
-            char* profileName = m_cliopt.encName ? m_cliopt.encName : (char *)"x265";
+            char* profileName = m_cliopt.encName[0] ? m_cliopt.encName : (char *)"x265";
 
             if (signal(SIGINT, sigint_handler) == SIG_ERR)
                 x265_log(m_param, X265_LOG_ERROR, "Unable to register CTRL+C handler: %s in %s\n",
