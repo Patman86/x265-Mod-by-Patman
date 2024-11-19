@@ -3602,6 +3602,7 @@ void Encoder::initSPS(SPS *sps)
 #if ENABLE_MULTIVIEW
     sps->setSpsExtOrMaxSubLayersMinus1 = sps->maxTempSubLayers - 1;
     sps->maxViews = m_param->numViews;
+    sps->spsInferScalingListFlag = 0;
     if (m_param->numViews > 1)
     {
         sps->sps_extension_flag = true;

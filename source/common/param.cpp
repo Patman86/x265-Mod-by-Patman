@@ -1515,8 +1515,6 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("scc")
         {
             p->bEnableSCC = atoi(value);
-            if (p->bEnableSCC)
-                p->bEnableWeightedPred = false;
         }
 #endif
         OPT("frame-rc") p->bConfigRCFrame = atobool(value);
@@ -2007,6 +2005,7 @@ int x265_check_params(x265_param* param)
         CHECK(param->internalBitDepth != 8, "BitDepthConstraint must be 8 for Multiview main profile");
         CHECK(param->analysisMultiPassDistortion || param->analysisMultiPassRefine, "Multiview encode doesnot support multipass feature");
         CHECK(strlen(param->analysisSave) || strlen(param->analysisLoad), "Multiview encode doesnot support analysis save and load feature");
+        CHECK(param->isAbrLadderEnable, "Multiview encode and Abr-Ladder feature can't be enabled together");
     }
 #endif
 #if ENABLE_SCC_EXT
@@ -3025,6 +3024,7 @@ void x265_copy_params(x265_param* dst, x265_param* src)
         dst->aomFilmGrain = src->aomFilmGrain;
     dst->bEnableSBRC = src->bEnableSBRC;
     dst->bConfigRCFrame = src->bConfigRCFrame;
+    dst->isAbrLadderEnable = src->isAbrLadderEnable;
 }
 
 #ifdef SVT_HEVC
