@@ -526,7 +526,7 @@ void FrameEncoder::compressFrame(int layer)
     bool bUseWeightB = slice->m_sliceType == B_SLICE && slice->m_pps->bUseWeightedBiPred && !layer;
 
     WeightParam* reuseWP = NULL;
-    if (m_param->analysisLoad && (bUseWeightP || bUseWeightB))
+    if (m_param->analysisLoad[0] && (bUseWeightP || bUseWeightB))
         reuseWP = (WeightParam*)m_frame[layer]->m_analysisData.wt;
 
     if (bUseWeightP || bUseWeightB)

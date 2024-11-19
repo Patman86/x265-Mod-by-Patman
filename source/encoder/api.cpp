@@ -817,7 +817,7 @@ void x265_alloc_analysis_data(x265_param *param, x265_analysis_data* analysis)
         //Allocate memory for distortionData pointer
         CHECKED_MALLOC_ZERO(distortionData, x265_analysis_distortion_data, 1);
         CHECKED_MALLOC_ZERO(distortionData->ctuDistortion, sse_t, analysis->numPartitions * numCUs_sse_t);
-        if (param->analysisLoad || param->rc.bStatRead)
+        if (param->analysisLoad[0] || param->rc.bStatRead)
         {
             CHECKED_MALLOC_ZERO(distortionData->scaledDistortion, double, analysis->numCUsInFrame);
             CHECKED_MALLOC_ZERO(distortionData->offset, double, analysis->numCUsInFrame);
@@ -922,7 +922,7 @@ void x265_free_analysis_data(x265_param *param, x265_analysis_data* analysis)
     if (analysis->distortionData)
     {
         X265_FREE((analysis->distortionData)->ctuDistortion);
-        if (param->rc.bStatRead || param->analysisLoad)
+        if (param->rc.bStatRead || param->analysisLoad[0])
         {
             X265_FREE((analysis->distortionData)->scaledDistortion);
             X265_FREE((analysis->distortionData)->offset);
