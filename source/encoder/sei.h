@@ -469,15 +469,15 @@ public:
             {
                 for (int k = 0; k <= 2; k++)  /* column */
                 {
-                    temp_sign_r[j][k] = sign_r[j][k];
-                    temp_exponent_r[j][k] = exponent_r[j][k];
-                    temp_mantissa_r[j][k] = mantissa_r[j][k];
-                    temp_length_mantissa_r[j][k] = length_mantissa_r[j][k];
+                    sign_r[j][k] = temp_sign_r[j][k];
+                    exponent_r[j][k] = temp_exponent_r[j][k];
+                    mantissa_r[j][k] = temp_mantissa_r[j][k];
+                    length_mantissa_r[j][k] = temp_length_mantissa_r[j][k];
                 }
-                temp_sign_t[i][j] = sign_t[i][j];
-                temp_exponent_t[i][j] = exponent_t[i][j];
-                temp_mantissa_t[i][j] = mantissa_t[i][j];
-                temp_length_mantissa_t[i][j] = length_mantissa_t[i][j];
+                sign_t[i][j] = temp_sign_t[i][j];
+                exponent_t[i][j] = temp_exponent_t[i][j];
+                mantissa_t[i][j] = temp_mantissa_t[i][j];
+                length_mantissa_t[i][j] = temp_length_mantissa_t[i][j];
             }
         }
     }

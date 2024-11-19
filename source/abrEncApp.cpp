@@ -63,7 +63,7 @@ namespace X265_NS {
             m_passEnc[i]->init(ret);
         }
 
-        m_numInputViews = m_passEnc[0]->m_param->numViews - !!m_passEnc[0]->m_param->format;
+        m_numInputViews = (m_passEnc[0]->m_param->numViews > 1) ? m_passEnc[0]->m_param->numViews - !!m_passEnc[0]->m_param->format : 0;
         if (!allocBuffers())
         {
             x265_log(NULL, X265_LOG_ERROR, "Unable to allocate memory for buffers\n");
@@ -146,7 +146,7 @@ namespace X265_NS {
     {
         x265_cleanup(); /* Free library singletons */
 #if ENABLE_MULTIVIEW
-        if(m_numInputViews > 1)
+        if(m_numInputViews != 0)
         {
             for (uint8_t pass = 0; pass < m_numInputViews; pass++)
             {
@@ -252,7 +252,7 @@ namespace X265_NS {
                 }
             }
         }
-
+        m_param->isAbrLadderEnable = m_parent->m_numEncodes > 1;
         if (m_cliopt.zoneFile)
         {
             if (!m_cliopt.parseZoneFile())
