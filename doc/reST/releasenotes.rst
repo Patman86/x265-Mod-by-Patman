@@ -2,6 +2,44 @@
 Release Notes
 *************
 
+Version 4.1
+===========
+
+Release date - 22nd November, 2024.
+
+New feature
+-----------
+1. Aom Film-Grain characteristics as a SEI message to support Film Grain Synthesis.
+
+API changes
+-----------
+1. API Support to enable VBV end feature.
+2. Reverted the 4.0 api changes.
+3. Added command line parameters for Aom film grain characteristics as a SEI message to the bitstream (--aom-film-grain).
+4. Added support to configure Bitrate, CRF, and QP at frame level, along with CLI support for frame-level RC configuration (--frame-rc)
+5. Declared few params(numapools, csvfn, scalingLists etc) with fixed size to fix memory leaks
+
+Optimizations
+-------------
+1. Eliminated redundant pointer copies in lowresMC and lowresQPelCost, improving encoding performance by up to 0.9% on modern CPUs.
+2. Mcstf optimization - Improved mcstf performance by moving mcstf computation to lookahead and search range optimization.
+
+Bug fixes
+---------
+1. mcstf crash when using multiple frame threads.
+2. CLI parsing for MV-HEVC Encode.
+3. segfault and decoder crash in scc.
+4. compilation issue in clang.
+5. potential stack buffer overflow issues.
+6. documentation for b-intra, max-merge, limit-refs and qg-size
+7. memory leak fixes for sei, zones, sao, hme, vbv, sbrc, mcstf, alpha, multiview, scc, two pass, rskip, film grain, aq-mode, scaling_list, fades, analysis save and load etc
+
+Known issues
+------------
+1. Inconsistent output with recon option
+2. Output mismatch between analysis save & load with cutree for reuse-levels < 10
+
+
 Version 4.0
 ===========
 
