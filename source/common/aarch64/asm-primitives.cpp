@@ -856,9 +856,25 @@ void setupSvePrimitives(EncoderPrimitives &p)
     // sa8d
     p.cu[BLOCK_4x4].sa8d   = PFX(pixel_satd_4x4_sve);
     p.chroma[X265_CSP_I420].cu[BLOCK_8x8].sa8d = PFX(pixel_satd_4x4_sve);
-#endif
+#else // HIGH_BIT_DEPTH
+    // sse_pp
+    p.cu[BLOCK_4x4].sse_pp   = PFX(pixel_sse_pp_4x4_sve);
+    p.cu[BLOCK_8x8].sse_pp   = PFX(pixel_sse_pp_8x8_sve);
+    p.cu[BLOCK_16x16].sse_pp = PFX(pixel_sse_pp_16x16_sve);
+    p.cu[BLOCK_32x32].sse_pp = PFX(pixel_sse_pp_32x32_sve);
+    p.cu[BLOCK_64x64].sse_pp = PFX(pixel_sse_pp_64x64_sve);
+
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_4x4].sse_pp   = PFX(pixel_sse_pp_4x4_sve);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_8x8].sse_pp   = PFX(pixel_sse_pp_8x8_sve);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_16x16].sse_pp = PFX(pixel_sse_pp_16x16_sve);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_32x32].sse_pp = PFX(pixel_sse_pp_32x32_sve);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_4x8].sse_pp   = PFX(pixel_sse_pp_4x8_sve);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sse_pp  = PFX(pixel_sse_pp_8x16_sve);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].sse_pp = PFX(pixel_sse_pp_16x32_sve);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].sse_pp = PFX(pixel_sse_pp_32x64_sve);
+#endif // !HIGH_BIT_DEPTH
 }
-#endif
+#endif // defined(HAVE_SVE2) || defined(HAVE_SVE)
 
 #if defined(HAVE_SVE2)
 #if !HIGH_BIT_DEPTH
