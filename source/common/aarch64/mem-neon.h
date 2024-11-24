@@ -1,7 +1,8 @@
 /*****************************************************************************
- * Copyright (C) 2024 MulticoreWare, Inc
+ * Copyright (C) 2024-2025 MulticoreWare, Inc
  *
  * Authors: Hari Limaye <hari.limaye@arm.com>
+ *          Gerda Zsejke More <gerdazsejke.more@arm.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -182,6 +183,51 @@ static void inline load_s16x8xn(const int16_t *src, const intptr_t stride,
     {
         dst[i] = vld1q_s16(src);
         src += stride;
+    }
+}
+
+template<int N>
+static void inline load_u16x4xn(const uint16_t *src, const intptr_t stride,
+                                uint16x4_t *dst)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        dst[i] = vld1_u16(src);
+        src += stride;
+    }
+}
+
+template<int N>
+static void inline load_u16x8xn(const uint16_t *src, const intptr_t stride,
+                                uint16x8_t *dst)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        dst[i] = vld1q_u16(src);
+        src += stride;
+    }
+}
+
+template<int N>
+static void inline store_u16x2xn(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x4_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_lane_u32((uint32_t *)dst, vreinterpret_u32_u16(src[i]), 0);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_u16x6xn(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_u16(dst, vget_low_u16(src[i]));
+        vst1q_lane_u32((uint32_t *)(dst + 4), vreinterpretq_u32_u16(src[i]), 2);
+        dst += dst_stride;
     }
 }
 
