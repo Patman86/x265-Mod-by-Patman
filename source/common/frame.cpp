@@ -133,7 +133,7 @@ bool Frame::create(x265_param *param, float* quantOffsets)
         }
     }
 
-    if (param->bAnalysisType == AVC_INFO)
+    //if (param->bAnalysisType == AVC_INFO)
     {
         m_analysisData.wt = NULL;
         m_analysisData.intraData = NULL;
@@ -322,6 +322,7 @@ void Frame::destroy()
         }
 
         delete m_mcstf->m_metld;
+        m_mcstf->m_metld = NULL;
         for (int i = 0; i < (m_mcstf->m_range << 1); i++)
             m_mcstf->destroyRefPicInfo(&m_mcstfRefList[i]);
 

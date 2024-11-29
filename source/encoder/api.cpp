@@ -91,10 +91,14 @@ x265_encoder *x265_encoder_open(x265_param *p)
         return NULL;
     }
 
-    Encoder* encoder = NULL;
-    x265_param* param = PARAM_NS::x265_param_alloc();
-    x265_param* latestParam = PARAM_NS::x265_param_alloc();
-    x265_param* zoneParam = PARAM_NS::x265_param_alloc();
+    Encoder* encoder = new Encoder;
+    encoder->m_paramBase[0] = PARAM_NS::x265_param_alloc();
+    encoder->m_paramBase[1] = PARAM_NS::x265_param_alloc();
+    encoder->m_paramBase[2] = PARAM_NS::x265_param_alloc();
+
+    x265_param* param = encoder->m_paramBase[0];
+    x265_param* latestParam = encoder->m_paramBase[1];
+    x265_param* zoneParam = encoder->m_paramBase[2];
 
     if(param) PARAM_NS::x265_param_default(param);
     if(latestParam) PARAM_NS::x265_param_default(latestParam);
@@ -115,8 +119,6 @@ x265_encoder *x265_encoder_open(x265_param *p)
     x265_copy_params(zoneParam, p);
     x265_log(param, X265_LOG_INFO, "HEVC encoder version %s [Mod by Patman]\n", PFX(version_str));
     x265_log(param, X265_LOG_INFO, "build info %s\n", PFX(build_info_str));
-
-    encoder = new Encoder;
 
 #ifdef SVT_HEVC
 
@@ -196,18 +198,16 @@ x265_encoder *x265_encoder_open(x265_param *p)
 
     if (!param->bResetZoneConfig)
     {
-        param->rc.zones = X265_MALLOC(x265_zone, param->rc.zonefileCount);
+        // TODO: Memory pointer broken if both (p->rc.zoneCount || p->rc.zonefileCount) and (!param->bResetZoneConfig)
+        param->rc.zones = x265_zone_alloc(param->rc.zonefileCount, 1);
         for (int i = 0; i < param->rc.zonefileCount; i++)
         {
-            param->rc.zones[i].zoneParam = X265_MALLOC(x265_param, 1);
             memcpy(param->rc.zones[i].zoneParam, param, sizeof(x265_param));
             param->rc.zones[i].relativeComplexity = X265_MALLOC(double, param->reconfigWindowSize);
         }
     }
 
-    // Need free zone because follow up Memcpy will broken all of pointer
-    x265_zone_free(zoneParam);
-    memcpy(zoneParam, param, sizeof(x265_param));
+    x265_copy_params(zoneParam, param);
     for (int i = 0; i < param->rc.zonefileCount; i++)
     {
         encoder->configureZone(zoneParam, param->rc.zones[i].zoneParam);
@@ -224,7 +224,6 @@ x265_encoder *x265_encoder_open(x265_param *p)
         }
     }
 
-    encoder->m_templateParam = param;
     encoder->m_latestParam = latestParam;
     encoder->m_zoneParam = zoneParam;
     x265_copy_params(latestParam, param);
@@ -819,7 +818,7 @@ void x265_alloc_analysis_data(x265_param *param, x265_analysis_data* analysis)
         //Allocate memory for distortionData pointer
         CHECKED_MALLOC_ZERO(distortionData, x265_analysis_distortion_data, 1);
         CHECKED_MALLOC_ZERO(distortionData->ctuDistortion, sse_t, analysis->numPartitions * numCUs_sse_t);
-        if (param->analysisLoad || param->rc.bStatRead)
+        if (param->analysisLoad[0] || param->rc.bStatRead)
         {
             CHECKED_MALLOC_ZERO(distortionData->scaledDistortion, double, analysis->numCUsInFrame);
             CHECKED_MALLOC_ZERO(distortionData->offset, double, analysis->numCUsInFrame);
@@ -924,7 +923,7 @@ void x265_free_analysis_data(x265_param *param, x265_analysis_data* analysis)
     if (analysis->distortionData)
     {
         X265_FREE((analysis->distortionData)->ctuDistortion);
-        if (param->rc.bStatRead || param->analysisLoad)
+        if (param->rc.bStatRead || param->analysisLoad[0])
         {
             X265_FREE((analysis->distortionData)->scaledDistortion);
             X265_FREE((analysis->distortionData)->offset);
@@ -935,7 +934,7 @@ void x265_free_analysis_data(x265_param *param, x265_analysis_data* analysis)
 
     /* Early exit freeing weights alone if level is 1 (when there is no analysis inter/intra) */
     if (!isMultiPassOpt && analysis->wt && !(param->bAnalysisType == AVC_INFO))
-        X265_FREE(analysis->wt);
+        X265_FREE_ZERO(analysis->wt);
 
     //Free memory for intraData pointers
     if (analysis->intraData)
@@ -994,7 +993,6 @@ void x265_free_analysis_data(x265_param *param, x265_analysis_data* analysis)
 
 void x265_cleanup(void)
 {
-    BitCost::destroy();
 }
 
 x265_picture *x265_picture_alloc()

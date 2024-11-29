@@ -479,12 +479,10 @@ namespace X265_NS {
 
     void CLIOptions::destroy()
     {
-        if (isAbrLadderConfig)
-        {
-            for (int idx = 1; idx < argCnt; idx++)
-                free(argString[idx]);
+        if(argString && argString != orgArgv)
             free(argString);
-        }
+        if (stringPool)
+            free(stringPool);
 
         for (int i = 0; i < MAX_VIEWS; i++)
         {
@@ -537,32 +535,32 @@ namespace X265_NS {
         file_num     = totalbytes < 1000000 ? (double) totalbytes / 1000. : (double) totalbytes / 1000000.;
         file_unit    = totalbytes < 1000000 ? "K": "M";
         if (framesToBeEncoded)
-		{
-			ete        = (int)(elapsed / 1000000);
-			eta        = (int)(elapsed * (framesToBeEncoded - frameNum) / ((int64_t)frameNum * 1000000));
-			percentage = 100. * frameNum / (param->chunkEnd ? param->chunkEnd : param->totalFrames);
-			ete_hh     = ete / 3600;
-			ete_mm     = (ete / 60) % 60;
-			ete_ss     = ete % 60;
-			eta_hh     = eta / 3600;
-			eta_mm     = (eta / 60) % 60;
-			eta_ss     = eta % 60;
-			estsz      = (double) totalbytes * framesToBeEncoded / (frameNum * 1000.);
-			estsz_prec = estsz < 1000000 ? 2 : estsz < 10000000 ? 1 : 0;
-			estsz_num = estsz < 1000 ? estsz : estsz / 1000;
-			estsz_unit = estsz < 1000 ? "K" : "M";
-			snprintf(buf, sizeof(buf), "x265 [%.1f%%] %d/%d Frames @ %.*f FPS | %.*f kb/s | %d:%02d:%02d [-%d:%02d:%02d] | %.*f %sB [%.*f %sB]",
-					percentage, frameNum, (param->chunkEnd ? param->chunkEnd : param->totalFrames), fps_prec, fps, bitrate_prec, bitrate,
-					ete_hh, ete_mm, ete_ss,
-					eta_hh, eta_mm, eta_ss,
-					file_prec, file_num, file_unit,
-					estsz_prec, estsz_num, estsz_unit);
+        {
+            ete        = (int)(elapsed / 1000000);
+            eta        = (int)(elapsed * (framesToBeEncoded - frameNum) / ((int64_t)frameNum * 1000000));
+            percentage = 100. * frameNum / (param->chunkEnd ? param->chunkEnd : param->totalFrames);
+            ete_hh     = ete / 3600;
+            ete_mm     = (ete / 60) % 60;
+            ete_ss     = ete % 60;
+            eta_hh     = eta / 3600;
+            eta_mm     = (eta / 60) % 60;
+            eta_ss     = eta % 60;
+            estsz      = (double) totalbytes * framesToBeEncoded / (frameNum * 1000.);
+            estsz_prec = estsz < 1000000 ? 2 : estsz < 10000000 ? 1 : 0;
+            estsz_num = estsz < 1000 ? estsz : estsz / 1000;
+            estsz_unit = estsz < 1000 ? "K" : "M";
+            snprintf(buf, sizeof(buf), "x265 [%.1f%%] %d/%d Frames @ %.*f FPS | %.*f kb/s | %d:%02d:%02d [-%d:%02d:%02d] | %.*f %sB [%.*f %sB]",
+                    percentage, frameNum, (param->chunkEnd ? param->chunkEnd : param->totalFrames), fps_prec, fps, bitrate_prec, bitrate,
+                    ete_hh, ete_mm, ete_ss,
+                    eta_hh, eta_mm, eta_ss,
+                    file_prec, file_num, file_unit,
+                    estsz_prec, estsz_num, estsz_unit);
         }
         else
             snprintf(buf, sizeof(buf), "x265 %d Frames @ %.*f FPS | %.*f kb/s | %d:%02d:%02d | %.*f %sB",
-					frameNum, fps_prec, fps, bitrate_prec, bitrate,
-					ete_hh, ete_mm, ete_ss,
-					file_prec, file_num, file_unit);
+                    frameNum, fps_prec, fps, bitrate_prec, bitrate,
+                    ete_hh, ete_mm, ete_ss,
+                    file_prec, file_num, file_unit);
         fprintf(stderr, "%s  \r", buf + 5);
         SetConsoleTitle(buf);
         fflush(stderr); // needed in windows
@@ -695,7 +693,6 @@ namespace X265_NS {
         const char *profile = NULL;
         int svtEnabled = 0;
         argCnt = argc;
-        argString = argv;
 
         if (argc <= 1)
         {
@@ -845,6 +842,16 @@ namespace X265_NS {
                     this->qpfile = x265_fopen(optarg, "rb");
                     if (!this->qpfile)
                         x265_log_file(param, X265_LOG_ERROR, "%s qpfile not found or error in opening qp file\n", optarg);
+                }
+                OPT("pme")
+                {
+                    x265_log_file(param, X265_LOG_ERROR, " pme feature is deprecated from release 4.1 \n", optarg);
+                    return true;
+                }
+                OPT("pmode")
+                {
+                    x265_log_file(param, X265_LOG_ERROR, " pmode feature is deprecated from release 4.1 \n", optarg);
+                    return true;
                 }
                 OPT("dolby-vision-rpu")
                 {
@@ -1195,7 +1202,7 @@ namespace X265_NS {
 
         rewind(zoneFile);
         char **args = (char**)alloca(256 * sizeof(char *));
-        param->rc.zones = X265_MALLOC(x265_zone, param->rc.zonefileCount);
+        param->rc.zones = x265_zone_alloc(param->rc.zonefileCount, 1);;
         for (int i = 0; i < param->rc.zonefileCount; i++)
         {
             param->rc.zones[i].startFrame = -1;
@@ -1203,7 +1210,6 @@ namespace X265_NS {
             {
                 if (*line == '#' || (strcmp(line, "\r\n") == 0))
                     continue;
-                param->rc.zones[i].zoneParam = X265_MALLOC(x265_param, 1);
                 int index = (int)strcspn(line, "\r\n");
                 line[index] = '\0';
                 argLine = line;
@@ -1543,6 +1549,7 @@ namespace X265_NS {
             free(args);
             exit(1);
         }
+        free(args);
         return 1;
     }
 

@@ -154,11 +154,14 @@ static bool parseAbrConfig(FILE* abrConfig, CLIOptions cliopt[], uint8_t numEnco
     char line[1024];
     char* argLine;
 
-    char **argv = (char**)alloca(256 * sizeof(char *));
-    char *strPool = (char*)alloca(256 * X265_MAX_STRING_SIZE * sizeof(char));
+    char *strPool = (char*)malloc(256 * X265_MAX_STRING_SIZE * sizeof(char));
     int strPoolSize = 256 * X265_MAX_STRING_SIZE;
     for (uint32_t i = 0; i < numEncodes; i++)
     {
+        char **argv = (char**)malloc(256 * sizeof(char *));
+        cliopt[i].stringPool = (i == 0 ? strPool : NULL);
+        cliopt[i].argString = argv;
+        cliopt[i].orgArgv = NULL;
         if (fgets(line, sizeof(line), abrConfig) == NULL) {
             fprintf(stderr, "Error reading line from configuration file.\n");
             return false;
@@ -203,11 +206,12 @@ static bool parseAbrConfig(FILE* abrConfig, CLIOptions cliopt[], uint8_t numEnco
         char* token = strtok(start, " ");
         while (token)
         {
-            argv[argc++] = strPool;
-            strPool += strlen(token);
-            strPoolSize -= strlen(token);
-            strcpy(argv[argc++], token);
+            argv[argc] = strPool;
+            strPool += strlen(token) + 1;
+            strPoolSize -= (int)strlen(token) + 1;
+            strcpy(argv[argc], token);
             token = strtok(NULL, " ");
+            argc++;
         }
         argv[argc] = NULL;
         if (cliopt[i].parse(argc++, argv))
@@ -287,6 +291,8 @@ int main(int argc, char **argv)
         numEncodes = getNumAbrEncodes(abrConfig);
 
     CLIOptions* cliopt = new CLIOptions[numEncodes];
+    cliopt[0].orgArgv = argv;
+    cliopt[0].argString = argv;
 
     if (isAbrLadder)
     {

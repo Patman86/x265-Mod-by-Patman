@@ -524,6 +524,11 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_32x32].cpy1Dto2D_shr = PFX(cpy1Dto2D_shr_32x32_neon);
     p.cu[BLOCK_64x64].cpy1Dto2D_shr = PFX(cpy1Dto2D_shr_64x64_neon);
 
+    // sad
+    ALL_LUMA_PU(sad, pixel_sad, neon);
+    ALL_LUMA_PU(sad_x3, sad_x3, neon);
+    ALL_LUMA_PU(sad_x4, sad_x4, neon);
+
 #if !HIGH_BIT_DEPTH
     // pixel_avg_pp
     ALL_LUMA_PU(pixelavg_pp[NONALIGNED], pixel_avg_pp, neon);
@@ -536,11 +541,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     ALL_CHROMA_422_PU(addAvg[NONALIGNED], addAvg, neon);
     ALL_CHROMA_420_PU(addAvg[ALIGNED], addAvg, neon);
     ALL_CHROMA_422_PU(addAvg[ALIGNED], addAvg, neon);
-
-    // sad
-    ALL_LUMA_PU(sad, pixel_sad, neon);
-    ALL_LUMA_PU(sad_x3, sad_x3, neon);
-    ALL_LUMA_PU(sad_x4, sad_x4, neon);
 
     // sse_pp
     p.cu[BLOCK_4x4].sse_pp   = PFX(pixel_sse_pp_4x4_neon);

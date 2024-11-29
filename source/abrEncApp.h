@@ -46,6 +46,8 @@ namespace X265_NS {
         PassEncoder        **m_passEnc;
         uint32_t           m_queueSize;
         ThreadSafeInteger  m_numActiveEncodes;
+        // Temporary duplicated param for free the analysis info, unnecessary free here
+        x265_param         *m_param;    //[numEncodes]
 
         x265_picture       ***m_inputPicBuffer; //[numEncodes][queueSize]
         x265_analysis_data **m_analysisBuffer; //[numEncodes][queueSize]

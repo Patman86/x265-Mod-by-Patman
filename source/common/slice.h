@@ -281,6 +281,7 @@ struct SPS
 
 #if ENABLE_MULTIVIEW
     int      setSpsExtOrMaxSubLayersMinus1;
+    int      spsInferScalingListFlag;
     int      maxViews;
     bool     vui_parameters_present_flag;
 #endif

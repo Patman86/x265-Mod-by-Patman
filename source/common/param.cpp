@@ -1530,8 +1530,6 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("scc")
         {
             p->bEnableSCC = atoi(value);
-            if (p->bEnableSCC)
-                p->bEnableWeightedPred = false;
         }
 #endif
         OPT("frame-rc") p->bConfigRCFrame = atobool(value);
@@ -1921,7 +1919,7 @@ int x265_check_params(x265_param* param)
         CHECK((param->internalBitDepth != 10), "Dolby Vision profile - 5, profile - 8.1, profile - 8.2 and profile - 8.4 are Main10 only\n");
         CHECK((param->internalCsp != X265_CSP_I420), "Dolby Vision profile - 5, profile - 8.1, profile - 8.2 and profile - 8.4 requires YCbCr 4:2:0 color space\n");
         if (param->dolbyProfile == 81)
-            CHECK(!(param->masteringDisplayColorVolume), "Dolby Vision profile - 8.1 requires Mastering display color volume information\n");
+            CHECK(param->masteringDisplayColorVolume[0] == 0, "Dolby Vision profile - 8.1 requires Mastering display color volume information\n");
     }
     if (param->bField && param->interlaceMode)
     {
@@ -2022,6 +2020,7 @@ int x265_check_params(x265_param* param)
         CHECK(param->internalBitDepth != 8, "BitDepthConstraint must be 8 for Multiview main profile");
         CHECK(param->analysisMultiPassDistortion || param->analysisMultiPassRefine, "Multiview encode doesnot support multipass feature");
         CHECK(strlen(param->analysisSave) || strlen(param->analysisLoad), "Multiview encode doesnot support analysis save and load feature");
+        CHECK(param->isAbrLadderEnable, "Multiview encode and Abr-Ladder feature can't be enabled together");
     }
 #endif
 #if ENABLE_SCC_EXT
@@ -2996,7 +2995,7 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->bSingleSeiNal = src->bSingleSeiNal;
     dst->chunkStart = src->chunkStart;
     dst->chunkEnd = src->chunkEnd;
-    if (src->naluFile) snprintf(dst->naluFile, X265_MAX_STRING_SIZE, "%s", src->naluFile);
+    if (src->naluFile[0]) snprintf(dst->naluFile, X265_MAX_STRING_SIZE, "%s", src->naluFile);
     else dst->naluFile[0] = 0;
     dst->scaleFactor = src->scaleFactor;
     dst->ctuDistortionRefine = src->ctuDistortionRefine;
@@ -3051,6 +3050,7 @@ void x265_copy_params(x265_param* dst, x265_param* src)
         dst->aomFilmGrain = src->aomFilmGrain;
     dst->bEnableSBRC = src->bEnableSBRC;
     dst->bConfigRCFrame = src->bConfigRCFrame;
+    dst->isAbrLadderEnable = src->isAbrLadderEnable;
 }
 
 #ifdef SVT_HEVC

@@ -637,7 +637,7 @@ endif(ARM64)
 
 option(WARNINGS_AS_ERRORS "Stop compiles on first warning" OFF)
 if(WARNINGS_AS_ERRORS)
-    if(GCC)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         add_definitions(-Werror)
         add_definitions(-Wno-unused)
     elseif(MSVC)

@@ -51,6 +51,7 @@ namespace X265_NS {
         m_numActiveEncodes.set(numEncodes);
         m_queueSize = (numEncodes > 1) ? X265_INPUT_QUEUE_SIZE : 1;
         m_passEnc = X265_MALLOC(PassEncoder*, m_numEncodes);
+        m_param = X265_MALLOC(x265_param, m_numEncodes);
 
         for (uint8_t i = 0; i < m_numEncodes; i++)
         {
@@ -63,7 +64,7 @@ namespace X265_NS {
             m_passEnc[i]->init(ret);
         }
 
-        m_numInputViews = m_passEnc[0]->m_param->numViews - !!m_passEnc[0]->m_param->format;
+        m_numInputViews = (m_passEnc[0]->m_param->numViews > 1) ? m_passEnc[0]->m_param->numViews - !!m_passEnc[0]->m_param->format : 0;
         if (!allocBuffers())
         {
             x265_log(NULL, X265_LOG_ERROR, "Unable to allocate memory for buffers\n");
@@ -78,10 +79,11 @@ namespace X265_NS {
     bool AbrEncoder::allocBuffers()
     {
 #if ENABLE_MULTIVIEW
-        m_inputPicBuffer = X265_MALLOC(x265_picture**, MAX_VIEWS);
-#else
-        m_inputPicBuffer = X265_MALLOC(x265_picture**, m_numEncodes);
+        if(m_numInputViews > 1)
+            m_inputPicBuffer = X265_MALLOC(x265_picture**, MAX_VIEWS);
+        else
 #endif
+            m_inputPicBuffer = X265_MALLOC(x265_picture**, m_numEncodes);
         m_analysisBuffer = X265_MALLOC(x265_analysis_data*, m_numEncodes);
 
         m_picWriteCnt = new ThreadSafeInteger[m_numEncodes];
@@ -145,17 +147,42 @@ namespace X265_NS {
     {
         x265_cleanup(); /* Free library singletons */
 #if ENABLE_MULTIVIEW
-        for (uint8_t pass = 0; pass < m_numInputViews; pass++)
+        if(m_numInputViews != 0)
         {
-            for (uint32_t index = 0; index < m_queueSize; index++)
+            for (uint8_t pass = 0; pass < m_numInputViews; pass++)
             {
-                X265_FREE(m_inputPicBuffer[pass][index]->planes[0]);
-                x265_picture_free(m_inputPicBuffer[pass][index]);
-            }
-            X265_FREE(m_inputPicBuffer[pass]);
+                for (uint32_t index = 0; index < m_queueSize; index++)
+                {
+                    X265_FREE(m_inputPicBuffer[pass][index]->planes[0]);
+                    x265_picture_free(m_inputPicBuffer[pass][index]);
+                }
+                X265_FREE(m_inputPicBuffer[pass]);
 
-            if (pass == 0)
+                if (pass == 0)
+                {
+                    X265_FREE(m_analysisBuffer[pass]);
+                    X265_FREE(m_readFlag[pass]);
+                    delete[] m_picIdxReadCnt[pass];
+                    delete[] m_analysisWrite[pass];
+                    delete[] m_analysisRead[pass];
+                    m_passEnc[pass]->destroy();
+                    delete m_passEnc[pass];
+                }
+            }
+        }
+        else
+        {
+#endif
+            for (uint8_t pass = 0; pass < m_numEncodes; pass++)
             {
+                for (uint32_t index = 0; index < m_queueSize; index++)
+                {
+                    X265_FREE(m_inputPicBuffer[pass][index]->planes[0]);
+                    x265_picture_free(m_inputPicBuffer[pass][index]);
+                    x265_free_analysis_data(&m_param[pass], &m_analysisBuffer[pass][index]);
+                }
+                X265_FREE(m_inputPicBuffer[pass]);
+
                 X265_FREE(m_analysisBuffer[pass]);
                 X265_FREE(m_readFlag[pass]);
                 delete[] m_picIdxReadCnt[pass];
@@ -164,24 +191,7 @@ namespace X265_NS {
                 m_passEnc[pass]->destroy();
                 delete m_passEnc[pass];
             }
-        }
-#else
-        for (uint8_t pass = 0; pass < m_numEncodes; pass++)
-        {
-            for (uint32_t index = 0; index < m_queueSize; index++)
-            {
-                X265_FREE(m_inputPicBuffer[pass][index]->planes[0]);
-                x265_picture_free(m_inputPicBuffer[pass][index]);
-            }
-            X265_FREE(m_inputPicBuffer[pass]);
-
-            X265_FREE(m_analysisBuffer[pass]);
-            X265_FREE(m_readFlag[pass]);
-            delete[] m_picIdxReadCnt[pass];
-            delete[] m_analysisWrite[pass];
-            delete[] m_analysisRead[pass];
-            m_passEnc[pass]->destroy();
-            delete m_passEnc[pass];
+#if ENABLE_MULTIVIEW
         }
 #endif
         X265_FREE(m_inputPicBuffer);
@@ -198,6 +208,7 @@ namespace X265_NS {
         X265_FREE(m_analysisRead);
 
         X265_FREE(m_passEnc);
+        X265_FREE_ZERO(m_param);
     }
 
     PassEncoder::PassEncoder(uint32_t id, CLIOptions cliopt, AbrEncoder *parent)
@@ -243,7 +254,7 @@ namespace X265_NS {
                 }
             }
         }
-
+        m_param->isAbrLadderEnable = m_parent->m_numEncodes > 1;
         if (m_cliopt.zoneFile)
         {
             if (!m_cliopt.parseZoneFile())
@@ -388,6 +399,7 @@ namespace X265_NS {
 
         x265_free_analysis_data(m_param, m_analysisInfo);
         memcpy(m_analysisInfo, src, sizeof(x265_analysis_data));
+        m_analysisInfo->wt = NULL;
         x265_alloc_analysis_data(m_param, m_analysisInfo);
 
         bool isVbv = m_param->rc.vbvBufferSize && m_param->rc.vbvMaxBitrate;
@@ -578,13 +590,14 @@ ret:
 #if ENABLE_LIBVMAF
             x265_vmaf_data* vmafdata = m_cliopt.vmafData;
 #endif
+            memcpy(&m_parent->m_param[m_id], m_param, sizeof(x265_param));
             /* This allows muxers to modify bitstream format */
             m_cliopt.output->setParam(m_param);
             const x265_api* api = m_cliopt.api;
             ReconPlay* reconPlay = NULL;
             if (m_cliopt.reconPlayCmd)
                 reconPlay = new ReconPlay(m_cliopt.reconPlayCmd, *m_param);
-            char* profileName = m_cliopt.encName ? m_cliopt.encName : (char *)"x265";
+            char* profileName = m_cliopt.encName[0] ? m_cliopt.encName : (char *)"x265";
 
             if (signal(SIGINT, sigint_handler) == SIG_ERR)
                 x265_log(m_param, X265_LOG_ERROR, "Unable to register CTRL+C handler: %s in %s\n",
@@ -1158,7 +1171,7 @@ ret:
 
             for (int view = 0; view < m_parentEnc->m_param->numViews - !!m_parentEnc->m_param->format; view++)
             {
-                x265_picture* dest = m_parentEnc->m_parent->m_inputPicBuffer[view][writeIdx];
+                x265_picture* dest = (m_parentEnc->m_param->numViews > 1) ? m_parentEnc->m_parent->m_inputPicBuffer[view][writeIdx] : m_parentEnc->m_parent->m_inputPicBuffer[m_id][writeIdx];
                 src->format = m_parentEnc->m_param->format;
                 if (m_input[view]->readPicture(*src) && !b_ctrl_c)
                 {
