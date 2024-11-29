@@ -133,7 +133,7 @@ void general_log(const x265_param* param, const char* caller, int level, const c
     }
 
     if (caller)
-        p += sprintf(buffer, "%-4s [%s]: ", caller, log_level);
+        p += snprintf(buffer, sizeof(buffer), "%-4s [%s]: ", caller, log_level);
     va_list arg;
     va_start(arg, fmt);
     vsnprintf(buffer + p, bufferSize - p, fmt, arg);
@@ -183,7 +183,7 @@ void general_log_file(const x265_param* param, const char* caller, int level, co
     }
 
     if (caller)
-        p += sprintf(buffer, "%-4s [%s]: ", caller, log_level);
+        p += snprintf(buffer, sizeof(buffer), "%-4s [%s]: ", caller, log_level);
     va_list arg;
     va_start(arg, fmt);
     vsnprintf(buffer + p, bufferSize - p, fmt, arg);

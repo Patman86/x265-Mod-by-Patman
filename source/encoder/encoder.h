@@ -208,6 +208,8 @@ public:
     FILE*              m_naluFile;
     x265_param*        m_param;
     x265_param*        m_latestParam;     // Holds latest param during a reconfigure
+    x265_param*        m_zoneParam;
+    x265_param*        m_templateParam;
     RateControl*       m_rateControl;
     Lookahead*         m_lookahead;
     AdaptiveFrameDuplication* m_dupBuffer[DUP_BUFFER];      // picture buffer of size 2
@@ -287,7 +289,6 @@ public:
     FILE* m_filmGrainIn;
     /* Aom film grain model file*/
     FILE* m_aomFilmGrainIn;
-    OrigPicBuffer*          m_origPicBuffer;
 
     Encoder();
     ~Encoder()
@@ -328,7 +329,7 @@ public:
 
     void printReconfigureParams();
 
-    char* statsString(EncStats&, char*);
+    char* statsString(EncStats&, char* , size_t bufferSize);
 
     void configure(x265_param *param);
 

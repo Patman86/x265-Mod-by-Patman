@@ -897,7 +897,7 @@ the prediction quad-tree.
 
 .. option:: --b-intra, --no-b-intra
 
-	Enables the evaluation of intra modes in B slices. Default disabled.
+	Enables the evaluation of intra modes in B slices. Default enabled.
 
 .. option:: --cu-lossless, --no-cu-lossless
 
@@ -1205,7 +1205,7 @@ Temporal / motion search options
 	as a "skip".  Otherwise the merge candidates are tested as part of
 	motion estimation when searching for the least cost inter option.
 	The max candidate number is encoded in the SPS and determines the
-	bit cost of signaling merge CUs. Default 2
+	bit cost of signaling merge CUs. Default 3
 
 .. option:: --me <integer|string>
 
@@ -2119,7 +2119,14 @@ Quality, rate control and rate distortion options
 	Used to trigger encoding of selective GOPs; Disabled by default.
 	
 	**API ONLY**
-	
+
+.. option:: --frame-rc, --no-frame-rc
+
+    This option allows configuring Rate control parameter of the chosen Rate Control
+    mode(CRF or QP or Bitrate) at frame level.
+    This option is recommended to be enabled only when planning to invoke the API function
+    x265_encoder_reconfig() to configure Rate control parameter value for each frame.
+    Default: disabled.
 
 Quantization Options
 ====================

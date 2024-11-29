@@ -84,9 +84,47 @@ namespace X265_NS {
         {
             me.init(X265_CSP_I400);
             me.setQP(X265_LOOKAHEAD_QP);
+            predPUYuv.create(FENC_STRIDE, X265_CSP_I400);
+            m_useSADinME = 1;
+            m_motionVectorFactor = 16;
         }
 
-        ~MotionEstimatorTLD() {}
+        Yuv  predPUYuv;
+        int m_useSADinME;
+        int m_motionVectorFactor;
+        int32_t  m_bitDepth;
+
+        void init(const x265_param* param);
+
+        void motionEstimationLuma(MotionEstimatorTLD& m_tld, MV* mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, pixel* buf, int bs, int sRange,
+            MV* previous = 0, uint32_t prevmvStride = 0, int factor = 1);
+
+        void motionEstimationLumaDoubleRes(MotionEstimatorTLD& m_tld, MV* mvs, uint32_t mvStride, PicYuv* orig, PicYuv* buffer, int blockSize,
+            MV* previous, uint32_t prevMvStride, int factor, int* minError);
+
+        int motionErrorLumaSSD(MotionEstimatorTLD& m_tld, pixel* src,
+            int stride,
+            pixel* buf,
+            int x,
+            int y,
+            int dx,
+            int dy,
+            int bs,
+            int besterror = 8 * 8 * 1024 * 1024);
+
+        int motionErrorLumaSAD(MotionEstimatorTLD& m_tld, pixel* src,
+            int stride,
+            pixel* buf,
+            int x,
+            int y,
+            int dx,
+            int dy,
+            int bs,
+            int besterror = 8 * 8 * 1024 * 1024);
+
+        ~MotionEstimatorTLD() {
+            predPUYuv.destroy();
+        }
     };
 
     struct TemporalFilterRefPicInfo
@@ -104,6 +142,9 @@ namespace X265_NS {
         uint32_t   mvsStride2;
         int*       error;
         int*       noise;
+        int        poc;
+        pixel*     lowres;
+        pixel*     lowerRes;
 
         int16_t    origOffset;
         bool       isFilteredFrame;
@@ -118,7 +159,7 @@ namespace X265_NS {
     {
     public:
         TemporalFilter();
-        ~TemporalFilter() {}
+        ~TemporalFilter();
 
         void init(const x265_param* param);
 
@@ -131,7 +172,6 @@ namespace X265_NS {
         double m_chromaFactor;
         double m_sigmaMultiplier;
         double m_sigmaZeroPoint;
-        int m_motionVectorFactor;
         int m_padding;
 
         // Private member variables
@@ -145,36 +185,10 @@ namespace X265_NS {
         uint8_t m_sliceTypeConfig;
 
         MotionEstimatorTLD* m_metld;
-        Yuv  predPUYuv;
-        int m_useSADinME;
 
         int createRefPicInfo(TemporalFilterRefPicInfo* refFrame, x265_param* param);
 
         void bilateralFilter(Frame* frame, TemporalFilterRefPicInfo* mctfRefList, double overallStrength);
-
-        void motionEstimationLuma(MV *mvs, uint32_t mvStride, PicYuv *orig, PicYuv *buffer, int bs,
-            MV *previous = 0, uint32_t prevmvStride = 0, int factor = 1);
-
-        void motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, PicYuv *orig, PicYuv *buffer, int blockSize,
-            MV *previous, uint32_t prevMvStride, int factor, int* minError);
-
-        int motionErrorLumaSSD(PicYuv *orig,
-            PicYuv *buffer,
-            int x,
-            int y,
-            int dx,
-            int dy,
-            int bs,
-            int besterror = 8 * 8 * 1024 * 1024);
-
-        int motionErrorLumaSAD(PicYuv *orig,
-            PicYuv *buffer,
-            int x,
-            int y,
-            int dx,
-            int dy,
-            int bs,
-            int besterror = 8 * 8 * 1024 * 1024);
 
         void destroyRefPicInfo(TemporalFilterRefPicInfo* curFrame);
 

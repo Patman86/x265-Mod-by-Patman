@@ -40,7 +40,7 @@ public:
     * The writeSEImessages() method calls writeSEI() which encodes the header */
     void writeSEImessages(Bitstream& bs, const SPS& sps, NalUnitType nalUnitType, NALList& list, int isNested, int layerId = 0);
     void setSize(uint32_t size);
-    static char* base64Decode(char encodedString[], int base64EncodeLength);
+    static char* base64Decode(char encodedString[], int base64EncodeLength, char* base64Decode);
     virtual ~SEI() {}
 protected:
     SEIPayloadType  m_payloadType;

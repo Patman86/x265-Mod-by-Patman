@@ -92,7 +92,7 @@ building out of a Mercurial source repository.  If you are building out of
 a release source package, the version will not change.  If Mercurial is not
 found, the version will be "unknown".
 
-= Build Instructions for cross-compilation for Arm AArch64 Targets=
+= Build Instructions for cross-compilation for Arm AArch64 Targets =
 
 Cross compilation of x265 for AArch64 targets is possible on x86 platforms by
 passing a toolchain file when running CMake to configure the project:
@@ -106,30 +106,42 @@ running CMake to configure the project. For example:
 
 * cmake -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
 
-If target platform supports Armv8.4 Neon DotProd instructions, the
-CROSS_COMPILE_NEON_DOTPROD CMake option should be set to ON:
+The following AArch64 ISA features are turned on by default when cross-compiling:
 
-* cmake -DCROSS_COMPILE_NEON_DOTPROD=ON  <other configuration options...>
+* Neon DotProd, mandatory from Armv8.4
+* Neon I8MM, mandatory from Armv8.6
+* SVE, mandatory from Armv9.0
+* SVE2, mandatory from Armv9.0
 
-If target platform supports Armv8.6 Neon I8MM instructions, the
-CROSS_COMPILE_NEON_I8MM CMake option should be set to ON:
+If the target platform does not support Armv8.4 Neon DotProd instructions, the
+ENABLE_NEON_DOTPROD CMake option should be set to OFF:
 
-* cmake -DCROSS_COMPILE_NEON_I8MM=ON  <other configuration options...>
+* cmake -DENABLE_NEON_DOTPROD=OFF  <other configuration options...>
 
-If the target platform supports SVE or SVE2, CROSS_COMPILE_SVE or
-CROSS_COMPILE_SVE2 CMake options should be set to ON, respectively.
-For example, when running CMake to configure the project:
+If target platform does not support Armv8.6 Neon I8MM instructions, the
+ENABLE_NEON_I8MM CMake option should be set to OFF:
 
-1. cmake -DCROSS_COMPILE_SVE=ON  <other configuration options...>
-2. cmake -DCROSS_COMPILE_SVE2=ON <other configuration options...>
+* cmake -DENABLE_NEON_I8MM=OFF  <other configuration options...>
 
-Note: when the CROSS_COMPILE_SVE option is set to ON the build configuration will
-also compile for Neon DotProd and I8MM, as we impose the constraint that SVE implies
-both Neon DotProd and I8MM.
+Note: when the ENABLE_NEON_DOTPROD option is set to OFF the build configuration will
+disable Neon I8MM, as we impose the constraint that Neon DotProd implies Neon I8MM.
 
-Similarly when the CROSS_COMPILE_SVE2 option is set to ON the build configuration
-will also compile for Neon I8MM, as we impose the constraint that SVE2 implies Neon
-I8MM. SVE2 already implies that Neon DotProd is implemented since SVE2 is an Armv9.0
-feature which implies Armv8.5, and Neon DotProd is mandatory from Armv8.4.
+If the target platform does not support SVE, the ENABLE_SVE CMake option should be
+set to OFF:
+
+* cmake -DENABLE_SVE=OFF  <other configuration options...>
+
+Note: when any of ENABLE_NEON_DOTPROD or ENABLE_NEON_I8MM are set to OFF, the build
+configuration will disable SVE, as we impose the constraint that SVE implies both
+Neon DotProd and Neon I8MM.
+
+If the target platform does not support SVE2, the ENABLE_SVE2 CMake option should be
+set to OFF:
+
+* cmake -DENABLE_SVE2=OFF  <other configuration options...>
+
+Note: when any of ENABLE_NEON_DOTPROD, ENABLE_NEON_I8MM, or ENABLE_SVE are set to
+OFF, the build configuration will disable SVE2, as we impose the constraint that
+SVE2 implies Neon I8MM, as well as Neon DotProd and SVE.
 
 Then, the normal build process can be followed.

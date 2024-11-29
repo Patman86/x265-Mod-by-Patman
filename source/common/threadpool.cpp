@@ -302,22 +302,22 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
      * For windows because threads can't be allocated to live across sockets
      * changing the default behavior to be per-socket pools -- FIXME */
 #if defined(_WIN32_WINNT) && _WIN32_WINNT >= _WIN32_WINNT_WIN7 || HAVE_LIBNUMA
-    if (!p->numaPools || (strcmp(p->numaPools, "NULL") == 0 || strcmp(p->numaPools, "*") == 0 || strcmp(p->numaPools, "") == 0))
+    if (!strlen(p->numaPools) || (strcmp(p->numaPools, "NULL") == 0 || strcmp(p->numaPools, "*") == 0 || strcmp(p->numaPools, "") == 0))
     {
          char poolString[50] = "";
          for (int i = 0; i < numNumaNodes; i++)
          {
              char nextCount[10] = "";
              if (i)
-                 sprintf(nextCount, ",%d", cpusPerNode[i]);
+                 snprintf(nextCount, sizeof(nextCount), ",%d", cpusPerNode[i]);
              else
-                   sprintf(nextCount, "%d", cpusPerNode[i]);
+                   snprintf(nextCount, sizeof(nextCount), "%d", cpusPerNode[i]);
              strcat(poolString, nextCount);
          }
          x265_param_parse(p, "pools", poolString);
      }
 #endif
-    if (p->numaPools && *p->numaPools)
+    if (strlen(p->numaPools))
     {
         const char *nodeStr = p->numaPools;
         for (int i = 0; i < numNumaNodes; i++)
@@ -452,7 +452,7 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
                 int len = 0;
                 for (int j = 0; j < 64; j++)
                     if ((nodeMaskPerPool[node] >> j) & 1)
-                        len += sprintf(nodesstr + len, ",%d", j);
+                        len += snprintf(nodesstr + len, sizeof(nodesstr) - len, ",%d", j);
                 x265_log(p, X265_LOG_INFO, "Thread pool %d using %d threads on numa nodes %s\n", i, numThreads, nodesstr + 1);
                 delete[] nodesstr;
             }

@@ -30,6 +30,7 @@
 #include "motion.h"
 #include "piclist.h"
 #include "threadpool.h"
+#include "temporalfilter.h"
 
 namespace X265_NS {
 // private namespace
@@ -202,6 +203,9 @@ public:
 
     int8_t                  m_gopId;
 
+    OrigPicBuffer*          m_origPicBuf;
+    MotionEstimatorTLD*     m_metld;
+
     Lookahead(x265_param *param, ThreadPool *pool);
 #if DETAILED_CU_STATS
     int64_t       m_slicetypeDecideElapsedTime;
@@ -224,6 +228,9 @@ public:
     void    getEstimatedPictureCost(Frame *pic);
     void    setLookaheadQueue();
     int     findSliceType(int poc);
+    bool    generatemcstf(Frame * frame, PicList refPic, int poclast);
+    bool    isFilterThisframe(uint8_t sliceTypeConfig, int curSliceType);
+
 
 protected:
 
@@ -319,6 +326,8 @@ protected:
 
     int64_t estimateFrameCost(LookaheadTLD& tld, int p0, int p1, int b, bool intraPenalty);
     void    estimateCUCost(LookaheadTLD& tld, int cux, int cuy, int p0, int p1, int b, bool bDoSearch[2], bool lastRow, int slice, bool hme);
+
+    void    estimatelowresmotion(MotionEstimatorTLD& m_metld, Frame* curframe, int refId);
 
     CostEstimateGroup& operator=(const CostEstimateGroup&);
 };

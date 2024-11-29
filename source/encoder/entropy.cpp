@@ -1073,11 +1073,7 @@ void Entropy::codeSliceHeader(const Slice& slice, FrameData& encData, uint32_t s
     }
 
     if (slice.isInterB())
-#if ENABLE_SCC_EXT
-        WRITE_FLAG(slice.m_bLMvdL1Zero, "mvd_l1_zero_flag");
-#else
         WRITE_FLAG(0, "mvd_l1_zero_flag");
-#endif
 
 #if ENABLE_SCC_EXT
     if (slice.m_bTemporalMvp)

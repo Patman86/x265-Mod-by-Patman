@@ -31,10 +31,10 @@ include(CheckCXXSourceCompiles)
 option(FPROFILE_GENERATE "Compile executable to generate usage data" OFF)
 option(FPROFILE_USE "Compile executable using generated usage data" OFF)
 option(NATIVE_BUILD "Target the build CPU" OFF)
-option(STATIC_LINK_CRT "Statically link C runtime for release builds" OFF)
+option(STATIC_LINK_CRT "Statically link C and C++ runtimes for release builds" OFF)
 mark_as_advanced(FPROFILE_USE FPROFILE_GENERATE NATIVE_BUILD)
 # X265_BUILD must be incremented each time the public API is changed
-set(X265_BUILD 213)
+set(X265_BUILD 215)
 configure_file("${PROJECT_SOURCE_DIR}/x265.def.in"
                "${PROJECT_BINARY_DIR}/x265.def")
 configure_file("${PROJECT_SOURCE_DIR}/x265_config.h.in"
@@ -90,11 +90,28 @@ elseif(ARM64MATCH GREATER "-1")
 
     option(AARCH64_WARNINGS_AS_ERRORS "Build with -Werror for AArch64 Intrinsics files" OFF)
 
-    # Options for cross compiling AArch64 optional extensions
-    option(CROSS_COMPILE_SVE "Cross Compile for SVE Target" OFF)
-    option(CROSS_COMPILE_SVE2 "Cross Compile for SVE2 Target" OFF)
-    option(CROSS_COMPILE_NEON_DOTPROD "Cross Compile for Neon DotProd Target" OFF)
-    option(CROSS_COMPILE_NEON_I8MM "Cross Compile for Neon I8MM Target" OFF)
+    option(AARCH64_RUNTIME_CPU_DETECT "Enable AArch64 run-time CPU feature detection" ON)
+    if(NOT CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin|Windows")
+        set(AARCH64_RUNTIME_CPU_DETECT OFF CACHE BOOL "" FORCE)
+        message(STATUS "Run-time CPU feature detection unsupported on this platform")
+    endif()
+
+    # Options for manually enabling/disabling AArch64 SIMD extensions.
+    option(ENABLE_NEON "Enable Neon" ON)
+    option(ENABLE_NEON_DOTPROD "Enable Neon DotProd" ON)
+    option(ENABLE_NEON_I8MM "Enable Neon I8MM" ON)
+    option(ENABLE_SVE "Enable SVE" ON)
+    option(ENABLE_SVE2 "Enable SVE2" ON)
+
+    # Compiler flags for AArch64 extensions.
+    set(AARCH64_NEON_FLAG "-march=armv8-a")
+    # Neon DotProd is mandatory from Armv8.4.
+    set(AARCH64_NEON_DOTPROD_FLAG "-march=armv8.2-a+dotprod")
+    # Neon I8MM is mandatory from Armv8.6.
+    set(AARCH64_NEON_I8MM_FLAG "-march=armv8.2-a+dotprod+i8mm")
+    set(AARCH64_SVE_FLAG "-march=armv8.2-a+dotprod+i8mm+sve")
+    # SVE2 is only available from Armv9.0, and armv9-a implies +dotprod and +sve.
+    set(AARCH64_SVE2_FLAG "-march=armv9-a+i8mm+sve2")
 else()
     message(STATUS "CMAKE_SYSTEM_PROCESSOR value `${CMAKE_SYSTEM_PROCESSOR}` is unknown")
     message(STATUS "Please add this value near ${CMAKE_CURRENT_LIST_FILE}:${CMAKE_CURRENT_LIST_LINE}")
@@ -140,11 +157,11 @@ if(UNIX)
     endif()
 endif(UNIX)
 
-if(X64 AND NOT WIN32)
+if((X64 AND NOT WIN32) OR ARM64)
     option(ENABLE_PIC "Enable Position Independent Code" ON)
 else()
     option(ENABLE_PIC "Enable Position Independent Code" OFF)
-endif(X64 AND NOT WIN32)
+endif()
 
 # Compiler detection
 if(CMAKE_GENERATOR STREQUAL "Xcode")
@@ -282,34 +299,20 @@ if(GCC)
         endif()
     endif()
     if(ARM64)
-        message(STATUS "Found Neon")
         set(CPU_HAS_NEON 1)
-        add_definitions(-DX265_ARCH_ARM64=1 -DHAVE_NEON=1)
+        add_definitions(-DX265_ARCH_ARM64=1)
 
-        if(CROSS_COMPILE_ARM64)
-            # Handle cross-compilation options.
-            if(CROSS_COMPILE_NEON_DOTPROD)
-                set(CPU_HAS_NEON_DOTPROD 1)
-            endif()
-            if(CROSS_COMPILE_NEON_I8MM)
-                set(CPU_HAS_NEON_I8MM 1)
-                # Impose the constraint that Neon I8MM implies Neon DotProd.
-                set(CPU_HAS_NEON_DOTPROD 1)
-            endif()
-            if(CROSS_COMPILE_SVE)
-                set(CPU_HAS_SVE 1)
-                # Impose the constraint that SVE implies Neon DotProd and I8MM.
-                set(CPU_HAS_NEON_DOTPROD 1)
-                set(CPU_HAS_NEON_I8MM 1)
-            endif()
-            if(CROSS_COMPILE_SVE2)
-                set(CPU_HAS_SVE2 1)
-                # SVE2 implies SVE and Neon DotProd.
-                set(CPU_HAS_SVE 1)
-                set(CPU_HAS_NEON_DOTPROD 1)
-                # Impose the constraint that SVE2 implies Neon I8MM.
-                set(CPU_HAS_NEON_I8MM 1)
-            endif()
+        if (AARCH64_RUNTIME_CPU_DETECT)
+            add_definitions(-DAARCH64_RUNTIME_CPU_DETECT=1)
+            message(STATUS "Configuring build for run-time CPU feature detection")
+        endif()
+
+        if(AARCH64_RUNTIME_CPU_DETECT OR CROSS_COMPILE_ARM64)
+            # Add all extensions when compiling for run-time CPU feature detection or cross compiling.
+            set(CPU_HAS_NEON_DOTPROD 1)
+            set(CPU_HAS_NEON_I8MM 1)
+            set(CPU_HAS_SVE 1)
+            set(CPU_HAS_SVE2 1)
         else()
             if(CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
                 find_package(NEON_DOTPROD)
@@ -317,49 +320,32 @@ if(GCC)
                 find_package(SVE)
                 find_package(SVE2)
             else()
-                message(STATUS "Compile time feature detection unsupported on this platform")
+                message(STATUS "Compile-time CPU feature detection unsupported on this platform")
             endif()
         endif()
 
-        if(CPU_HAS_NEON_DOTPROD)
-            # Neon DotProd is mandatory from Armv8.4.
-            message(STATUS "Found Neon DotProd")
-            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod)
-            add_definitions(-DHAVE_NEON_DOTPROD=1)
-        endif()
-        if(CPU_HAS_NEON_I8MM)
-            # Neon I8MM is mandatory from Armv8.6.
-            message(STATUS "Found Neon I8MM")
-            # Impose the constraint that Neon I8MM implies Neon DotProd.
-            if(NOT CPU_HAS_NEON_DOTPROD)
-                message(FATAL_ERROR "Unsupported AArch64 feature combination (Neon I8MM without Neon DotProd)")
-            endif()
-            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod+i8mm)
-            add_definitions(-DHAVE_NEON_I8MM=1)
-        endif()
-        if(CPU_HAS_SVE)
-            message(STATUS "Found SVE")
-            # Impose the constraint that SVE implies Neon I8MM.
-            if(NOT CPU_HAS_NEON_I8MM)
-                message(FATAL_ERROR "Unsupported AArch64 feature combination (SVE without Neon I8MM)")
-            endif()
-            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod+i8mm+sve)
-            add_definitions(-DHAVE_SVE=1)
-        endif()
-        if(CPU_HAS_SVE2)
-            message(STATUS "Found SVE2")
-            # SVE2 is only available from Armv9.0, and armv9-a implies +dotprod
-            set(ARM_ARGS -O3 -march=armv8.2-a+dotprod+i8mm+sve)
-            add_definitions(-DHAVE_SVE2=1)
-        endif()
-        set(ARM_ARGS ${ARM_ARGS} -fPIC)
-        # Do not allow implicit vector type conversions in Clang builds (this
-        # is already the default in GCC builds).
-        check_cxx_compiler_flag(-flax-vector-conversions=none CC_HAS_FLAX_VEC_CONV_NONE)
-        if(CC_HAS_FLAX_VEC_CONV_NONE)
-            set(ARM_ARGS ${ARM_ARGS} -flax-vector-conversions=none)
-        endif()
-        if(CPU_HAS_SVE)
+        if(ENABLE_SVE OR ENABLE_SVE2)
+            set(OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
+            string(APPEND CMAKE_REQUIRED_FLAGS " ${AARCH64_SVE_FLAG}")
+            set(OLD_CMAKE_TRY_COMPILE_TARGET_TYPE ${CMAKE_TRY_COMPILE_TARGET_TYPE})
+            set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+
+            # Check whether the compiler can compile SVE functions that require
+            # backup/restore of SVE registers according to AAPCS.
+            # https://github.com/llvm/llvm-project/issues/80009.
+            set(SVE_COMPILATION_TEST "
+#include <arm_sve.h>
+void other();
+svfloat32_t func(svfloat32_t a) {
+  other();
+  return a;
+}
+int main() { return 0; }")
+
+            check_c_source_compiles("${SVE_COMPILATION_TEST}" SVE_COMPILATION_C_TEST_COMPILED)
+            check_cxx_source_compiles("${SVE_COMPILATION_TEST}" SVE_COMPILATION_CXX_TEST_COMPILED)
+
+            # Check if arm_neon_sve_bridge.h is available.
             set(SVE_HEADER_TEST "
 #ifndef __ARM_NEON_SVE_BRIDGE
 #error 1
@@ -367,24 +353,80 @@ if(GCC)
 #include <arm_sve.h>
 #include <arm_neon_sve_bridge.h>
 int main() { return 0; }")
-            set(OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
-            # CMAKE_REQUIRED_FLAGS requires a space-delimited string, whereas
-            # ARM_ARGS is defined and used elsewhere as a ;-list.
-            foreach(ARM_ARG ${ARM_ARGS})
-                string(APPEND CMAKE_REQUIRED_FLAGS " ${ARM_ARG}")
-            endforeach()
             check_c_source_compiles("${SVE_HEADER_TEST}" SVE_HEADER_C_TEST_COMPILED)
             check_cxx_source_compiles("${SVE_HEADER_TEST}" SVE_HEADER_CXX_TEST_COMPILED)
+
             set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQUIRED_FLAGS})
-            if(SVE_HEADER_C_TEST_COMPILED AND SVE_HEADER_CXX_TEST_COMPILED)
-                add_definitions(-DHAVE_SVE_BRIDGE=1)
-                set(HAVE_SVE_BRIDGE 1)
+            set(CMAKE_TRY_COMPILE_TARGET_TYPE ${OLD_CMAKE_TRY_COMPILE_TARGET_TYPE})
+            if (SVE_COMPILATION_C_TEST_COMPILED AND SVE_COMPILATION_CXX_TEST_COMPILED)
+                if (SVE_HEADER_C_TEST_COMPILED AND SVE_HEADER_CXX_TEST_COMPILED)
+                    add_definitions(-DHAVE_SVE_BRIDGE=1)
+                    set(HAVE_SVE_BRIDGE 1)
+                endif()
+            else()
+                set(ENABLE_SVE OFF CACHE BOOL "" FORCE)
+                set(ENABLE_SVE2 OFF CACHE BOOL "" FORCE)
+                message(STATUS "Disabling SVE and SVE2")
             endif()
         endif()
+
+        # Impose constraint that disabling one extension disables all 'higher order' ones.
+        if(NOT ENABLE_NEON)
+            message(STATUS "Disabling Neon")
+            set(CPU_HAS_NEON 0)
+            set(ENABLE_NEON_DOTPROD 0)
+        endif()
+        if(NOT ENABLE_NEON_DOTPROD)
+            message(STATUS "Disabling Neon DotProd")
+            set(CPU_HAS_NEON_DOTPROD 0)
+            set(ENABLE_NEON_I8MM 0)
+        endif()
+        if(NOT ENABLE_NEON_I8MM)
+            message(STATUS "Disabling Neon I8MM")
+            set(CPU_HAS_NEON_I8MM 0)
+            set(ENABLE_SVE 0)
+        endif()
+        if(NOT ENABLE_SVE)
+            message(STATUS "Disabling SVE")
+            set(CPU_HAS_SVE 0)
+            set(ENABLE_SVE2 0)
+        endif()
+        if(NOT ENABLE_SVE2)
+            message(STATUS "Disabling SVE2")
+            set(CPU_HAS_SVE2 0)
+        endif()
+
+        if(CPU_HAS_NEON)
+            message(STATUS "Found Neon")
+            add_definitions(-DHAVE_NEON=1)
+        endif()
+        if(CPU_HAS_NEON_DOTPROD)
+            message(STATUS "Found Neon DotProd")
+            add_definitions(-DHAVE_NEON_DOTPROD=1)
+        endif()
+        if(CPU_HAS_NEON_I8MM)
+            message(STATUS "Found Neon I8MM")
+            add_definitions(-DHAVE_NEON_I8MM=1)
+        endif()
+        if(CPU_HAS_SVE)
+            message(STATUS "Found SVE")
+            add_definitions(-DHAVE_SVE=1)
+        endif()
+        if(CPU_HAS_SVE2)
+            message(STATUS "Found SVE2")
+            add_definitions(-DHAVE_SVE2=1)
+        endif()
+        set(ARM_ARGS -O3)
+        # Do not allow implicit vector type conversions in Clang builds (this
+        # is already the default in GCC builds).
+        check_cxx_compiler_flag(-flax-vector-conversions=none CC_HAS_FLAX_VEC_CONV_NONE)
+        if(CC_HAS_FLAX_VEC_CONV_NONE)
+            set(ARM_ARGS ${ARM_ARGS} -flax-vector-conversions=none)
+        endif()
     endif()
-	if(ENABLE_PIC)
-	list(APPEND ARM_ARGS -DPIC)
-	endif()
+    if(ENABLE_PIC)
+        list(APPEND ARM_ARGS -DPIC -fPIC)
+    endif()
     add_definitions(${ARM_ARGS})
     if(FPROFILE_GENERATE)
         if(INTEL_CXX)
@@ -422,7 +464,7 @@ int main() { return 0; }")
     endif(FPROFILE_USE)
     if(STATIC_LINK_CRT)
         add_definitions(-static)
-        list(APPEND LINKER_OPTIONS "-static-libgcc")
+        list(APPEND LINKER_OPTIONS "-static-libgcc -static-libstdc++")
     endif(STATIC_LINK_CRT)
     check_cxx_compiler_flag(-Wno-strict-overflow CC_HAS_NO_STRICT_OVERFLOW)
     check_cxx_compiler_flag(-Wno-narrowing CC_HAS_NO_NARROWING) 
@@ -480,6 +522,10 @@ endif(GCC)
 find_package(Nasm)
 if(ARM OR CROSS_COMPILE_ARM OR ARM64 OR CROSS_COMPILE_ARM64)
     option(ENABLE_ASSEMBLY "Enable use of assembly coded primitives" ON)
+    # Force ENABLE_ASSEMBLY to be OFF when all SIMD extensions are disabled.
+    if (NOT ENABLE_NEON)
+        set(ENABLE_ASSEMBLY OFF CACHE BOOL "" FORCE)
+    endif()
 elseif(NASM_FOUND AND X86)
     if (NASM_VERSION_STRING VERSION_LESS "2.13.0")
         message(STATUS "Nasm version ${NASM_VERSION_STRING} is too old. 2.13.0 or later required")
@@ -593,6 +639,7 @@ option(WARNINGS_AS_ERRORS "Stop compiles on first warning" OFF)
 if(WARNINGS_AS_ERRORS)
     if(GCC)
         add_definitions(-Werror)
+        add_definitions(-Wno-unused)
     elseif(MSVC)
         add_definitions(/WX)
     endif()
@@ -719,18 +766,18 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
             add_custom_command(
                 OUTPUT ${ASM}.${SUFFIX}
                 COMMAND ${CMAKE_CXX_COMPILER}
-                ARGS ${ARM_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                ARGS ${ARM_ARGS} ${ASM_FLAGS} ${AARCH64_NEON_FLAG} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                 DEPENDS ${ASM_SRC})
         endforeach()
-        if(CPU_HAS_SVE2)
-            foreach(ASM ${ARM_ASMS_SVE2})
+        if(CPU_HAS_NEON_DOTPROD)
+            foreach(ASM ${ARM_ASMS_NEON_DOTPROD})
                 set(ASM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/common/aarch64/${ASM})
                 list(APPEND ASM_SRCS ${ASM_SRC})
                 list(APPEND ASM_OBJS ${ASM}.${SUFFIX})
                 add_custom_command(
                     OUTPUT ${ASM}.${SUFFIX}
                     COMMAND ${CMAKE_CXX_COMPILER}
-                    ARGS ${ARM_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                    ARGS ${ARM_ARGS} ${ASM_FLAGS} ${AARCH64_NEON_DOTPROD_FLAG} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                     DEPENDS ${ASM_SRC})
             endforeach()
         endif()
@@ -742,19 +789,19 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
                 add_custom_command(
                     OUTPUT ${ASM}.${SUFFIX}
                     COMMAND ${CMAKE_CXX_COMPILER}
-                    ARGS ${ARM_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                    ARGS ${ARM_ARGS} ${ASM_FLAGS} ${AARCH64_SVE_FLAG} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                     DEPENDS ${ASM_SRC})
             endforeach()
         endif()
-        if(CPU_HAS_NEON_DOTPROD)
-            foreach(ASM ${ARM_ASMS_NEON_DOTPROD})
+        if(CPU_HAS_SVE2)
+            foreach(ASM ${ARM_ASMS_SVE2})
                 set(ASM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/common/aarch64/${ASM})
                 list(APPEND ASM_SRCS ${ASM_SRC})
                 list(APPEND ASM_OBJS ${ASM}.${SUFFIX})
                 add_custom_command(
                     OUTPUT ${ASM}.${SUFFIX}
                     COMMAND ${CMAKE_CXX_COMPILER}
-                    ARGS ${ARM_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                    ARGS ${ARM_ARGS} ${ASM_FLAGS} ${AARCH64_SVE2_FLAG} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
                     DEPENDS ${ASM_SRC})
             endforeach()
         endif()
@@ -810,15 +857,23 @@ endif()
 install(FILES x265.h "${PROJECT_BINARY_DIR}/x265_config.h" DESTINATION include)
 if((WIN32 AND ENABLE_CLI) OR (WIN32 AND ENABLE_SHARED))
     if(MSVC_IDE)
-        install(FILES "${PROJECT_BINARY_DIR}/Debug/x265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS Debug)
-        install(FILES "${PROJECT_BINARY_DIR}/RelWithDebInfo/x265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS RelWithDebInfo)
-        install(FILES "${PROJECT_BINARY_DIR}/Debug/libx265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS Debug OPTIONAL NAMELINK_ONLY)
-        install(FILES "${PROJECT_BINARY_DIR}/RelWithDebInfo/libx265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS RelWithDebInfo OPTIONAL NAMELINK_ONLY)
+        if(ENABLE_CLI)
+            install(FILES "${PROJECT_BINARY_DIR}/Debug/x265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS Debug)
+            install(FILES "${PROJECT_BINARY_DIR}/RelWithDebInfo/x265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS RelWithDebInfo)
+        endif()
+        if(ENABLE_SHARED)
+            install(FILES "${PROJECT_BINARY_DIR}/Debug/libx265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS Debug OPTIONAL NAMELINK_ONLY)
+            install(FILES "${PROJECT_BINARY_DIR}/RelWithDebInfo/libx265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS RelWithDebInfo OPTIONAL NAMELINK_ONLY)
+        endif()
     else()
-        install(FILES "${PROJECT_BINARY_DIR}/x265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS Debug)
-        install(FILES "${PROJECT_BINARY_DIR}/x265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS RelWithDebInfo)
-        install(FILES "${PROJECT_BINARY_DIR}/libx265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS Debug OPTIONAL NAMELINK_ONLY)
-        install(FILES "${PROJECT_BINARY_DIR}/libx265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS RelWithDebInfo OPTIONAL NAMELINK_ONLY)
+        if(ENABLE_CLI)
+            install(FILES "${PROJECT_BINARY_DIR}/x265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS Debug)
+            install(FILES "${PROJECT_BINARY_DIR}/x265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS RelWithDebInfo)
+        endif()
+        if(ENABLE_SHARED)
+            install(FILES "${PROJECT_BINARY_DIR}/libx265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS Debug OPTIONAL NAMELINK_ONLY)
+            install(FILES "${PROJECT_BINARY_DIR}/libx265.pdb" DESTINATION ${BIN_INSTALL_DIR} CONFIGURATIONS RelWithDebInfo OPTIONAL NAMELINK_ONLY)
+        endif()
     endif()
 endif()
 if(CMAKE_RC_COMPILER)
@@ -886,7 +941,7 @@ if(ENABLE_SHARED)
         endif()
     endif()
     set_target_properties(x265-shared PROPERTIES SOVERSION ${X265_BUILD})
-    if(X265_LATEST_TAG)
+    if(X265_LATEST_TAG OR NOT GIT_FOUND)
         if(WINDOWS)
             set_target_properties(x265-shared PROPERTIES VERSION ${X265_LATEST_TAG})
         endif()
@@ -908,7 +963,7 @@ if(ENABLE_SHARED)
     endif()
 endif()
 
-if(X265_LATEST_TAG)
+if(X265_LATEST_TAG OR NOT GIT_FOUND)
     # convert lists of link libraries into -lstdc++ -lm etc..
     foreach(LIB ${CMAKE_CXX_IMPLICIT_LINK_LIBRARIES} ${PLATFORM_LIBS})
         if(IS_ABSOLUTE ${LIB} AND EXISTS ${LIB})

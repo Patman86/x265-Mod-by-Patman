@@ -252,6 +252,8 @@ public:
     RateControlEntry* m_rce2Pass;
     Encoder* m_top;
 
+    bool    m_bRcReConfig;                /* RC-reconfigurtion */
+
     struct
     {
         uint16_t *qpBuffer[2]; /* Global buffers for converting MB-tree quantizer data. */
@@ -313,6 +315,7 @@ protected:
     double tuneAbrQScaleFromFeedback(double qScale);
     double tuneQScaleForZone(RateControlEntry *rce, double qScale); // Tune qScale to adhere to zone budget
     double tuneQscaleForSBRC(Frame* curFrame, double q); // Tune qScale to adhere to segment budget
+    double tuneQscaleToUpdatedBitrate(Frame* curFrame, double q); // Tune qScale according to updated bitrate
     void   accumPQpUpdate();
 
     int    getPredictorType(int lowresSliceType, int sliceType);

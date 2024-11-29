@@ -36,6 +36,8 @@ extern "C" {
 #pragma warning(disable: 4201) // non-standard extension used (nameless struct/union)
 #endif
 
+#define X265_MAX_STRING_SIZE    (256)
+
 /* x265_encoder:
  *      opaque handler for encoder */
 typedef struct x265_encoder x265_encoder;
@@ -313,6 +315,9 @@ typedef struct x265_frame_stats
     double           bufferFillFinal;
     double           unclippedBufferFillFinal;
     uint8_t          tLayer;
+    int64_t          currTrBitrate;
+    double           currTrCRF;
+    int              currTrQP;
 } x265_frame_stats;
 
 typedef struct x265_ctu_info_t
@@ -1142,7 +1147,7 @@ typedef struct x265_param
      *
      * Frame encoders are distributed between the available thread pools, and
      * the encoder will never generate more thread pools than frameNumThreads */
-    const char* numaPools;
+    char numaPools[X265_MAX_STRING_SIZE];
 
     /* Enable wavefront parallel processing, greatly increases parallelism for
      * less than 1% compression efficiency loss. Requires a thread pool, enabled
@@ -1192,7 +1197,7 @@ typedef struct x265_param
      * per-slice statistics to this log file in encode order. Otherwise the
      * encoder will emit per-stream statistics into the log file when
      * x265_encoder_log is called (presumably at the end of the encode) */
-    const char* csvfn;
+    char      csvfn[X265_MAX_STRING_SIZE];
 
     /*== Internal Picture Specification ==*/
 
@@ -1472,7 +1477,7 @@ typedef struct x265_param
      * - all other strings indicate a filename containing custom scaling lists
      *   in the HM format. The encode will fail if the file is not parsed
      *   correctly. Custom lists must be signaled in the SPS. */
-    const char *scalingLists;
+    char scalingLists[X265_MAX_STRING_SIZE];
 
     /*== Intra Coding Tools ==*/
 
@@ -1657,7 +1662,7 @@ typedef struct x265_param
     int       analysisReuseMode;
 
     /* Filename for multi-pass-opt-analysis/distortion. Default name is "x265_analysis.dat" */
-    const char* analysisReuseFileName;
+    char      analysisReuseFileName[X265_MAX_STRING_SIZE];
 
     /*== Rate Control ==*/
 
@@ -1777,7 +1782,7 @@ typedef struct x265_param
 
         /* Filename of the 2pass output/input stats file, if unspecified the
          * encoder will default to using x265_2pass.log */
-        const char* statFileName;
+        char statFileName[X265_MAX_STRING_SIZE];
 
         /* temporally blur quants */
         double    qblur;
@@ -1801,7 +1806,7 @@ typedef struct x265_param
          * are separated by comma, space or newline. Text after a hash (#) is
          * ignored. The lambda tables are process-global, so these new lambda
          * values will affect all encoders in the same process */
-        const char* lambdaFileName;
+        char lambdaFileName[X265_MAX_STRING_SIZE];
 
         /* Enable stricter conditions to check bitrate deviations in CBR mode. May compromise
          * quality to maintain bitrate adherence */
@@ -1841,7 +1846,7 @@ typedef struct x265_param
         int       dataShareMode;
 
         /* Unique shared memory name. Required if the shared memory mode enabled. NULL by default */
-        const char* sharedMemName;
+        char sharedMemName[X265_MAX_STRING_SIZE];
 
     } rc;
 
@@ -1946,7 +1951,7 @@ typedef struct x265_param
      * are unsigned 16bit integers and %u are unsigned 32bit integers. The SEI
      * includes X,Y display primaries for RGB channels, white point X,Y and
      * max,min luminance values. */
-    const char* masteringDisplayColorVolume;
+    char masteringDisplayColorVolume[X265_MAX_STRING_SIZE];
 
     /* Maximum Content light level(MaxCLL), specified as integer that indicates the
      * maximum pixel intensity level in units of 1 candela per square metre of the
@@ -2035,7 +2040,7 @@ typedef struct x265_param
     int       bLimitSAO;
 
     /* File containing the tone mapping information */
-    const char*     toneMapFile;
+    char      toneMapFile[X265_MAX_STRING_SIZE];
 
     /* Insert tone mapping information only for IDR frames and when the 
      * tone mapping information changes. */
@@ -2111,11 +2116,11 @@ typedef struct x265_param
     int       gopLookahead;
 
     /*Write per-frame analysis information into analysis buffers. Default disabled. */
-    const char* analysisSave;
+    char analysisSave[X265_MAX_STRING_SIZE];
 
     /* Read analysis information into analysis buffer and use this analysis information
      * to reduce the amount of work the encoder must perform. Default disabled. */
-    const char* analysisLoad;
+    char analysisLoad[X265_MAX_STRING_SIZE];
 
     /*Number of RADL pictures allowed in front of IDR*/
     int radl;
@@ -2147,7 +2152,7 @@ typedef struct x265_param
     * Default 0 (disabled). */
     int       chunkEnd;
     /* File containing base64 encoded SEI messages in POC order */
-    const char*    naluFile;
+    char      naluFile[X265_MAX_STRING_SIZE];
 
     /* Generate bitstreams confirming to the specified dolby vision profile,
      * note that 0x7C01 makes RPU appear to be an unspecified NAL type in
@@ -2308,7 +2313,7 @@ typedef struct x265_param
     * precedence than individual VUI parameters. If any individual VUI option is specified
     * together with this, which changes the values set corresponding to the system-id
     * or color-volume, it will be discarded. */
-    const char* videoSignalTypePreset;
+    char     videoSignalTypePreset[X265_MAX_STRING_SIZE];
 
     /* Flag indicating whether the encoder should emit an End of Bitstream
      * NAL at the end of bitstream. Default false */
@@ -2327,6 +2332,10 @@ typedef struct x265_param
     /*Motion compensated temporal filter*/
     int      bEnableTemporalFilter;
     double   temporalFilterStrength;
+    /*Search Range for L0, L1 and L2 in MCTF*/
+    int      searchRangeForLayer0;
+    int      searchRangeForLayer1;
+    int      searchRangeForLayer2;
 
     /*SBRC*/
     int      bEnableSBRC;
@@ -2344,6 +2353,9 @@ typedef struct x265_param
 
     /*Screen Content Coding*/
     int     bEnableSCC;
+
+    /*Frame level RateControl Configuration*/
+    int     bConfigRCFrame;
 } x265_param;
 
 /* x265_param_alloc:

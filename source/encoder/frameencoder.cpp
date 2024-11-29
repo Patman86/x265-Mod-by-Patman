@@ -106,16 +106,6 @@ void FrameEncoder::destroy()
         delete m_rce.picTimingSEI;
         delete m_rce.hrdTiming;
     }
-
-    if (m_param->bEnableTemporalFilter)
-    {
-        delete m_frameEncTF->m_metld;
-
-        for (int i = 0; i < (m_frameEncTF->m_range << 1); i++)
-            m_frameEncTF->destroyRefPicInfo(&m_mcstfRefList[i]);
-
-        delete m_frameEncTF;
-    }
 }
 
 bool FrameEncoder::init(Encoder *top, int numRows, int numCols)
@@ -208,16 +198,6 @@ bool FrameEncoder::init(Encoder *top, int numRows, int numCols)
         unsigned long tmp;
         CLZ(tmp, (numRows * numCols - 1));
         m_sliceAddrBits = (uint16_t)(tmp + 1);
-    }
-
-    if (m_param->bEnableTemporalFilter)
-    {
-        m_frameEncTF = new TemporalFilter();
-        if (m_frameEncTF)
-            m_frameEncTF->init(m_param);
-
-        for (int i = 0; i < (m_frameEncTF->m_range << 1); i++)
-            ok &= !!m_frameEncTF->createRefPicInfo(&m_mcstfRefList[i], m_param);
     }
 
     m_retFrameBuffer = X265_MALLOC(Frame*, m_param->numLayers);
@@ -368,7 +348,7 @@ void FrameEncoder::threadMain()
             while (!m_frame[0]->m_ctuInfo)
                 m_frame[0]->m_copied.wait();
         }
-        if ((m_param->bAnalysisType == AVC_INFO) && !m_param->analysisSave && !m_param->analysisLoad && !(IS_X265_TYPE_I(m_frame[0]->m_lowres.sliceType)))
+        if ((m_param->bAnalysisType == AVC_INFO) && !strlen(m_param->analysisSave) && !strlen(m_param->analysisLoad) && !(IS_X265_TYPE_I(m_frame[0]->m_lowres.sliceType)))
         {
             while (((m_frame[0]->m_analysisData.interData == NULL && m_frame[0]->m_analysisData.intraData == NULL) || (uint32_t)m_frame[0]->m_poc != m_frame[0]->m_analysisData.poc))
                 m_frame[0]->m_copyMVType.wait();
@@ -555,7 +535,7 @@ void FrameEncoder::compressFrame(int layer)
         m_cuStats.countWeightAnalyze++;
         ScopedElapsedTime time(m_cuStats.weightAnalyzeTime);
 #endif
-        if (m_param->analysisLoad)
+        if (strlen(m_param->analysisLoad))
         {
             for (int list = 0; list < slice->isInterB() + 1; list++) 
             {
@@ -580,7 +560,7 @@ void FrameEncoder::compressFrame(int layer)
     else
         slice->disableWeights();
 
-    if (m_param->analysisSave && (bUseWeightP || bUseWeightB))
+    if (strlen(m_param->analysisSave) && (bUseWeightP || bUseWeightB))
         reuseWP = (WeightParam*)m_frame[layer]->m_analysisData.wt;
     // Generate motion references
     int numPredDir = slice->isInterP() ? 1 : slice->isInterB() ? 2 : 0;
@@ -594,7 +574,7 @@ void FrameEncoder::compressFrame(int layer)
             slice->m_refReconPicList[l][ref] = slice->m_refFrameList[l][ref]->m_reconPic[0];
             m_mref[l][ref].init(slice->m_refReconPicList[l][ref], w, *m_param);
         }
-        if (m_param->analysisSave && (bUseWeightP || bUseWeightB))
+        if (strlen(m_param->analysisSave) && (bUseWeightP || bUseWeightB))
         {
             for (int i = 0; i < (m_param->internalCsp != X265_CSP_I400 ? 3 : 1); i++)
                 *(reuseWP++) = slice->m_weightPredTable[l][0][i];
@@ -676,8 +656,8 @@ void FrameEncoder::compressFrame(int layer)
     }
     if (m_param->bEnableTemporalFilter)
     {
-        m_frameEncTF->m_QP = qp;
-        m_frameEncTF->bilateralFilter(m_frame[layer], m_mcstfRefList, m_param->temporalFilterStrength);
+        m_frame[layer]->m_mcstf->m_QP = qp;
+        m_frame[layer]->m_mcstf->bilateralFilter(m_frame[layer], m_frame[layer]->m_mcstfRefList, m_param->temporalFilterStrength);
     }
 
     if (m_nr)
@@ -1071,14 +1051,14 @@ void FrameEncoder::compressFrame(int layer)
     if (m_param->bEnableTemporalFilter && m_top->isFilterThisframe(m_frame[layer]->m_mcstf->m_sliceTypeConfig, m_frame[layer]->m_lowres.sliceType))
     {
         //Reset the MCSTF context in Frame Encoder and Frame
-        for (int i = 0; i < (m_frameEncTF->m_range << 1); i++)
+        for (int i = 0; i < (m_frame[layer]->m_mcstf->m_range << 1); i++)
         {
-            memset(m_mcstfRefList[i].mvs0, 0, sizeof(MV) * ((m_param->sourceWidth / 16) * (m_param->sourceHeight / 16)));
-            memset(m_mcstfRefList[i].mvs1, 0, sizeof(MV) * ((m_param->sourceWidth / 16) * (m_param->sourceHeight / 16)));
-            memset(m_mcstfRefList[i].mvs2, 0, sizeof(MV) * ((m_param->sourceWidth / 16) * (m_param->sourceHeight / 16)));
-            memset(m_mcstfRefList[i].mvs,  0, sizeof(MV) * ((m_param->sourceWidth / 4) * (m_param->sourceHeight / 4)));
-            memset(m_mcstfRefList[i].noise, 0, sizeof(int) * ((m_param->sourceWidth / 4) * (m_param->sourceHeight / 4)));
-            memset(m_mcstfRefList[i].error, 0, sizeof(int) * ((m_param->sourceWidth / 4) * (m_param->sourceHeight / 4)));
+            memset(m_frame[layer]->m_mcstfRefList[i].mvs0, 0, sizeof(MV) * ((m_param->sourceWidth / 16) * (m_param->sourceHeight / 16)));
+            memset(m_frame[layer]->m_mcstfRefList[i].mvs1, 0, sizeof(MV) * ((m_param->sourceWidth / 16) * (m_param->sourceHeight / 16)));
+            memset(m_frame[layer]->m_mcstfRefList[i].mvs2, 0, sizeof(MV) * ((m_param->sourceWidth / 16) * (m_param->sourceHeight / 16)));
+            memset(m_frame[layer]->m_mcstfRefList[i].mvs,  0, sizeof(MV) * ((m_param->sourceWidth / 4) * (m_param->sourceHeight / 4)));
+            memset(m_frame[layer]->m_mcstfRefList[i].noise, 0, sizeof(int) * ((m_param->sourceWidth / 4) * (m_param->sourceHeight / 4)));
+            memset(m_frame[layer]->m_mcstfRefList[i].error, 0, sizeof(int) * ((m_param->sourceWidth / 4) * (m_param->sourceHeight / 4)));
 
             m_frame[layer]->m_mcstf->m_numRef = 0;
         }
@@ -1656,7 +1636,7 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
             /* TODO: use defines from slicetype.h for lowres block size */
             uint32_t block_y = (ctu->m_cuPelY >> m_param->maxLog2CUSize) * noOfBlocks;
             uint32_t block_x = (ctu->m_cuPelX >> m_param->maxLog2CUSize) * noOfBlocks;
-            if (!m_param->analysisLoad || !m_param->bDisableLookahead)
+            if (!strlen(m_param->analysisLoad) || !m_param->bDisableLookahead)
             {
                 cuStat.vbvCost = 0;
                 cuStat.intraVbvCost = 0;

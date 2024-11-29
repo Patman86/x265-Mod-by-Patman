@@ -466,7 +466,8 @@ namespace X265_NS {
         H0("\nSEI Message Options\n");
         H0("   --film-grain <filename>       File containing Film Grain Characteristics to be written as a SEI Message\n");
         H0("   --aom-film-grain <filename>   File containing Aom Film Grain Characteristics to be written as a SEI Message\n");
-
+        H0("   --[no-]frame-rc              Enable configuring Rate Control parameters(QP, CRF or Bitrate) at frame level.Default 0\n"
+           "                                Enable this option only when planning to invoke the API function x265_encoder_reconfig to configure Rate Control parameters\n");
 #undef OPT
 #undef H0
 #undef H1
@@ -506,6 +507,10 @@ namespace X265_NS {
         if (dolbyVisionRpu)
             fclose(dolbyVisionRpu);
         dolbyVisionRpu = NULL;
+#if ENABLE_MULTIVIEW
+        if (multiViewConfig)
+            fclose(multiViewConfig);
+#endif
         if (output)
             output->release();
         output = NULL;
@@ -546,7 +551,7 @@ namespace X265_NS {
 			estsz_prec = estsz < 1000000 ? 2 : estsz < 10000000 ? 1 : 0;
 			estsz_num = estsz < 1000 ? estsz : estsz / 1000;
 			estsz_unit = estsz < 1000 ? "K" : "M";
-			sprintf(buf, "x265 [%.1f%%] %d/%d Frames @ %.*f FPS | %.*f kb/s | %d:%02d:%02d [-%d:%02d:%02d] | %.*f %sB [%.*f %sB]",
+			snprintf(buf, sizeof(buf), "x265 [%.1f%%] %d/%d Frames @ %.*f FPS | %.*f kb/s | %d:%02d:%02d [-%d:%02d:%02d] | %.*f %sB [%.*f %sB]",
 					percentage, frameNum, (param->chunkEnd ? param->chunkEnd : param->totalFrames), fps_prec, fps, bitrate_prec, bitrate,
 					ete_hh, ete_mm, ete_ss,
 					eta_hh, eta_mm, eta_ss,
@@ -554,11 +559,10 @@ namespace X265_NS {
 					estsz_prec, estsz_num, estsz_unit);
         }
         else
-            sprintf(buf, "x265 %d Frames @ %.*f FPS | %.*f kb/s | %d:%02d:%02d | %.*f %sB",
+            snprintf(buf, sizeof(buf), "x265 %d Frames @ %.*f FPS | %.*f kb/s | %d:%02d:%02d | %.*f %sB",
 					frameNum, fps_prec, fps, bitrate_prec, bitrate,
 					ete_hh, ete_mm, ete_ss,
 					file_prec, file_num, file_unit);
-
         fprintf(stderr, "%s  \r", buf + 5);
         SetConsoleTitle(buf);
         fflush(stderr); // needed in windows
@@ -610,7 +614,6 @@ namespace X265_NS {
             showHelp(globalParam);
         }
 
-        globalParam->rc.zones[zonefileCount].zoneParam = api->param_alloc();
         if (!globalParam->rc.zones[zonefileCount].zoneParam)
         {
             x265_log(NULL, X265_LOG_ERROR, "param alloc failed\n");
@@ -1045,18 +1048,18 @@ namespace X265_NS {
         if (param->logLevel >= X265_LOG_INFO || param->logfLevel >= X265_LOG_INFO)
         {
             char buf[128];
-            int p = sprintf(buf, "%dx%d fps %d/%d %sp%d", param->sourceWidth, param->sourceHeight,
+            int p = snprintf(buf, sizeof(buf), "%dx%d fps %d/%d %sp%d", param->sourceWidth, param->sourceHeight,
                 param->fpsNum, param->fpsDenom, x265_source_csp_names[param->internalCsp], info[0].depth);
 
             int width, height;
             getParamAspectRatio(param, width, height);
             if (width && height)
-                p += sprintf(buf + p, " sar %d:%d", width, height);
+                p += snprintf(buf + p, sizeof(buf) - p, " sar %d:%d", width, height);
 
             if (framesToBeEncoded <= 0 || info[0].frameCount <= 0)
                 strcpy(buf + p, " unknown frame count");
             else
-                sprintf(buf + p, " frames %u - %d of %d", this->seek, this->seek + this->framesToBeEncoded - 1, info[0].frameCount);
+                snprintf(buf + p, sizeof(buf) - p, " frames %u - %d of %d", this->seek, this->seek + this->framesToBeEncoded - 1, info[0].frameCount);
 
             for (int view = 0; view < param->numViews - !!param->format; view++)
                 general_log(param, input[view]->getName(), X265_LOG_INFO, "%s\n", buf);
@@ -1078,7 +1081,7 @@ namespace X265_NS {
                 for (int view = 0; view < param->numLayers; view++)
                 {
                     char* buf = new char[strlen(temp) + 7];
-                    sprintf(buf, "%s-%d.yuv", token, view);
+                    snprintf(buf, strlen(temp) + 7, "%s-%d.yuv", token, view);
                     reconfn[view] = buf;
                 }
             }
@@ -1101,7 +1104,7 @@ namespace X265_NS {
             }
         }
 #if ENABLE_LIBVMAF
-        if (!reconfn)
+        if (!reconfn[0])
         {
             x265_log(param, X265_LOG_ERROR, "recon file must be specified to get VMAF score, try --help for help\n");
             return true;
@@ -1191,6 +1194,7 @@ namespace X265_NS {
         }
 
         rewind(zoneFile);
+        char **args = (char**)alloca(256 * sizeof(char *));
         param->rc.zones = X265_MALLOC(x265_zone, param->rc.zonefileCount);
         for (int i = 0; i < param->rc.zonefileCount; i++)
         {
@@ -1208,7 +1212,6 @@ namespace X265_NS {
                 start++;
                 param->rc.zones[i].startFrame = atoi(argLine);
                 int argCount = 0;
-                char **args = (char**)malloc(256 * sizeof(char *));
                 // Adding a dummy string to avoid file parsing error
                 args[argCount++] = (char *)"x265";
                 char* token = strtok(start, " ");
@@ -1414,6 +1417,7 @@ namespace X265_NS {
         rewind(multiViewConfig);
         int linenum = 0;
         int numInput = 0;
+        char** args = (char**)malloc(256 * sizeof(char*));
         while (fgets(line, sizeof(line), multiViewConfig))
         {
             if (*line == '#' || (strcmp(line, "\r\n") == 0))
@@ -1425,7 +1429,6 @@ namespace X265_NS {
             char* start = strchr(argLine, '-');
             int argCount = 0;
             char flag[] = "true";
-            char** args = (char**)malloc(256 * sizeof(char*));
             //Adding a dummy string to avoid file parsing error
             args[argCount++] = (char*)"x265";
             char* token = strtok(start, " ");
@@ -1527,6 +1530,7 @@ namespace X265_NS {
             {
                 if (api)
                     api->param_free(param);
+                free(args);
                 exit(1);
             }
             linenum++;
@@ -1536,6 +1540,7 @@ namespace X265_NS {
             x265_log(NULL, X265_LOG_WARNING, "Number of Input files does not match with the given format <%d>\n", param->format);
             if (api)
                 api->param_free(param);
+            free(args);
             exit(1);
         }
         return 1;

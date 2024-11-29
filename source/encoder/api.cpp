@@ -205,6 +205,8 @@ x265_encoder *x265_encoder_open(x265_param *p)
         }
     }
 
+    // Need free zone because follow up Memcpy will broken all of pointer
+    x265_zone_free(zoneParam);
     memcpy(zoneParam, param, sizeof(x265_param));
     for (int i = 0; i < param->rc.zonefileCount; i++)
     {
@@ -212,7 +214,7 @@ x265_encoder *x265_encoder_open(x265_param *p)
     }
 
     /* Try to open CSV file handle */
-    if (encoder->m_param->csvfn)
+    if (strlen(encoder->m_param->csvfn))
     {
         encoder->m_param->csvfpt = x265_csvlog_open(encoder->m_param);
         if (!encoder->m_param->csvfpt)
@@ -222,7 +224,9 @@ x265_encoder *x265_encoder_open(x265_param *p)
         }
     }
 
+    encoder->m_templateParam = param;
     encoder->m_latestParam = latestParam;
+    encoder->m_zoneParam = zoneParam;
     x265_copy_params(latestParam, param);
     if (encoder->m_aborted)
         goto fail;
@@ -309,7 +313,7 @@ int x265_encoder_reconfig(x265_encoder* enc, x265_param* param_in)
         return -1;
     x265_param save;
     Encoder* encoder = static_cast<Encoder*>(enc);
-    if (encoder->m_param->csvfn == NULL && param_in->csvfpt != NULL)
+    if (strlen(encoder->m_param->csvfn) && param_in->csvfpt != NULL)
          encoder->m_param->csvfpt = param_in->csvfpt;
     if (encoder->m_latestParam->forceFlush != param_in->forceFlush)
         return encoder->reconfigureParam(encoder->m_latestParam, param_in);
@@ -327,18 +331,20 @@ int x265_encoder_reconfig(x265_encoder* enc, x265_param* param_in)
     {
         /* reconfigure failed, recover saved param set */
         x265_copy_params(encoder->m_latestParam, &save);
+        x265_zone_free(&save);
         ret = -1;
     }
     else
     {
         encoder->configure(encoder->m_latestParam);
-        if (encoder->m_latestParam->scalingLists && encoder->m_latestParam->scalingLists != encoder->m_param->scalingLists)
+        if (strlen(encoder->m_latestParam->scalingLists) && strcmp(encoder->m_latestParam->scalingLists, encoder->m_param->scalingLists))
         {
             if (encoder->m_param->bRepeatHeaders)
             {
                 if (encoder->m_scalingList.parseScalingList(encoder->m_latestParam->scalingLists))
                 {
                     x265_copy_params(encoder->m_latestParam, &save);
+                    x265_zone_free(&save);
                     return -1;
                 }
                 encoder->m_scalingList.setupQuantMatrices(encoder->m_param->internalCsp);
@@ -347,12 +353,13 @@ int x265_encoder_reconfig(x265_encoder* enc, x265_param* param_in)
             {
                 x265_log(encoder->m_param, X265_LOG_ERROR, "Repeat headers is turned OFF, cannot reconfigure scalinglists\n");
                 x265_copy_params(encoder->m_latestParam, &save);
+                x265_zone_free(&save);
                 return -1;
             }
         }
         if (!isReconfigureRc)
             encoder->m_reconfigure = true;
-        else if (encoder->m_reconfigureRc)
+        else if (encoder->m_reconfigureRc || encoder->m_latestParam->bConfigRCFrame)
         {
             VPS saveVPS;
             memcpy(&saveVPS.ptl, &encoder->m_vps.ptl, sizeof(saveVPS.ptl));
@@ -373,6 +380,7 @@ int x265_encoder_reconfig(x265_encoder* enc, x265_param* param_in)
     /* Zones support modifying num of Refs. Requires determining level at each zone start*/
     if (encoder->m_param->rc.zonefileCount)
         determineLevel(*encoder->m_latestParam, encoder->m_vps);
+    x265_zone_free(&save);
     return ret;
 }
 
@@ -1009,7 +1017,7 @@ void x265_picture_init(x265_param *param, x265_picture *pic)
     pic->picStruct = 0;
     pic->vbvEndFlag = 0;
 
-    if ((param->analysisSave || param->analysisLoad) || (param->bAnalysisType == AVC_INFO))
+    if ((strlen(param->analysisSave) || strlen(param->analysisLoad)) || (param->bAnalysisType == AVC_INFO))
     {
         uint32_t widthInCU = (param->sourceWidth + param->maxCUSize - 1) >> param->maxLog2CUSize;
         uint32_t heightInCU = (param->sourceHeight + param->maxCUSize - 1) >> param->maxLog2CUSize;
@@ -1041,6 +1049,8 @@ void x265_zone_free(x265_param *param)
     {
         for (int i = 0; i < param->rc.zonefileCount; i++)
             x265_free(param->rc.zones[i].zoneParam);
+        param->rc.zonefileCount = 0;
+        param->rc.zoneCount = 0;
         x265_free(param->rc.zones);
     }
 }
@@ -1399,6 +1409,15 @@ FILE* x265_csvlog_open(const x265_param* param)
 #if ENABLE_LIBVMAF
                     fprintf(csvfp, ", VMAF Frame Score");
 #endif
+                    if (param->bConfigRCFrame)
+                    {
+                        if (param->rc.rateControlMode == X265_RC_ABR)
+                            fprintf(csvfp, ", Target bitrate");
+                        else if (param->rc.rateControlMode == X265_RC_CRF)
+                            fprintf(csvfp, ", Target CRF");
+                        else if (param->rc.rateControlMode == X265_RC_CQP)
+                            fprintf(csvfp, ", Target QP");
+                    }
                 }
                 fprintf(csvfp, "\n");
             }
@@ -1526,6 +1545,15 @@ void x265_csvlog_frame(const x265_param* param, const x265_picture* pic)
 #if ENABLE_LIBVMAF
         fprintf(param->csvfpt, ", %lf", frameStats->vmafFrameScore);
 #endif
+        if (param->bConfigRCFrame)
+        {
+            if(param->rc.rateControlMode == X265_RC_ABR)
+                fprintf(param->csvfpt, ", %ld", (long)frameStats->currTrBitrate);
+            else if (param->rc.rateControlMode == X265_RC_CRF)
+                fprintf(param->csvfpt, ", %f", frameStats->currTrCRF);
+            else if (param->rc.rateControlMode == X265_RC_CQP)
+                fprintf(param->csvfpt, ", %d", frameStats->currTrQP);
+        }
     }
     fprintf(param->csvfpt, "\n");
     fflush(stderr);
@@ -1903,9 +1931,9 @@ int compute_vmaf(double* vmaf_score, char* fmt, int width, int height, int bitde
 
 	VmafConfiguration cfg = {
 		.log_level = VMAF_LOG_LEVEL_INFO,
-		.n_threads = n_thread,
-		.n_subsample = n_subsample,
-		.cpumask = disable_avx ? -1 : 0,
+		.n_threads = static_cast<unsigned int>(n_thread),
+		.n_subsample = static_cast<unsigned int>(n_subsample),
+		.cpumask = static_cast<uint64_t>(disable_avx),
 		.gpumask = 0,
 	};
 

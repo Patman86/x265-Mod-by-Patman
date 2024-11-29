@@ -147,6 +147,8 @@ public:
     Frame*                 m_nextMCSTF;           // PicList doubly linked list pointers
     Frame*                 m_prevMCSTF;
     int*                   m_isSubSampled;
+    TemporalFilterRefPicInfo m_mcstfRefList[MAX_MCSTF_TEMPORAL_WINDOW_LENGTH];
+    PicYuv*                m_mcstffencPic;
 
     /*Vbv-End-Flag*/
     int vbvEndFlag;
@@ -175,6 +177,13 @@ public:
     int                    m_viewId;
     Frame*                 m_nextSubDPB;           // PicList doubly linked list pointers
     Frame*                 m_prevSubDPB;
+
+    /*Target bitrate for this picture*/
+    int64_t                m_targetBitrate;
+    /* target CRF for this picture.*/
+    double                 m_targetCrf;
+    /* target QP for this picture.*/
+    int                    m_targetQp;
 
     Frame();
 

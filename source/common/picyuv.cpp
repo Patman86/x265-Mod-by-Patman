@@ -154,6 +154,10 @@ bool PicYuv::createScaledPicYUV(x265_param* param, uint8_t scaleFactor)
     m_param = param;
     m_picWidth = m_param->sourceWidth / scaleFactor;
     m_picHeight = m_param->sourceHeight / scaleFactor;
+    int maxBlocksInRow = (m_picWidth + X265_LOWRES_CU_SIZE - 1) >> X265_LOWRES_CU_BITS;
+    int maxBlocksInCol = (m_picHeight + X265_LOWRES_CU_SIZE - 1) >> X265_LOWRES_CU_BITS;
+    m_picWidth = maxBlocksInRow * X265_LOWRES_CU_SIZE;
+    m_picHeight = maxBlocksInCol * X265_LOWRES_CU_SIZE;
 
     m_picCsp = m_param->internalCsp;
     m_hChromaShift = CHROMA_H_SHIFT(m_picCsp);
