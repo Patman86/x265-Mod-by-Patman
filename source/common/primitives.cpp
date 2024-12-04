@@ -91,7 +91,9 @@ void setupAliasPrimitives(EncoderPrimitives &p)
     /* at HIGH_BIT_DEPTH, pixel == short so we can alias many primitives */
     for (int i = 0; i < NUM_CU_SIZES; i++)
     {
+#if !defined(X265_ARCH_ARM64)
         p.cu[i].sse_pp = (pixel_sse_t)p.cu[i].sse_ss;
+#endif
 
         p.cu[i].copy_ps = (copy_ps_t)p.pu[i].copy_pp;
         p.cu[i].copy_sp = (copy_sp_t)p.pu[i].copy_pp;
