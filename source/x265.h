@@ -1184,7 +1184,7 @@ typedef struct x265_param
     int       logLevel;
 
     /* filename of general log */
-    char*     logfn;
+    char      logfn[X265_MAX_STRING_SIZE];
 
     /* level of general log */
     int       logfLevel;
