@@ -213,6 +213,8 @@ function PFX(pixel_sse_pp_64x64_sve)
     ret
 endfunc
 
+#endif // HIGH_BIT_DEPTH
+
 .macro SSE_SS_4x2
     ldr             d16, [x0]
     ldr             d17, [x2]
@@ -367,5 +369,3 @@ function PFX(pixel_sse_ss_64x64_sve)
     fmov            x0, d0
     ret
 endfunc
-
-#endif // HIGH_BIT_DEPTH
