@@ -1625,34 +1625,6 @@ void transpose_neon<64>(pixel *dst, const pixel *src, intptr_t stride)
 }
 
 
-template<int size>
-sse_t pixel_ssd_s_neon(const int16_t *a, intptr_t dstride)
-{
-    sse_t sum = 0;
-
-
-    int32x4_t vsum = vdupq_n_s32(0);
-
-    for (int y = 0; y < size; y++)
-    {
-        int x = 0;
-
-        for (; (x + 8) <= size; x += 8)
-        {
-            int16x8_t in = vld1q_s16(a + x);
-            vsum = vmlal_s16(vsum, vget_low_s16(in), vget_low_s16(in));
-            vsum = vmlal_high_s16(vsum, (in), (in));
-        }
-        for (; x < size; x++)
-        {
-            sum += a[x] * a[x];
-        }
-
-        a += dstride;
-    }
-    return sum + vaddvq_s32(vsum);
-}
-
 
 };
 
