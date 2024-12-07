@@ -552,6 +552,17 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_32x32].sse_ss = PFX(pixel_sse_ss_32x32_neon);
     p.cu[BLOCK_64x64].sse_ss = PFX(pixel_sse_ss_64x64_neon);
 
+    // ssd_s
+    p.cu[BLOCK_4x4].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_4x4_neon);
+    p.cu[BLOCK_8x8].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_8x8_neon);
+    p.cu[BLOCK_16x16].ssd_s[NONALIGNED] = PFX(pixel_ssd_s_16x16_neon);
+    p.cu[BLOCK_32x32].ssd_s[NONALIGNED] = PFX(pixel_ssd_s_32x32_neon);
+
+    p.cu[BLOCK_4x4].ssd_s[ALIGNED]   = PFX(pixel_ssd_s_4x4_neon);
+    p.cu[BLOCK_8x8].ssd_s[ALIGNED]   = PFX(pixel_ssd_s_8x8_neon);
+    p.cu[BLOCK_16x16].ssd_s[ALIGNED] = PFX(pixel_ssd_s_16x16_neon);
+    p.cu[BLOCK_32x32].ssd_s[ALIGNED] = PFX(pixel_ssd_s_32x32_neon);
+
 #if !HIGH_BIT_DEPTH
     // pixel_avg_pp
     ALL_LUMA_PU(pixelavg_pp[NONALIGNED], pixel_avg_pp, neon);
@@ -564,17 +575,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     ALL_CHROMA_422_PU(addAvg[NONALIGNED], addAvg, neon);
     ALL_CHROMA_420_PU(addAvg[ALIGNED], addAvg, neon);
     ALL_CHROMA_422_PU(addAvg[ALIGNED], addAvg, neon);
-
-    // ssd_s
-    p.cu[BLOCK_4x4].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_4x4_neon);
-    p.cu[BLOCK_8x8].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_8x8_neon);
-    p.cu[BLOCK_16x16].ssd_s[NONALIGNED] = PFX(pixel_ssd_s_16x16_neon);
-    p.cu[BLOCK_32x32].ssd_s[NONALIGNED] = PFX(pixel_ssd_s_32x32_neon);
-
-    p.cu[BLOCK_4x4].ssd_s[ALIGNED]   = PFX(pixel_ssd_s_4x4_neon);
-    p.cu[BLOCK_8x8].ssd_s[ALIGNED]   = PFX(pixel_ssd_s_8x8_neon);
-    p.cu[BLOCK_16x16].ssd_s[ALIGNED] = PFX(pixel_ssd_s_16x16_neon);
-    p.cu[BLOCK_32x32].ssd_s[ALIGNED] = PFX(pixel_ssd_s_32x32_neon);
 
     // pixel_var
     p.cu[BLOCK_8x8].var   = PFX(pixel_var_8x8_neon);

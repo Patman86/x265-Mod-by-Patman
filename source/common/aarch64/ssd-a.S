@@ -786,4 +786,145 @@ function PFX(pixel_sse_ss_64x64_neon)
     ret
 endfunc
 
+function PFX(pixel_ssd_s_4x4_neon)
+    movi            v0.4s, #0
+    add             x1, x1, x1
+
+    ldr             d16, [x0]
+    ldr             d17, [x0, x1]
+    smlal           v0.4s, v16.4h, v16.4h
+    smlal           v0.4s, v17.4h, v17.4h
+    add             x0, x0, x1, lsl 1
+    ldr             d16, [x0]
+    ldr             d17, [x0, x1]
+    smlal           v0.4s, v16.4h, v16.4h
+    smlal           v0.4s, v17.4h, v17.4h
+
+    ret_v0_w0
+endfunc
+
+function PFX(pixel_ssd_s_8x8_neon)
+    movi            v0.4s, #0
+    movi            v1.4s, #0
+    add             x1, x1, x1
+.rept 8
+    ld1             {v16.8h}, [x0], x1
+    smlal           v0.4s, v16.4h, v16.4h
+    smlal2          v1.4s, v16.8h, v16.8h
+.endr
+    add             v0.4s, v0.4s, v1.4s
+    ret_v0_w0
+endfunc
+
+function PFX(pixel_ssd_s_16x16_neon)
+    movi            v0.4s, #0
+    movi            v1.4s, #0
+    add             x1, x1, x1
+
+    mov             w12, #16
+.Loop_ssd_s_16:
+    sub             w12, w12, #1
+    ld1             {v16.8h-v17.8h}, [x0], x1
+    smlal           v0.4s, v16.4h, v16.4h
+    smlal2          v1.4s, v16.8h, v16.8h
+    smlal           v0.4s, v17.4h, v17.4h
+    smlal2          v1.4s, v17.8h, v17.8h
+    cbnz            w12, .Loop_ssd_s_16
+
+    add             v0.4s, v0.4s, v1.4s
+    uaddlv          d0, v0.4s
+    fmov            x0, d0
+    ret
+endfunc
+
+function PFX(pixel_ssd_s_32x32_neon)
+    movi            v0.4s, #0
+    movi            v1.4s, #0
+    movi            v2.4s, #0
+    movi            v3.4s, #0
+    add             x1, x1, x1
+
+    mov             w12, #32
+.Loop_ssd_s_32:
+    sub             w12, w12, #1
+
+    ldp             q16, q17, [x0]
+    smlal           v0.4s, v16.4h, v16.4h
+    smlal2          v1.4s, v16.8h, v16.8h
+    smlal           v0.4s, v17.4h, v17.4h
+    smlal2          v1.4s, v17.8h, v17.8h
+
+    ldp             q16, q17, [x0, #32]
+    smlal           v2.4s, v16.4h, v16.4h
+    smlal2          v3.4s, v16.8h, v16.8h
+    smlal           v2.4s, v17.4h, v17.4h
+    smlal2          v3.4s, v17.8h, v17.8h
+
+    add             x0, x0, x1
+    cbnz            w12, .Loop_ssd_s_32
+
+    uaddlp          v0.2d, v0.4s
+    uadalp          v0.2d, v1.4s
+    uadalp          v0.2d, v2.4s
+    uadalp          v0.2d, v3.4s
+    addp            d0, v0.2d
+    fmov            x0, d0
+    ret
+endfunc
+
+function PFX(pixel_ssd_s_64x64_neon)
+    movi            v0.4s, #0
+    movi            v31.4s, #0
+    add             x1, x1, x1
+    add             x3, x3, x3
+
+    mov             w12, #2
+.Loop_ssd_s_64x32:
+    sub             w12, w12, #1
+    movi            v1.4s, #0
+    movi            v2.4s, #0
+    movi            v3.4s, #0
+    movi            v4.4s, #0
+    mov             w11, #32
+.Loop_ssd_s_64x1:
+    sub             w11, w11, #1
+
+    ldp             q16, q17, [x0]
+    smlal           v1.4s, v16.4h, v16.4h
+    smlal2          v2.4s, v16.8h, v16.8h
+    smlal           v1.4s, v17.4h, v17.4h
+    smlal2          v2.4s, v17.8h, v17.8h
+
+    ldp             q16, q17, [x0, #32]
+    smlal           v3.4s, v16.4h, v16.4h
+    smlal2          v4.4s, v16.8h, v16.8h
+    smlal           v3.4s, v17.4h, v17.4h
+    smlal2          v4.4s, v17.8h, v17.8h
+
+    ldp             q16, q17, [x0, #64]
+    smlal           v1.4s, v16.4h, v16.4h
+    smlal2          v2.4s, v16.8h, v16.8h
+    smlal           v1.4s, v17.4h, v17.4h
+    smlal2          v2.4s, v17.8h, v17.8h
+
+    ldp             q16, q17, [x0, #96]
+    smlal           v3.4s, v16.4h, v16.4h
+    smlal2          v4.4s, v16.8h, v16.8h
+    smlal           v3.4s, v17.4h, v17.4h
+    smlal2          v4.4s, v17.8h, v17.8h
+
+    add             x0, x0, x1
+    cbnz            w11, .Loop_ssd_s_64x1
+
+    uadalp          v0.2d, v1.4s
+    uadalp          v0.2d, v2.4s
+    uadalp          v0.2d, v3.4s
+    uadalp          v0.2d, v4.4s
+    cbnz            w12, .Loop_ssd_s_64x32
+
+    addp            d0, v0.2d
+    fmov            x0, d0
+    ret
+endfunc
+
 #endif // !HIGH_BIT_DEPTH
