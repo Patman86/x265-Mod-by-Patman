@@ -213,6 +213,118 @@ function PFX(pixel_sse_pp_64x64_sve)
     ret
 endfunc
 
+function PFX(pixel_ssd_s_4x4_sve)
+    movi            v0.4s, #0
+    add             x1, x1, x1
+
+    ldr             d16, [x0]
+    ldr             d17, [x0, x1]
+    sdot            z0.d, z16.h, z16.h
+    sdot            z0.d, z17.h, z17.h
+    add             x0, x0, x1, lsl #1
+    ldr             d16, [x0]
+    ldr             d17, [x0, x1]
+    sdot            z0.d, z16.h, z16.h
+    sdot            z0.d, z17.h, z17.h
+
+    fmov            w0, s0
+    ret
+endfunc
+
+function PFX(pixel_ssd_s_8x8_sve)
+    movi            v0.4s, #0
+    movi            v1.4s, #0
+    add             x1, x1, x1
+
+.rept 4
+    ld1             {v16.8h}, [x0], x1
+    sdot            z0.d, z16.h, z16.h
+    ld1             {v17.8h}, [x0], x1
+    sdot            z1.d, z17.h, z17.h
+.endr
+
+    add             v0.2d, v0.2d, v1.2d
+    addp            d0, v0.2d
+    fmov            w0, s0
+    ret
+endfunc
+
+function PFX(pixel_ssd_s_16x16_sve)
+    movi            v0.4s, #0
+    movi            v1.4s, #0
+    add             x1, x1, x1
+
+    mov             w12, #16
+.Loop_ssd_s_16:
+    sub             w12, w12, #1
+
+    ld1             {v16.8h-v17.8h}, [x0], x1
+    sdot            z0.d, z16.h, z16.h
+    sdot            z1.d, z17.h, z17.h
+    cbnz            w12, .Loop_ssd_s_16
+
+    add             v0.2d, v0.2d, v1.2d
+    addp            d0, v0.2d
+    fmov            x0, d0
+    ret
+endfunc
+
+function PFX(pixel_ssd_s_32x32_sve)
+    movi            v0.4s, #0
+    movi            v1.4s, #0
+    add             x1, x1, x1
+
+    mov             w12, #32
+.Loop_ssd_s_32:
+    sub             w12, w12, #1
+
+    ldp             q16, q17, [x0]
+    sdot            z0.d, z16.h, z16.h
+    sdot            z1.d, z17.h, z17.h
+    ldp             q16, q17, [x0, #32]
+    sdot            z0.d, z16.h, z16.h
+    sdot            z1.d, z17.h, z17.h
+
+    add             x0, x0, x1
+    cbnz            w12, .Loop_ssd_s_32
+
+    add             v0.2d, v0.2d, v1.2d
+    addp            d0, v0.2d
+    fmov            x0, d0
+    ret
+endfunc
+
+function PFX(pixel_ssd_s_64x64_sve)
+    movi            v0.4s, #0
+    movi            v1.4s, #0
+    add             x1, x1, x1
+
+    mov             w12, #64
+.Loop_ssd_s_64:
+    sub             w12, w12, #1
+
+    ldp             q16, q17, [x0]
+    sdot            z0.d, z16.h, z16.h
+    sdot            z1.d, z17.h, z17.h
+    ldp             q16, q17, [x0, #32]
+    sdot            z0.d, z16.h, z16.h
+    sdot            z1.d, z17.h, z17.h
+    ldp             q16, q17, [x0, #64]
+    sdot            z0.d, z16.h, z16.h
+    sdot            z1.d, z17.h, z17.h
+    ldp             q16, q17,  [x0, #96]
+    sdot            z0.d, z16.h, z16.h
+    sdot            z1.d, z17.h, z17.h
+
+    add             x0, x0, x1
+    cbnz            w12, .Loop_ssd_s_64
+
+    add             v0.2d, v0.2d, v1.2d
+    addp            d0, v0.2d
+    fmov            x0, d0
+    ret
+endfunc
+
 #endif // HIGH_BIT_DEPTH
 
 .macro SSE_SS_4x2
