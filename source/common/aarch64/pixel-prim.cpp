@@ -910,106 +910,6 @@ int sad_pp_neon(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intp
 }
 
 template<int lx, int ly>
-void sad_x3_neon(const pixel *pix1, const pixel *pix2, const pixel *pix3, const pixel *pix4, intptr_t frefstride,
-                 int32_t *res)
-{
-    res[0] = 0;
-    res[1] = 0;
-    res[2] = 0;
-    for (int y = 0; y < ly; y++)
-    {
-        int x = 0;
-        uint16x8_t vsum16_0 = vdupq_n_u16(0);
-        uint16x8_t vsum16_1 = vdupq_n_u16(0);
-        uint16x8_t vsum16_2 = vdupq_n_u16(0);
-#if HIGH_BIT_DEPTH
-        for (; (x + 8) <= lx; x += 8)
-        {
-            uint16x8_t p1 = vld1q_u16(pix1 + x);
-            uint16x8_t p2 = vld1q_u16(pix2 + x);
-            uint16x8_t p3 = vld1q_u16(pix3 + x);
-            uint16x8_t p4 = vld1q_u16(pix4 + x);
-            vsum16_0 = vabaq_u16(vsum16_0, p1, p2);
-            vsum16_1 = vabaq_u16(vsum16_1, p1, p3);
-            vsum16_2 = vabaq_u16(vsum16_2, p1, p4);
-        }
-        if (lx & 4)
-        {
-            uint16x4_t p1 = vld1_u16(pix1 + x);
-            uint16x4_t p2 = vld1_u16(pix2 + x);
-            uint16x4_t p3 = vld1_u16(pix3 + x);
-            uint16x4_t p4 = vld1_u16(pix4 + x);
-            res[0] += vaddlv_u16(vaba_u16(vdup_n_u16(0), p1, p2));
-            res[1] += vaddlv_u16(vaba_u16(vdup_n_u16(0), p1, p3));
-            res[2] += vaddlv_u16(vaba_u16(vdup_n_u16(0), p1, p4));
-            x += 4;
-        }
-        if (lx >= 4)
-        {
-            res[0] += vaddlvq_u16(vsum16_0);
-            res[1] += vaddlvq_u16(vsum16_1);
-            res[2] += vaddlvq_u16(vsum16_2);
-        }
-#else
-
-        for (; (x + 16) <= lx; x += 16)
-        {
-            uint8x16_t p1 = vld1q_u8(pix1 + x);
-            uint8x16_t p2 = vld1q_u8(pix2 + x);
-            uint8x16_t p3 = vld1q_u8(pix3 + x);
-            uint8x16_t p4 = vld1q_u8(pix4 + x);
-            vsum16_0 = vabal_u8(vsum16_0, vget_low_u8(p1), vget_low_u8(p2));
-            vsum16_0 = vabal_high_u8(vsum16_0, p1, p2);
-            vsum16_1 = vabal_u8(vsum16_1, vget_low_u8(p1), vget_low_u8(p3));
-            vsum16_1 = vabal_high_u8(vsum16_1, p1, p3);
-            vsum16_2 = vabal_u8(vsum16_2, vget_low_u8(p1), vget_low_u8(p4));
-            vsum16_2 = vabal_high_u8(vsum16_2, p1, p4);
-        }
-        if (lx & 8)
-        {
-            uint8x8_t p1 = vld1_u8(pix1 + x);
-            uint8x8_t p2 = vld1_u8(pix2 + x);
-            uint8x8_t p3 = vld1_u8(pix3 + x);
-            uint8x8_t p4 = vld1_u8(pix4 + x);
-            vsum16_0 = vabal_u8(vsum16_0, p1, p2);
-            vsum16_1 = vabal_u8(vsum16_1, p1, p3);
-            vsum16_2 = vabal_u8(vsum16_2, p1, p4);
-            x += 8;
-        }
-        if (lx & 4)
-        {
-            uint8x8_t p1 = load_u8x4x1(pix1 + x);
-            uint8x8_t p2 = load_u8x4x1(pix2 + x);
-            uint8x8_t p3 = load_u8x4x1(pix3 + x);
-            uint8x8_t p4 = load_u8x4x1(pix4 + x);
-            vsum16_0 = vabal_u8(vsum16_0, p1, p2);
-            vsum16_1 = vabal_u8(vsum16_1, p1, p3);
-            vsum16_2 = vabal_u8(vsum16_2, p1, p4);
-            x += 4;
-        }
-        if (lx >= 4)
-        {
-            res[0] += vaddvq_u16(vsum16_0);
-            res[1] += vaddvq_u16(vsum16_1);
-            res[2] += vaddvq_u16(vsum16_2);
-        }
-
-#endif
-        if (lx & 3) for (; x < lx; x++)
-            {
-                res[0] += abs(pix1[x] - pix2[x]);
-                res[1] += abs(pix1[x] - pix3[x]);
-                res[2] += abs(pix1[x] - pix4[x]);
-            }
-
-        pix1 += FENC_STRIDE;
-        pix2 += frefstride;
-        pix3 += frefstride;
-        pix4 += frefstride;
-    }
-}
-
-template<int lx, int ly>
 void sad_x4_neon(const pixel *pix1, const pixel *pix2, const pixel *pix3, const pixel *pix4, const pixel *pix5,
                  intptr_t frefstride, int32_t *res)
 {
@@ -1641,7 +1541,6 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.pu[LUMA_ ## W ## x ## H].copy_pp = blockcopy_pp_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].addAvg[NONALIGNED] = addAvg_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].addAvg[ALIGNED] = addAvg_neon<W, H>; \
-    p.pu[LUMA_ ## W ## x ## H].sad_x3 = sad_x3_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].sad_x4 = sad_x4_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[NONALIGNED] = pixelavg_pp_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[ALIGNED] = pixelavg_pp_neon<W, H>;
@@ -1656,7 +1555,6 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.pu[LUMA_ ## W ## x ## H].copy_pp = blockcopy_pp_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].addAvg[NONALIGNED] = addAvg_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].addAvg[ALIGNED] = addAvg_neon<W, H>; \
-    p.pu[LUMA_ ## W ## x ## H].sad_x3 = sad_x3_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].sad_x4 = sad_x4_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[NONALIGNED] = pixelavg_pp_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[ALIGNED] = pixelavg_pp_neon<W, H>;
@@ -1703,11 +1601,8 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     LUMA_PU(16, 64);
 
 #if !(HIGH_BIT_DEPTH)
-    p.pu[LUMA_4x4].sad_x3 = sad_x3_neon<4, 4>;
     p.pu[LUMA_4x4].sad_x4 = sad_x4_neon<4, 4>;
-    p.pu[LUMA_4x8].sad_x3 = sad_x3_neon<4, 8>;
     p.pu[LUMA_4x8].sad_x4 = sad_x4_neon<4, 8>;
-    p.pu[LUMA_4x16].sad_x3 = sad_x3_neon<4, 16>;
     p.pu[LUMA_4x16].sad_x4 = sad_x4_neon<4, 16>;
 #endif // !(HIGH_BIT_DEPTH)
 
