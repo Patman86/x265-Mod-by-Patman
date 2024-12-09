@@ -843,6 +843,19 @@ void setupSvePrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_32x32].sse_ss = PFX(pixel_sse_ss_32x32_sve);
     p.cu[BLOCK_64x64].sse_ss = PFX(pixel_sse_ss_64x64_sve);
 
+    // ssd_s
+    p.cu[BLOCK_4x4].ssd_s[ALIGNED]      = PFX(pixel_ssd_s_4x4_sve);
+    p.cu[BLOCK_8x8].ssd_s[ALIGNED]      = PFX(pixel_ssd_s_8x8_sve);
+    p.cu[BLOCK_16x16].ssd_s[ALIGNED]    = PFX(pixel_ssd_s_16x16_sve);
+    p.cu[BLOCK_32x32].ssd_s[ALIGNED]    = PFX(pixel_ssd_s_32x32_sve);
+    p.cu[BLOCK_64x64].ssd_s[ALIGNED]    = PFX(pixel_ssd_s_64x64_sve);
+
+    p.cu[BLOCK_4x4].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_4x4_sve);
+    p.cu[BLOCK_8x8].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_8x8_sve);
+    p.cu[BLOCK_16x16].ssd_s[NONALIGNED] = PFX(pixel_ssd_s_16x16_sve);
+    p.cu[BLOCK_32x32].ssd_s[NONALIGNED] = PFX(pixel_ssd_s_32x32_sve);
+    p.cu[BLOCK_64x64].ssd_s[NONALIGNED] = PFX(pixel_ssd_s_64x64_sve);
+
 #if !HIGH_BIT_DEPTH
     p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sub_ps  = PFX(pixel_sub_ps_8x16_sve);
 
@@ -879,20 +892,6 @@ void setupSvePrimitives(EncoderPrimitives &p)
     p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sse_pp  = PFX(pixel_sse_pp_8x16_sve);
     p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].sse_pp = PFX(pixel_sse_pp_16x32_sve);
     p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].sse_pp = PFX(pixel_sse_pp_32x64_sve);
-
-    // ssd_s
-    p.cu[BLOCK_4x4].ssd_s[ALIGNED]      = PFX(pixel_ssd_s_4x4_sve);
-    p.cu[BLOCK_8x8].ssd_s[ALIGNED]      = PFX(pixel_ssd_s_8x8_sve);
-    p.cu[BLOCK_16x16].ssd_s[ALIGNED]    = PFX(pixel_ssd_s_16x16_sve);
-    p.cu[BLOCK_32x32].ssd_s[ALIGNED]    = PFX(pixel_ssd_s_32x32_sve);
-    p.cu[BLOCK_64x64].ssd_s[ALIGNED]    = PFX(pixel_ssd_s_64x64_sve);
-
-    p.cu[BLOCK_4x4].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_4x4_sve);
-    p.cu[BLOCK_8x8].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_8x8_sve);
-    p.cu[BLOCK_16x16].ssd_s[NONALIGNED] = PFX(pixel_ssd_s_16x16_sve);
-    p.cu[BLOCK_32x32].ssd_s[NONALIGNED] = PFX(pixel_ssd_s_32x32_sve);
-    p.cu[BLOCK_64x64].ssd_s[NONALIGNED] = PFX(pixel_ssd_s_64x64_sve);
-
 #endif // !HIGH_BIT_DEPTH
 }
 #endif // defined(HAVE_SVE2) || defined(HAVE_SVE)
@@ -912,17 +911,6 @@ void setupSve2Primitives(EncoderPrimitives &p)
     CHROMA_420_PU_MULTIPLE_ARCHS(addAvg[ALIGNED], addAvg, sve2);
     CHROMA_422_PU_CAN_USE_SVE2(addAvg[NONALIGNED], addAvg);
     CHROMA_422_PU_CAN_USE_SVE2(addAvg[ALIGNED], addAvg);
-
-    // ssd_s
-    p.cu[BLOCK_4x4].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_4x4_sve2);
-    p.cu[BLOCK_8x8].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_8x8_sve2);
-    p.cu[BLOCK_16x16].ssd_s[NONALIGNED] = PFX(pixel_ssd_s_16x16_sve2);
-    p.cu[BLOCK_32x32].ssd_s[NONALIGNED] = PFX(pixel_ssd_s_32x32_sve2);
-
-    p.cu[BLOCK_4x4].ssd_s[ALIGNED]   = PFX(pixel_ssd_s_4x4_sve2);
-    p.cu[BLOCK_8x8].ssd_s[ALIGNED]   = PFX(pixel_ssd_s_8x8_sve2);
-    p.cu[BLOCK_16x16].ssd_s[ALIGNED] = PFX(pixel_ssd_s_16x16_sve2);
-    p.cu[BLOCK_32x32].ssd_s[ALIGNED] = PFX(pixel_ssd_s_32x32_sve2);
 
     // pixel_var
     p.cu[BLOCK_8x8].var   = PFX(pixel_var_8x8_sve2);
