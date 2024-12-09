@@ -1641,7 +1641,6 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.pu[LUMA_ ## W ## x ## H].copy_pp = blockcopy_pp_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].addAvg[NONALIGNED] = addAvg_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].addAvg[ALIGNED] = addAvg_neon<W, H>; \
-    p.pu[LUMA_ ## W ## x ## H].sad = sad_pp_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].sad_x3 = sad_x3_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].sad_x4 = sad_x4_neon<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[NONALIGNED] = pixelavg_pp_neon<W, H>; \
@@ -1702,16 +1701,6 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     LUMA_PU(48, 64);
     LUMA_PU(64, 16);
     LUMA_PU(16, 64);
-    
-#if defined(__APPLE__)
-    p.pu[LUMA_4x4].sad = sad_pp_neon<4, 4>;
-    p.pu[LUMA_4x8].sad = sad_pp_neon<4, 8>;
-    p.pu[LUMA_4x16].sad = sad_pp_neon<4, 16>;
-#endif // defined(__APPLE__)
-    p.pu[LUMA_8x4].sad = sad_pp_neon<8, 4>;
-    p.pu[LUMA_8x8].sad = sad_pp_neon<8, 8>;
-    p.pu[LUMA_8x16].sad = sad_pp_neon<8, 16>;
-    p.pu[LUMA_8x32].sad = sad_pp_neon<8, 32>;
 
 #if !(HIGH_BIT_DEPTH)
     p.pu[LUMA_4x4].sad_x3 = sad_x3_neon<4, 4>;
