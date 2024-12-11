@@ -617,6 +617,12 @@ namespace X265_NS {
 
     bool CLIOptions::parse(int argc, char **argv)
     {
+        if (argc <= 1)
+        {
+            x265_log(NULL, X265_LOG_ERROR, "No input file. Run x265 --help for a list of options.\n");
+            return true;
+        }
+
         bool bError = false;
         int bShowHelp = false;
         int inputBitDepth = 8;
@@ -635,12 +641,6 @@ namespace X265_NS {
         const char *profile = NULL;
         int svtEnabled = 0;
         argCnt = argc;
-
-        if (argc <= 1)
-        {
-            x265_log(NULL, X265_LOG_ERROR, "No input file. Run x265 --help for a list of options.\n");
-            return true;
-        }
 
         /* Presets are applied before all other options. */
         for (optind = 0;;)
