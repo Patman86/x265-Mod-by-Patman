@@ -4,6 +4,7 @@
 
 #if HAVE_NEON
 #include "arm64-utils.h"
+#include "mem-neon.h"
 #include <arm_neon.h>
 
 using namespace X265_NS;
@@ -399,6 +400,51 @@ void planar_pred_neon(pixel * dst, intptr_t dstStride, const pixel * srcPix, int
         }
 }
 
+#if !HIGH_BIT_DEPTH
+void intra_pred_planar4_neon(pixel *dst, intptr_t dstStride, const pixel *srcPix,
+                             int /*dirMode*/, int /*bFilter*/)
+{
+    const int log2Size = 2;
+    const int blkSize = 1 << log2Size;
+
+    uint8x16_t src = vld1q_u8(srcPix + 1);
+
+    uint8x8_t above =
+        vreinterpret_u8_u32(vdup_laneq_u32(vreinterpretq_u32_u8(src), 0));
+
+    uint8x8_t topRight = vdup_laneq_u8(src, blkSize);
+    uint8x8_t bottomLeft = vdup_laneq_u8(src, 3 * blkSize);
+
+    const uint8_t c[2][16] =
+    {
+        {3, 2, 1, 0, 3, 2, 1, 0, 1, 2, 3, 4, 1, 2, 3, 4},
+        {3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 3, 3}
+    };
+
+    const uint8x16_t c0 = vld1q_u8(c[0]);
+    const uint8x16_t c1 = vld1q_u8(c[1]);
+
+    uint16x8_t t = vmull_u8(topRight, vget_high_u8(c0));
+    t = vmlal_u8(t, above, vget_low_u8(c1));
+    t = vmlal_u8(t, bottomLeft, vget_high_u8(c1));
+
+    uint8x8_t index02 = vcreate_u8(0x0A0A0A0A08080808);
+    uint8x8_t left02 = vqtbl1_u8(src, index02);
+    uint16x8_t t02 = vmlal_u8(t, left02, vget_low_u8(c0));
+    uint8x8_t d02 = vrshrn_n_u16(t02, log2Size + 1);
+
+    uint8x8_t index13 = vcreate_u8(0x0B0B0B0B09090909);
+    uint8x8_t left13 = vqtbl1_u8(src, index13);
+    uint16x8_t t13 = vmlal_u8(t, left13, vget_low_u8(c0));
+    uint16x8_t sub_bottomLeft_above = vsubl_u8(bottomLeft, above);
+    t13 = vaddq_u16(t13, sub_bottomLeft_above);
+    uint8x8_t d13 = vrshrn_n_u16(t13, log2Size + 1);
+
+    store_u8x4_strided_xN<2>(dst + 0 * dstStride, 2 * dstStride, &d02);
+    store_u8x4_strided_xN<2>(dst + 1 * dstStride, 2 * dstStride, &d13);
+}
+#endif
+
 static void dcPredFilter(const pixel* above, const pixel* left, pixel* dst, intptr_t dststride, int size)
 {
     // boundary pixels processing
@@ -576,6 +622,7 @@ void setupIntraPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_32x32].intra_pred_allangs = all_angs_pred_neon<5>;
 
 #if !HIGH_BIT_DEPTH
+    p.cu[BLOCK_4x4].intra_pred[PLANAR_IDX] = intra_pred_planar4_neon;
     p.cu[BLOCK_8x8].intra_pred[PLANAR_IDX] = PFX(intra_pred_planar8_neon);
     p.cu[BLOCK_16x16].intra_pred[PLANAR_IDX] = PFX(intra_pred_planar16_neon);
 #endif
