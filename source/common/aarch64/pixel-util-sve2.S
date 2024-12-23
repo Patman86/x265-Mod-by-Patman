@@ -74,6 +74,7 @@ function PFX(pixel_var_16x16_sve2)
 .vl_gt_16_pixel_var_16x16:
     ptrue           p0.h, vl16
     mov             z0.d, #0
+    mov             z1.d, #0
 .rept 16
     ld1b            {z4.h}, p0/z, [x0]
     add             x0, x0, x1
@@ -194,7 +195,7 @@ function PFX(pixel_var_64x64_sve2)
     bgt             .vl_gt_112_pixel_var_64x64
     ptrue           p0.b, vl64
     mov             z0.d, #0
-    mov             z1.d, #0
+    mov             z2.d, #0
 .rept 64
     ld1b            {z4.b}, p0/z, [x0]
     add             x0, x0, x1
