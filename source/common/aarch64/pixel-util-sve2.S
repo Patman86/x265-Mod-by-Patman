@@ -408,8 +408,8 @@ function PFX(pixel_sub_ps_64x64_sve2)
     ret
 .vl_gt_16_pixel_sub_ps_64x64:
     rdvl            x9, #1
-    cmp             x9, #16
-    bgt             .vl_gt_16_pixel_sub_ps_64x64
+    cmp             x9, #32
+    bgt             .vl_gt_48_pixel_sub_ps_64x64
     ptrue           p0.b, vl32
     mov             w12, #16
 .vl_gt_16_loop_sub_ps_64_sve2:
