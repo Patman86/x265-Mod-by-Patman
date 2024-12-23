@@ -1275,7 +1275,7 @@ function PFX(cpy1Dto2D_shr_32x32_sve)
     sub             w4, w3, #1
     dup             z1.h, w4
     cmp             x9, #48
-    bgt             .vl_gt_48_cpy2Dto1D_shr_32x32
+    bgt             .vl_gt_48_cpy1Dto2D_shr_32x32
     ptrue           p0.h, vl16
     mov             z2.h, #1
     lsl             z2.h, p0/m, z2.h, z1.h
