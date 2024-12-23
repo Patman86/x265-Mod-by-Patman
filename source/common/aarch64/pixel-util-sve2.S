@@ -1339,12 +1339,13 @@ function PFX(ssimDist64_sve2)
 .vl_gt_112_ssimDist64:
     ssimDist_start_sve2
     ptrue           p0.s, vl32
+    mov             x5, #32
 .vl_gt_112_loop_ssimDist64_sve2:
     sub             w12, w12, #1
     ld1b            {z2.s}, p0/z, [x0]
-    ld1b            {z3.s}, p0/z, [x0, #1, mul vl]
+    ld1b            {z3.s}, p0/z, [x0, x5]
     ld1b            {z23.s}, p0/z, [x2]
-    ld1b            {z24.s}, p0/z, [x2, #1, mul vl]
+    ld1b            {z24.s}, p0/z, [x2, x5]
     ssimDist_1_sve2 z2, z3, z23, z24
     add             x0, x0, x1
     add             x2, x2, x3
@@ -1596,10 +1597,11 @@ function PFX(normFact64_sve2)
 .vl_gt_112_normFact64:
     normFact_start_sve2
     ptrue           p0.s, vl32
+    mov             x4, #32
 .vl_gt_112_loop_normFact64_sve2:
     sub             w12, w12, #1
     ld1b            {z4.s}, p0/z, [x0]
-    ld1b            {z5.s}, p0/z, [x0, #1, mul vl]
+    ld1b            {z5.s}, p0/z, [x0, x4]
     normFact_1_sve2 z4, z5
     add             x0, x0, x1
     cbnz            w12, .vl_gt_112_loop_normFact64_sve2
