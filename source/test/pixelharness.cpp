@@ -1113,10 +1113,9 @@ bool PixelHarness::check_addAvg_aligned(addAvg_t ref, addAvg_t opt)
         if (memcmp(ref_dest, opt_dest, 64 * 64 * sizeof(pixel)))
             return false;
 
-            reportfail();
-            j += INCR * 2;
-        }
-
+        reportfail();
+        j += INCR * 2;
+    }
     return true;
 }
 bool PixelHarness::check_calSign(sign_t ref, sign_t opt)
