@@ -445,6 +445,91 @@ void intra_pred_planar4_neon(pixel *dst, intptr_t dstStride, const pixel *srcPix
 }
 #endif
 
+#if !HIGH_BIT_DEPTH
+void intra_pred_planar32_neon(pixel *dst, intptr_t dstStride, const pixel *srcPix,
+                              int /*dirMode*/, int /*bFilter*/)
+{
+    const int log2Size = 5;
+    const int blkSize = 1 << log2Size;
+
+    const pixel *src0 = srcPix + 1;
+    const pixel *src1 = srcPix + 2 * blkSize + 1;
+
+    uint8x8_t above0 = vld1_u8(src0 + 0 * 8);
+    uint8x8_t above1 = vld1_u8(src0 + 1 * 8);
+    uint8x8_t above2 = vld1_u8(src0 + 2 * 8);
+    uint8x8_t above3 = vld1_u8(src0 + 3 * 8);
+
+    uint8x8_t topRight = vdup_n_u8(src0[blkSize]);
+    uint8x8_t bottomLeft = vdup_n_u8(src1[blkSize]);
+
+    const uint8_t c[2][32] =
+    {
+        {31, 30, 29, 28, 27, 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16,
+         15, 14, 13, 12, 11, 10,  9,  8,  7,  6,  5,  4,  3,  2,  1,  0},
+        { 1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16,
+         17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32}
+    };
+
+    // left constant
+    const uint8x8_t l0 = vld1_u8(c[0] + 0 * 8);
+    const uint8x8_t l1 = vld1_u8(c[0] + 1 * 8);
+    const uint8x8_t l2 = vld1_u8(c[0] + 2 * 8);
+    const uint8x8_t l3 = vld1_u8(c[0] + 3 * 8);
+
+    // topRight constant
+    const uint8x8_t tR0 = vld1_u8(c[1] + 0 * 8);
+    const uint8x8_t tR1 = vld1_u8(c[1] + 1 * 8);
+    const uint8x8_t tR2 = vld1_u8(c[1] + 2 * 8);
+    const uint8x8_t tR3 = vld1_u8(c[1] + 3 * 8);
+
+    const uint16x8_t offset = vdupq_n_u16(blkSize);
+    const uint16x8_t offset_bottomLeft = vaddw_u8(offset, bottomLeft);
+
+    const uint8x8_t c31 = vdup_n_u8(31);
+
+    uint16x8_t t0 = vmlal_u8(offset_bottomLeft, topRight, tR0);
+    t0 = vmlal_u8(t0, above0, c31);
+
+    uint16x8_t t1 = vmlal_u8(offset_bottomLeft, topRight, tR1);
+    t1 = vmlal_u8(t1, above1, c31);
+
+    uint16x8_t t2 = vmlal_u8(offset_bottomLeft, topRight, tR2);
+    t2 = vmlal_u8(t2, above2, c31);
+
+    uint16x8_t t3 = vmlal_u8(offset_bottomLeft, topRight, tR3);
+    t3 = vmlal_u8(t3, above3, c31);
+
+    uint16x8_t sub_bottomLeft_above0 = vsubl_u8(bottomLeft, above0);
+    uint16x8_t sub_bottomLeft_above1 = vsubl_u8(bottomLeft, above1);
+    uint16x8_t sub_bottomLeft_above2 = vsubl_u8(bottomLeft, above2);
+    uint16x8_t sub_bottomLeft_above3 = vsubl_u8(bottomLeft, above3);
+
+    for (int y = 0; y < 32; y++)
+    {
+        uint8x8_t left = vdup_n_u8(src1[y]);
+
+        uint16x8_t r0 = vmlal_u8(t0, left, l0);
+        uint16x8_t r1 = vmlal_u8(t1, left, l1);
+        uint16x8_t r2 = vmlal_u8(t2, left, l2);
+        uint16x8_t r3 = vmlal_u8(t3, left, l3);
+
+        uint8x8_t d[4];
+        d[0] = vshrn_n_u16(r0, log2Size + 1);
+        d[1] = vshrn_n_u16(r1, log2Size + 1);
+        d[2] = vshrn_n_u16(r2, log2Size + 1);
+        d[3] = vshrn_n_u16(r3, log2Size + 1);
+
+        store_u8x8xn<4>(dst + y * dstStride, 8, d);
+
+        t0 = vaddq_u16(t0, sub_bottomLeft_above0);
+        t1 = vaddq_u16(t1, sub_bottomLeft_above1);
+        t2 = vaddq_u16(t2, sub_bottomLeft_above2);
+        t3 = vaddq_u16(t3, sub_bottomLeft_above3);
+    }
+}
+#endif
+
 static void dcPredFilter(const pixel* above, const pixel* left, pixel* dst, intptr_t dststride, int size)
 {
     // boundary pixels processing
@@ -625,6 +710,7 @@ void setupIntraPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_4x4].intra_pred[PLANAR_IDX] = intra_pred_planar4_neon;
     p.cu[BLOCK_8x8].intra_pred[PLANAR_IDX] = PFX(intra_pred_planar8_neon);
     p.cu[BLOCK_16x16].intra_pred[PLANAR_IDX] = PFX(intra_pred_planar16_neon);
+    p.cu[BLOCK_32x32].intra_pred[PLANAR_IDX] = intra_pred_planar32_neon;
 #endif
 
     p.cu[BLOCK_4x4].intra_pred[DC_IDX] = intra_pred_dc_neon<4>;
