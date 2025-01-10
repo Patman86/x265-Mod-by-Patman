@@ -1685,6 +1685,7 @@ int x265_check_params(x265_param* param)
 {
 #define CHECK(expr, msg) check_failed |= _confirm(param, expr, msg)
     int check_failed = 0; /* abort if there is a fatal configuration problem */
+    CHECK((param->sourceWidth > 8192 && param->sourceHeight > 4320), "Input video resolution exceeds the maximum supported 8K resolution of 8192x4320");
     CHECK(param->uhdBluray == 1 && (X265_DEPTH != 10 || param->internalCsp != 1 || param->interlaceMode != 0),
         "uhd-bd: bit depth, chroma subsample, source picture type must be 10, 4:2:0, progressive");
     CHECK(param->maxCUSize != 64 && param->maxCUSize != 32 && param->maxCUSize != 16,
@@ -1888,7 +1889,7 @@ int x265_check_params(x265_param* param)
     CHECK(param->rc.rateControlMode == X265_RC_CQP && param->rc.bStatRead,
           "Constant QP is incompatible with 2pass");
     CHECK(param->rc.bStrictCbr && (param->rc.bitrate <= 0 || param->rc.vbvBufferSize <=0),
-          "Strict-cbr cannot be applied without specifying target bitrate or vbv bufsize");
+          "Strict-cbr cannot be applied without specifying both target bitrate and vbv bufsize");
     CHECK(strlen(param->analysisSave) && (param->analysisSaveReuseLevel < 0 || param->analysisSaveReuseLevel > 10),
         "Invalid analysis save refine level. Value must be between 1 and 10 (inclusive)");
     CHECK(strlen(param->analysisLoad) && (param->analysisLoadReuseLevel < 0 || param->analysisLoadReuseLevel > 10),

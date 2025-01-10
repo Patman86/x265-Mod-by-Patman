@@ -1155,65 +1155,6 @@ void sad_x4_neon(const pixel *pix1, const pixel *pix2, const pixel *pix3, const 
 }
 
 
-template<int lx, int ly, class T1, class T2>
-sse_t sse_neon(const T1 *pix1, intptr_t stride_pix1, const T2 *pix2, intptr_t stride_pix2)
-{
-    sse_t sum = 0;
-
-    int32x4_t vsum1 = vdupq_n_s32(0);
-    int32x4_t vsum2 = vdupq_n_s32(0);
-    for (int y = 0; y < ly; y++)
-    {
-        int x = 0;
-        for (; (x + 8) <= lx; x += 8)
-        {
-            int16x8_t tmp;
-            if (sizeof(T1) == 2 && sizeof(T2) == 2)
-            {
-                // We have to cast to the 'real' type so that this block
-                // will compile for both low and high bitdepth.
-                uint16x8_t vpix1 = vld1q_u16((const uint16_t*)pix1 + x);
-                uint16x8_t vpix2 = vld1q_u16((const uint16_t*)pix2 + x);
-                tmp = vreinterpretq_s16_u16(vsubq_u16(vpix1, vpix2));
-            }
-            else if (sizeof(T1) == 1 && sizeof(T2) == 1)
-            {
-                // We have to cast to the 'real' type so that this block
-                // will compile for both low and high bitdepth.
-                uint8x8_t vpix1 = vld1_u8((const uint8_t*)pix1 + x);
-                uint8x8_t vpix2 = vld1_u8((const uint8_t*)pix2 + x);
-                tmp = vreinterpretq_s16_u16(vsubl_u8(vpix1, vpix2));
-            }
-            else
-            {
-                X265_CHECK(false, "unsupported sse");
-            }
-            vsum1 = vmlal_s16(vsum1, vget_low_s16(tmp), vget_low_s16(tmp));
-            vsum2 = vmlal_high_s16(vsum2, tmp, tmp);
-        }
-        for (; x < lx; x++)
-        {
-            int tmp = pix1[x] - pix2[x];
-            sum += (tmp * tmp);
-        }
-
-        if (sizeof(T1) == 2 && sizeof(T2) == 2)
-        {
-            int32x4_t vsum = vaddq_s32(vsum1, vsum2);
-            sum += vaddvq_s32(vsum);
-            vsum1 = vsum2 = vdupq_n_s32(0);
-        }
-
-        pix1 += stride_pix1;
-        pix2 += stride_pix2;
-    }
-
-    int32x4_t vsum = vaddq_s32(vsum1, vsum2);
-
-    return sum + vaddvq_s32(vsum);
-}
-
-
 template<int bx, int by>
 void blockcopy_ps_neon(int16_t *a, intptr_t stridea, const pixel *b, intptr_t strideb)
 {
@@ -1684,34 +1625,6 @@ void transpose_neon<64>(pixel *dst, const pixel *src, intptr_t stride)
 }
 
 
-template<int size>
-sse_t pixel_ssd_s_neon(const int16_t *a, intptr_t dstride)
-{
-    sse_t sum = 0;
-
-
-    int32x4_t vsum = vdupq_n_s32(0);
-
-    for (int y = 0; y < size; y++)
-    {
-        int x = 0;
-
-        for (; (x + 8) <= size; x += 8)
-        {
-            int16x8_t in = vld1q_s16(a + x);
-            vsum = vmlal_s16(vsum, vget_low_s16(in), vget_low_s16(in));
-            vsum = vmlal_high_s16(vsum, (in), (in));
-        }
-        for (; x < size; x++)
-        {
-            sum += a[x] * a[x];
-        }
-
-        a += dstride;
-    }
-    return sum + vaddvq_s32(vsum);
-}
-
 
 };
 
@@ -1953,7 +1866,6 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
 
 
 #define CHROMA_CU_420(W, H) \
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].sse_pp  = sse_neon<W, H, pixel, pixel>; \
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].copy_pp = blockcopy_pp_neon<W, H>; \
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].copy_ps = blockcopy_ps_neon<W, H>; \
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].sub_ps = pixel_sub_ps_neon<W, H>;  \
@@ -2044,7 +1956,6 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
 
 
 #define CHROMA_CU_422(W, H) \
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].sse_pp  = sse_neon<W, H, pixel, pixel>;  \
     p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].copy_pp = blockcopy_pp_neon<W, H>; \
     p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].copy_ps = blockcopy_ps_neon<W, H>; \
     p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].sub_ps = pixel_sub_ps_neon<W, H>; \

@@ -1082,6 +1082,16 @@ void Encoder::copyUserSEIMessages(Frame *frame, const x265_picture* pic_in)
     }
 
     int numPayloads = pic_in->userSEI.numPayloads + toneMapPayload + userPayload;
+
+    // TODO: we may reuse buffer if become smaller than exist buffer
+    if (frame->m_userSEI.payloads && numPayloads != frame->m_userSEI.numPayloads)
+    {
+        for (int i = 0; i < frame->m_userSEI.numPayloads; i++)
+            delete[] frame->m_userSEI.payloads[i].payload;
+        delete[] frame->m_userSEI.payloads;
+        frame->m_userSEI.payloads = NULL;
+    }
+
     frame->m_userSEI.numPayloads = numPayloads;
 
     if (frame->m_userSEI.numPayloads)
@@ -1102,12 +1112,12 @@ void Encoder::copyUserSEIMessages(Frame *frame, const x265_picture* pic_in)
             else
                 input = pic_in->userSEI.payloads[i];
 
-            if (frame->m_userSEI.payloads[i].payload && (frame->m_userSEI.payloads[i].payloadSize < input.payloadSize))
+            // TODO: condition may improve, because buffer size may change from big to small, but never back to original allocate size
+            if (frame->m_userSEI.payloads[i].payload && frame->m_userSEI.payloads[i].payloadSize < input.payloadSize)
             {
                 delete[] frame->m_userSEI.payloads[i].payload;
                 frame->m_userSEI.payloads[i].payload = NULL;
             }
-
             if (!frame->m_userSEI.payloads[i].payload)
                 frame->m_userSEI.payloads[i].payload = new uint8_t[input.payloadSize];
             memcpy(frame->m_userSEI.payloads[i].payload, input.payload, input.payloadSize);
