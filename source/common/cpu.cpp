@@ -352,7 +352,7 @@ uint32_t cpu_detect(bool benableavx512)
 {
     int flags = 0;
 
-#if HAVE_ARMV6
+#if HAVE_ARMV6 && ENABLE_ASSEMBLY
     flags |= X265_CPU_ARMV6;
 
     // don't do this hack if compiled with -mfpu=neon
