@@ -104,6 +104,10 @@ namespace Level {
         LEVEL6 = 180,
         LEVEL6_1 = 183,
         LEVEL6_2 = 186,
+        LEVEL6_3 = 189,
+        LEVEL7 = 210,
+        LEVEL7_1 = 213,
+        LEVEL7_2 = 216,
         LEVEL8_5 = 255,
     };
 }
@@ -113,7 +117,7 @@ struct ProfileTierLevel
     int      profileIdc[MAX_LAYERS];
     int      levelIdc;
     uint32_t minCrForLevel;
-    uint32_t maxLumaSrForLevel;
+    uint64_t maxLumaSrForLevel;
     uint32_t bitDepthConstraint;
     int      chromaFormatConstraint;
     bool     tierFlag;
