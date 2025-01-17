@@ -2026,6 +2026,19 @@ int x265_check_params(x265_param* param)
         if (checkValid)
             param->bEnableSCC = 0;
     }
+    if (!!param->bEnableSCC)
+    {
+        if (param->bEnableRdRefine && param->bDynamicRefine)
+        {
+            param->bEnableRdRefine = 0;
+            x265_log(param, X265_LOG_WARNING, "Disabling rd-refine as it can not be used with scc and dynamic-refine\n");
+        }
+        if (param->bEnableRdRefine && param->interRefine > 0)
+        {
+            param->bEnableRdRefine = 0;
+            x265_log(param, X265_LOG_WARNING, "Disabling rd-refine as it can not be used with scc and inter-refine\n");
+        }
+    }
     CHECK(!!param->bEnableSCC&& param->rdLevel != 6, "Enabling scc extension in x265 requires rdlevel of 6 ");
 #endif
 
