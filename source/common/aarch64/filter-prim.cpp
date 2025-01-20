@@ -2712,6 +2712,66 @@ void inline interp8_horiz_pp_neon(const pixel *src, intptr_t srcStride,
     }
 }
 
+#if X265_DEPTH == 10
+template<int coeff4>
+void inline filter4_ps_u16x4(const uint16x4_t *s, const uint16x4_t f,
+                             const uint16x8_t offset, int16x4_t &d)
+{
+    if (coeff4)
+    {
+        // { -4, 36, 36, -4 }
+        // Filter values are divisible by 4, factor that out in order to only
+        // need a multiplication by 9 and a subtraction (which is a
+        // multiplication by -1).
+        uint16x4_t sum03 = vadd_u16(s[0], s[3]);
+        uint16x4_t sum12 = vadd_u16(s[1], s[2]);
+
+        int16x4_t sum =
+            vreinterpret_s16_u16(vmla_n_u16(vget_low_u16(offset), sum12, 9));
+        d = vsub_s16(sum, vreinterpret_s16_u16(sum03));
+    }
+    else
+    {
+        uint16x4_t sum = vmls_lane_u16(vget_low_u16(offset), s[0], f, 0);
+        sum = vmla_lane_u16(sum, s[1], f, 1);
+        sum = vmla_lane_u16(sum, s[2], f, 2);
+        sum = vmls_lane_u16(sum, s[3], f, 3);
+
+        // We halved filter values so -1 from right shift.
+        d = vshr_n_s16(vreinterpret_s16_u16(sum), SHIFT_INTERP_PS - 1);
+    }
+}
+
+template<bool coeff4>
+void inline filter4_ps_u16x8(const uint16x8_t *s, const uint16x4_t f,
+                             const uint16x8_t offset, int16x8_t &d)
+{
+    if (coeff4)
+    {
+        // { -4, 36, 36, -4 }
+        // Filter values are divisible by 4, factor that out in order to only
+        // need a multiplication by 9 and a subtraction (which is a
+        // multiplication by -1).
+        uint16x8_t sum03 = vaddq_u16(s[0], s[3]);
+        uint16x8_t sum12 = vaddq_u16(s[1], s[2]);
+
+        int16x8_t sum =
+            vreinterpretq_s16_u16(vmlaq_n_u16(offset, sum12, 9));
+        d = vsubq_s16(sum, vreinterpretq_s16_u16(sum03));
+    }
+    else
+    {
+        uint16x8_t sum = vmlsq_lane_u16(offset, s[0], f, 0);
+        sum = vmlaq_lane_u16(sum, s[1], f, 1);
+        sum = vmlaq_lane_u16(sum, s[2], f, 2);
+        sum = vmlsq_lane_u16(sum, s[3], f, 3);
+
+        // We halved filter values so -1 from right shift.
+        d = vshrq_n_s16(vreinterpretq_s16_u16(sum), SHIFT_INTERP_PS - 1);
+    }
+}
+
+#else // X265_DEPTH == 12
 template<int coeff4>
 void inline filter4_ps_u16x4(const uint16x4_t *s, const uint16x4_t f,
                              const uint32x4_t offset, int16x4_t &d)
@@ -2729,11 +2789,7 @@ void inline filter4_ps_u16x4(const uint16x4_t *s, const uint16x4_t f,
         sum = vsubw_s16(sum, vreinterpret_s16_u16(sum03));
 
         // We divided filter values by 4 so -2 from right shift.
-#if X265_DEPTH == 10
-        d = vmovn_s32(sum);
-#else
         d = vshrn_n_s32(sum, SHIFT_INTERP_PS - 2);
-#endif
     }
     else
     {
@@ -2767,13 +2823,8 @@ void inline filter4_ps_u16x8(const uint16x8_t *s, const uint16x4_t f,
         sum_hi = vsubw_s16(sum_hi, vreinterpret_s16_u16(vget_high_u16(sum03)));
 
         // We divided filter values by 4 so -2 from right shift.
-#if X265_DEPTH == 10
-        int16x4_t d0 = vmovn_s32(sum_lo);
-        int16x4_t d1 = vmovn_s32(sum_hi);
-#else
         int16x4_t d0 = vshrn_n_s32(sum_lo, SHIFT_INTERP_PS - 2);
         int16x4_t d1 = vshrn_n_s32(sum_hi, SHIFT_INTERP_PS - 2);
-#endif
         d = vcombine_s16(d0, d1);
     }
     else
@@ -2796,25 +2847,40 @@ void inline filter4_ps_u16x8(const uint16x8_t *s, const uint16x4_t f,
     }
 }
 
+#endif // X265_DEPTH == 10
+
 template<int coeff4, int width, int height>
 void interp4_horiz_ps_neon(const pixel *src, intptr_t srcStride, int16_t *dst,
                            intptr_t dstStride, int coeffIdx, int isRowExt)
 {
     const int N_TAPS = 4;
     int blkheight = height;
-    const uint16x4_t filter = vreinterpret_u16_s16(
+    uint16x4_t filter = vreinterpret_u16_s16(
         vabs_s16(vld1_s16(X265_NS::g_chromaFilter[coeffIdx])));
-    uint32x4_t offset;
+    uint32_t offset_u32;
 
     if (coeff4)
     {
         // The -2 is needed because we will divide the filter values by 4.
-        offset = vdupq_n_u32((unsigned)-IF_INTERNAL_OFFS << (SHIFT_INTERP_PS - 2));
+        offset_u32 = (unsigned)-IF_INTERNAL_OFFS << (SHIFT_INTERP_PS - 2);
     }
     else
     {
-        offset = vdupq_n_u32((unsigned)-IF_INTERNAL_OFFS << SHIFT_INTERP_PS);
+        offset_u32 = (unsigned)-IF_INTERNAL_OFFS << SHIFT_INTERP_PS;
     }
+#if X265_DEPTH == 10
+    if (!coeff4)
+    {
+        // All filter values are even, halve them to avoid needing to widen to
+        // 32-bit elements in filter kernels.
+        filter = vshr_n_u16(filter, 1);
+        offset_u32 >>= 1;
+    }
+
+    const uint16x8_t offset = vdupq_n_u16((uint16_t)offset_u32);
+#else
+    const uint32x4_t offset = vdupq_n_u32(offset_u32);
+#endif // X265_DEPTH == 10
 
     if (isRowExt)
     {
@@ -2890,6 +2956,149 @@ void interp4_horiz_ps_neon(const pixel *src, intptr_t srcStride, int16_t *dst,
     }
 }
 
+#if X265_DEPTH == 10
+template<int coeffIdx>
+void inline filter8_ps_u16x4(const uint16x4_t *s, int16x4_t &d,
+                             uint32x4_t offset, uint16x8_t filter)
+{
+    uint16x4_t offset_u16 = vdup_n_u16((uint16_t)vgetq_lane_u32(offset, 0));
+
+    if (coeffIdx == 1)
+    {
+        // { -1, 4, -10, 58, 17, -5, 1, 0 }
+        uint16x4_t sum012456 = vsub_u16(s[6], s[0]);
+        sum012456 = vmla_laneq_u16(sum012456, s[1], filter, 1);
+        sum012456 = vmls_laneq_u16(sum012456, s[2], filter, 2);
+        sum012456 = vmla_laneq_u16(sum012456, s[4], filter, 4);
+        sum012456 = vmls_laneq_u16(sum012456, s[5], filter, 5);
+
+        uint16x4_t sum3 =
+            vmla_laneq_u16(offset_u16, s[3], filter, 3);
+
+        int32x4_t sum = vaddl_s16(vreinterpret_s16_u16(sum3),
+                                  vreinterpret_s16_u16(sum012456));
+
+        d = vshrn_n_s32(sum, SHIFT_INTERP_PS);
+    }
+    else if (coeffIdx == 2)
+    {
+        // { -1, 4, -11, 40, 40, -11, 4, -1 }
+        uint16x4_t sum07 = vadd_u16(s[0], s[7]);
+        uint16x4_t sum16 = vadd_u16(s[1], s[6]);
+        uint16x4_t sum25 = vadd_u16(s[2], s[5]);
+        uint16x4_t sum34 = vadd_u16(s[3], s[4]);
+
+        uint16x4_t sum0167 = vshl_n_u16(sum16, 2);
+        sum0167 = vsub_u16(sum0167, sum07);
+
+        uint32x4_t sum2345 = vmlal_laneq_u16(offset, sum34, filter, 3);
+        sum2345 = vmlsl_laneq_u16(sum2345, sum25, filter, 2);
+
+        int32x4_t sum = vaddw_s16(vreinterpretq_s32_u32(sum2345),
+                                  vreinterpret_s16_u16(sum0167));
+
+        d = vshrn_n_s32(sum, SHIFT_INTERP_PS);
+    }
+    else
+    {
+        // { 0, 1, -5, 17, 58, -10, 4, -1 }
+        uint16x4_t sum123567 = vsub_u16(s[1], s[7]);
+        sum123567 = vmls_laneq_u16(sum123567, s[2], filter, 2);
+        sum123567 = vmla_laneq_u16(sum123567, s[3], filter, 3);
+        sum123567 = vmla_laneq_u16(sum123567, s[6], filter, 6);
+        sum123567 = vmls_laneq_u16(sum123567, s[5], filter, 5);
+
+        uint16x4_t sum4 =
+            vmla_laneq_u16(offset_u16, s[4], filter, 4);
+
+        int32x4_t sum = vaddl_s16(vreinterpret_s16_u16(sum4),
+                                  vreinterpret_s16_u16(sum123567));
+
+        d = vshrn_n_s32(sum, SHIFT_INTERP_PS);
+    }
+}
+
+template<int coeffIdx>
+void inline filter8_ps_u16x8(const uint16x8_t *s, int16x8_t &d,
+                             uint32x4_t offset, uint16x8_t filter)
+{
+    uint16x8_t offset_u16 = vdupq_n_u16((uint16_t)vgetq_lane_u32(offset, 0));
+
+    if (coeffIdx == 1)
+    {
+        // { -1, 4, -10, 58, 17, -5, 1, 0 }
+        uint16x8_t sum012456 = vsubq_u16(s[6], s[0]);
+        sum012456 = vmlaq_laneq_u16(sum012456, s[1], filter, 1);
+        sum012456 = vmlsq_laneq_u16(sum012456, s[2], filter, 2);
+        sum012456 = vmlaq_laneq_u16(sum012456, s[4], filter, 4);
+        sum012456 = vmlsq_laneq_u16(sum012456, s[5], filter, 5);
+
+        uint16x8_t sum3 =
+            vmlaq_laneq_u16(offset_u16, s[3], filter, 3);
+
+        int32x4_t sum_lo = vaddl_s16(vget_low_s16(vreinterpretq_s16_u16(sum3)),
+                                     vget_low_s16(vreinterpretq_s16_u16(sum012456)));
+        int32x4_t sum_hi = vaddl_s16(vget_high_s16(vreinterpretq_s16_u16(sum3)),
+                                     vget_high_s16(vreinterpretq_s16_u16(sum012456)));
+
+        int16x4_t d_lo = vshrn_n_s32(sum_lo, SHIFT_INTERP_PS);
+        int16x4_t d_hi = vshrn_n_s32(sum_hi, SHIFT_INTERP_PS);
+        d = vcombine_s16(d_lo, d_hi);
+    }
+    else if (coeffIdx == 2)
+    {
+        // { -1, 4, -11, 40, 40, -11, 4, -1 }
+        uint16x8_t sum07 = vaddq_u16(s[0], s[7]);
+        uint16x8_t sum16 = vaddq_u16(s[1], s[6]);
+        uint16x8_t sum25 = vaddq_u16(s[2], s[5]);
+        uint16x8_t sum34 = vaddq_u16(s[3], s[4]);
+
+        uint16x8_t sum0167 = vshlq_n_u16(sum16, 2);
+        sum0167 = vsubq_u16(sum0167, sum07);
+
+        uint32x4_t sum2345_lo = vmlal_laneq_u16(offset, vget_low_u16(sum34),
+                                                filter, 3);
+        sum2345_lo = vmlsl_laneq_u16(sum2345_lo, vget_low_u16(sum25),
+                                     filter, 2);
+
+        uint32x4_t sum2345_hi = vmlal_laneq_u16(offset, vget_high_u16(sum34),
+                                                filter, 3);
+        sum2345_hi = vmlsl_laneq_u16(sum2345_hi, vget_high_u16(sum25),
+                                     filter, 2);
+
+        int32x4_t sum_lo = vaddw_s16(vreinterpretq_s32_u32(sum2345_lo),
+                                     vget_low_s16(vreinterpretq_s16_u16(sum0167)));
+        int32x4_t sum_hi = vaddw_s16(vreinterpretq_s32_u32(sum2345_hi),
+                                     vget_high_s16(vreinterpretq_s16_u16(sum0167)));
+
+        int16x4_t d_lo = vshrn_n_s32(sum_lo, SHIFT_INTERP_PS);
+        int16x4_t d_hi = vshrn_n_s32(sum_hi, SHIFT_INTERP_PS);
+        d = vcombine_s16(d_lo, d_hi);
+    }
+    else
+    {
+        // { 0, 1, -5, 17, 58, -10, 4, -1 }
+        uint16x8_t sum123567 = vsubq_u16(s[1], s[7]);
+        sum123567 = vmlsq_laneq_u16(sum123567, s[2], filter, 2);
+        sum123567 = vmlaq_laneq_u16(sum123567, s[3], filter, 3);
+        sum123567 = vmlaq_laneq_u16(sum123567, s[6], filter, 6);
+        sum123567 = vmlsq_laneq_u16(sum123567, s[5], filter, 5);
+
+        uint16x8_t sum4 =
+            vmlaq_laneq_u16(offset_u16, s[4], filter, 4);
+
+        int32x4_t sum_lo = vaddl_s16(vget_low_s16(vreinterpretq_s16_u16(sum4)),
+                                     vget_low_s16(vreinterpretq_s16_u16(sum123567)));
+        int32x4_t sum_hi = vaddl_s16(vget_high_s16(vreinterpretq_s16_u16(sum4)),
+                                     vget_high_s16(vreinterpretq_s16_u16(sum123567)));
+
+        int16x4_t d_lo = vshrn_n_s32(sum_lo, SHIFT_INTERP_PS);
+        int16x4_t d_hi = vshrn_n_s32(sum_hi, SHIFT_INTERP_PS);
+        d = vcombine_s16(d_lo, d_hi);
+    }
+}
+
+#else // X265_DEPTH == 12
 template<int coeffIdx>
 void inline filter8_ps_u16x4(const uint16x4_t *s, int16x4_t &d,
                              uint32x4_t offset, uint16x8_t filter)
@@ -3031,6 +3240,8 @@ void inline filter8_ps_u16x8(const uint16x8_t *s, int16x8_t &d,
         d = vcombine_s16(d_lo, d_hi);
     }
 }
+
+#endif // X265_DEPTH == 10
 
 template<int coeffIdx, int width, int height>
 void interp8_horiz_ps_neon(const pixel *src, intptr_t srcStride, int16_t *dst,
