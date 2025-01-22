@@ -220,6 +220,39 @@ static void inline store_u16x2xn(uint16_t *dst, intptr_t dst_stride,
 }
 
 template<int N>
+static void inline store_u16x2xn(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1q_lane_u32((uint32_t *)dst, vreinterpretq_u32_u16(src[i]), 0);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_u16x4xn(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x4_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_u16(dst, src[i]);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_u16x4xn(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_u16(dst, vget_low_u16(src[i]));
+        dst += dst_stride;
+    }
+}
+
+template<int N>
 static void inline store_u16x6xn(uint16_t *dst, intptr_t dst_stride,
                                  const uint16x8_t *src)
 {
@@ -227,6 +260,17 @@ static void inline store_u16x6xn(uint16_t *dst, intptr_t dst_stride,
     {
         vst1_u16(dst, vget_low_u16(src[i]));
         vst1q_lane_u32((uint32_t *)(dst + 4), vreinterpretq_u32_u16(src[i]), 2);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_u16x8xn(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1q_u16(dst, src[i]);
         dst += dst_stride;
     }
 }
@@ -308,6 +352,30 @@ static void inline store_s16xnxm(const int16x8_t *src, int16_t *dst,
     case 4: return store_s16x4xn<M>(dst, dst_stride, src);
     case 6: return store_s16x6xn<M>(dst, dst_stride, src);
     case 8: return store_s16x8xn<M>(dst, dst_stride, src);
+    }
+}
+
+template<int N, int M>
+static void inline store_u16xnxm(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x8_t *src)
+{
+    switch (N)
+    {
+    case 2: return store_u16x2xn<M>(dst, dst_stride, src);
+    case 4: return store_u16x4xn<M>(dst, dst_stride, src);
+    case 6: return store_u16x6xn<M>(dst, dst_stride, src);
+    case 8: return store_u16x8xn<M>(dst, dst_stride, src);
+    }
+}
+
+template<int N, int M>
+static void inline store_u16xnxm(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x4_t *src)
+{
+    switch (N)
+    {
+    case 2: return store_u16x2xn<M>(dst, dst_stride, src);
+    case 4: return store_u16x4xn<M>(dst, dst_stride, src);
     }
 }
 

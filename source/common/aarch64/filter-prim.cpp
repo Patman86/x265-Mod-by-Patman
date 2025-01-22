@@ -3311,6 +3311,345 @@ void interp8_horiz_ps_neon(const pixel *src, intptr_t srcStride, int16_t *dst,
     }
 }
 
+template<bool coeff4, int width, int height>
+void inline interp4_vert_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst,
+                                 intptr_t dstStride, const int16_t coeffIdx)
+{
+    const int N_TAPS = 4;
+    const uint16x8_t maxVal = vdupq_n_u16((1 << X265_DEPTH) - 1);
+    uint16x4_t filter = vreinterpret_u16_s16(
+        vabs_s16(vld1_s16(X265_NS::g_chromaFilter[coeffIdx])));
+
+    uint16_t offset_u16;
+
+    // A shim of 1 << (IF_FILTER_PREC - 1) enables us to use non-rounding
+    // shifts - which are generally faster than rounding shifts on modern CPUs.
+    if (coeff4)
+    {
+        // The outermost -2 is needed because we will divide the filter values by 4.
+        offset_u16 = 1 << (IF_FILTER_PREC - 1 - 2);
+    }
+    else
+    {
+        offset_u16 = 1 << (IF_FILTER_PREC - 1);
+    }
+
+#if X265_DEPTH == 10
+    if (!coeff4)
+    {
+        // All filter values are even, halve them to avoid needing to widen to
+        // 32-bit elements in filter kernels.
+        filter = vshr_n_u16(filter, 1);
+        offset_u16 >>= 1;
+    }
+
+    const uint16x8_t offset = vdupq_n_u16(offset_u16);
+#else
+    const uint32x4_t offset = vdupq_n_u32(offset_u16);
+#endif // X265_DEPTH == 10
+
+    src -= (N_TAPS / 2 - 1) * srcStride;
+
+    if (width % 8 != 0)
+    {
+        if (width == 12 || width == 6)
+        {
+            const int n_store = width == 12 ? 8 : 6;
+            const uint16_t *s = src;
+            uint16_t *d = dst;
+
+            uint16x8_t in0[7];
+            load_u16x8xn<3>(s, srcStride, in0);
+            s += 3 * srcStride;
+
+            for (int row = 0; row + 4 <= height; row += 4)
+            {
+                load_u16x8xn<4>(s, srcStride, in0 + 3);
+
+                uint16x8_t res[4];
+                filter4_u16x8<coeff4>(in0 + 0, filter, offset, maxVal, res[0]);
+                filter4_u16x8<coeff4>(in0 + 1, filter, offset, maxVal, res[1]);
+                filter4_u16x8<coeff4>(in0 + 2, filter, offset, maxVal, res[2]);
+                filter4_u16x8<coeff4>(in0 + 3, filter, offset, maxVal, res[3]);
+
+                store_u16xnxm<n_store, 4>(d, dstStride, res);
+
+                in0[0] = in0[4];
+                in0[1] = in0[5];
+                in0[2] = in0[6];
+
+                s += 4 * srcStride;
+                d += 4 * dstStride;
+            }
+
+            if (width == 6)
+            {
+                return;
+            }
+
+            src += 8;
+            dst += 8;
+        }
+
+        const int n_store = width > 4 ? 4 : width;
+
+        uint16x4_t in1[7];
+        load_u16x4xn<3>(src, srcStride, in1);
+        src += 3 * srcStride;
+
+        for (int row = 0; row + 4 <= height; row += 4)
+        {
+            load_u16x4xn<4>(src, srcStride, in1 + 3);
+
+            uint16x4_t res[4];
+            filter4_u16x4<coeff4>(in1 + 0, filter, offset, vget_low_u16(maxVal), res[0]);
+            filter4_u16x4<coeff4>(in1 + 1, filter, offset, vget_low_u16(maxVal), res[1]);
+            filter4_u16x4<coeff4>(in1 + 2, filter, offset, vget_low_u16(maxVal), res[2]);
+            filter4_u16x4<coeff4>(in1 + 3, filter, offset, vget_low_u16(maxVal), res[3]);
+
+            store_u16xnxm<n_store, 4>(dst, dstStride, res);
+
+            in1[0] = in1[4];
+            in1[1] = in1[5];
+            in1[2] = in1[6];
+
+            src += 4 * srcStride;
+            dst += 4 * dstStride;
+        }
+
+        if (height & 2)
+        {
+            load_u16x4xn<2>(src, srcStride, in1 + 3);
+
+            uint16x4_t res[2];
+            filter4_u16x4<coeff4>(in1 + 0, filter, offset, vget_low_u16(maxVal), res[0]);
+            filter4_u16x4<coeff4>(in1 + 1, filter, offset, vget_low_u16(maxVal), res[1]);
+
+            store_u16xnxm<n_store, 2>(dst, dstStride, res);
+        }
+    }
+    else
+    {
+        for (int col = 0; col < width; col += 8)
+        {
+            const uint16_t *s = src;
+            uint16_t *d = dst;
+
+            uint16x8_t in[7];
+            load_u16x8xn<3>(s, srcStride, in);
+            s += 3 * srcStride;
+
+            for (int row = 0; row + 4 <= height; row += 4)
+            {
+                load_u16x8xn<4>(s, srcStride, in + 3);
+
+                uint16x8_t res[4];
+                filter4_u16x8<coeff4>(in + 0, filter, offset, maxVal, res[0]);
+                filter4_u16x8<coeff4>(in + 1, filter, offset, maxVal, res[1]);
+                filter4_u16x8<coeff4>(in + 2, filter, offset, maxVal, res[2]);
+                filter4_u16x8<coeff4>(in + 3, filter, offset, maxVal, res[3]);
+
+                store_u16x8xn<4>(d, dstStride, res);
+
+                in[0] = in[4];
+                in[1] = in[5];
+                in[2] = in[6];
+
+                s += 4 * srcStride;
+                d += 4 * dstStride;
+            }
+
+            if (height & 2)
+            {
+                load_u16x8xn<2>(s, srcStride, in + 3);
+
+                uint16x8_t res[2];
+                filter4_u16x8<coeff4>(in + 0, filter, offset, maxVal, res[0]);
+                filter4_u16x8<coeff4>(in + 1, filter,  offset, maxVal, res[1]);
+
+                store_u16x8xn<2>(d, dstStride, res);
+            }
+
+            src += 8;
+            dst += 8;
+        }
+    }
+}
+
+template<int coeffIdx, int width, int height>
+void inline interp8_vert_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst,
+                                 intptr_t dstStride)
+{
+    const int N_TAPS = 8;
+    const uint16x8_t maxVal = vdupq_n_u16((1 << X265_DEPTH) - 1);
+    const uint16x8_t filter =
+        vreinterpretq_u16_s16(vabsq_s16(vld1q_s16(X265_NS::g_lumaFilter[coeffIdx])));
+
+    src -= (N_TAPS / 2 - 1) * srcStride;
+
+    if (width % 8 != 0)
+    {
+        const uint16_t *s = src;
+        uint16_t *d = dst;
+
+        if (width == 12)
+        {
+            uint16x8_t in[11];
+            load_u16x8xn<7>(s, srcStride, in);
+            s += 7 * srcStride;
+
+            for (int row = 0; row < height; row += 4)
+            {
+                load_u16x8xn<4>(s, srcStride, in + 7);
+
+                uint16x8_t res[4];
+                filter8_u16x8<coeffIdx>(in + 0, res[0], filter, maxVal);
+                filter8_u16x8<coeffIdx>(in + 1, res[1], filter, maxVal);
+                filter8_u16x8<coeffIdx>(in + 2, res[2], filter, maxVal);
+                filter8_u16x8<coeffIdx>(in + 3, res[3], filter, maxVal);
+
+                store_u16x8xn<4>(d, dstStride, res);
+
+                in[0] = in[4];
+                in[1] = in[5];
+                in[2] = in[6];
+                in[3] = in[7];
+                in[4] = in[8];
+                in[5] = in[9];
+                in[6] = in[10];
+
+                s += 4 * srcStride;
+                d += 4 * dstStride;
+            }
+
+            s = src + 8;
+            d = dst + 8;
+        }
+
+        uint16x4_t in[11];
+        load_u16x4xn<7>(s, srcStride, in);
+        s += 7 * srcStride;
+
+        for (int row = 0; row < height; row += 4)
+        {
+            load_u16x4xn<4>(s, srcStride, in + 7);
+
+            uint16x4_t res[4];
+            filter8_u16x4<coeffIdx>(in + 0, res[0], filter, vget_low_u16(maxVal));
+            filter8_u16x4<coeffIdx>(in + 1, res[1], filter, vget_low_u16(maxVal));
+            filter8_u16x4<coeffIdx>(in + 2, res[2], filter, vget_low_u16(maxVal));
+            filter8_u16x4<coeffIdx>(in + 3, res[3], filter, vget_low_u16(maxVal));
+
+            store_u16x4xn<4>(d, dstStride, res);
+
+            in[0] = in[4];
+            in[1] = in[5];
+            in[2] = in[6];
+            in[3] = in[7];
+            in[4] = in[8];
+            in[5] = in[9];
+            in[6] = in[10];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+    }
+    else if (width % 16 != 0)
+    {
+        for (int col = 0; col < width; col += 8)
+        {
+            const uint16_t *s = src;
+            uint16_t *d = dst;
+
+            uint16x8_t in[11];
+            load_u16x8xn<7>(s, srcStride, in);
+            s += 7 * srcStride;
+
+            for (int row = 0; row < height; row += 4)
+            {
+                load_u16x8xn<4>(s, srcStride, in + 7);
+
+                uint16x8_t res[4];
+                filter8_u16x8<coeffIdx>(in + 0, res[0], filter, maxVal);
+                filter8_u16x8<coeffIdx>(in + 1, res[1], filter, maxVal);
+                filter8_u16x8<coeffIdx>(in + 2, res[2], filter, maxVal);
+                filter8_u16x8<coeffIdx>(in + 3, res[3], filter, maxVal);
+
+                store_u16x8xn<4>(d, dstStride, res);
+
+                in[0] = in[4];
+                in[1] = in[5];
+                in[2] = in[6];
+                in[3] = in[7];
+                in[4] = in[8];
+                in[5] = in[9];
+                in[6] = in[10];
+
+                s += 4 * srcStride;
+                d += 4 * dstStride;
+            }
+
+            src += 8;
+            dst += 8;
+        }
+    }
+    else
+    {
+        for (int col = 0; col < width; col += 16)
+        {
+            const uint16_t *s = src;
+            uint16_t *d = dst;
+
+            uint16x8_t in0[11], in1[11];
+            load_u16x8xn<7>(s + 0, srcStride, in0);
+            load_u16x8xn<7>(s + 8, srcStride, in1);
+            s += 7 * srcStride;
+
+            for (int row = 0; row < height; row += 4)
+            {
+                load_u16x8xn<4>(s + 0, srcStride, in0 + 7);
+                load_u16x8xn<4>(s + 8, srcStride, in1 + 7);
+
+                uint16x8_t res0[4], res1[4];
+                filter8_u16x8<coeffIdx>(in0 + 0, res0[0], filter, maxVal);
+                filter8_u16x8<coeffIdx>(in0 + 1, res0[1], filter, maxVal);
+                filter8_u16x8<coeffIdx>(in0 + 2, res0[2], filter, maxVal);
+                filter8_u16x8<coeffIdx>(in0 + 3, res0[3], filter, maxVal);
+
+                filter8_u16x8<coeffIdx>(in1 + 0, res1[0], filter, maxVal);
+                filter8_u16x8<coeffIdx>(in1 + 1, res1[1], filter, maxVal);
+                filter8_u16x8<coeffIdx>(in1 + 2, res1[2], filter, maxVal);
+                filter8_u16x8<coeffIdx>(in1 + 3, res1[3], filter, maxVal);
+
+                store_u16x8xn<4>(d + 0, dstStride, res0);
+                store_u16x8xn<4>(d + 8, dstStride, res1);
+
+                in0[0] = in0[4];
+                in0[1] = in0[5];
+                in0[2] = in0[6];
+                in0[3] = in0[7];
+                in0[4] = in0[8];
+                in0[5] = in0[9];
+                in0[6] = in0[10];
+
+                in1[0] = in1[4];
+                in1[1] = in1[5];
+                in1[2] = in1[6];
+                in1[3] = in1[7];
+                in1[4] = in1[8];
+                in1[5] = in1[9];
+                in1[6] = in1[10];
+
+                s += 4 * srcStride;
+                d += 4 * dstStride;
+            }
+
+            src += 16;
+            dst += 16;
+        }
+    }
+}
+
 #endif // !HIGH_BIT_DEPTH
 }
 
@@ -3414,68 +3753,9 @@ void interp_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst, i
     }
 }
 
-#if HIGH_BIT_DEPTH
-
 template<int N, int width, int height>
-void interp_vert_pp_neon(const uint16_t *src, intptr_t srcStride, uint16_t *dst, intptr_t dstStride, int coeffIdx)
-{
-
-    const int16_t *c = (N == 4) ? g_chromaFilter[coeffIdx] : g_lumaFilter[coeffIdx];
-    int offset = 1 << (IF_FILTER_PREC - 1);
-    const uint16_t maxVal = (1 << X265_DEPTH) - 1;
-
-    src -= (N / 2 - 1) * srcStride;
-    int16x8_t vc = vld1q_s16(c);
-    int32x4_t low_vc = vmovl_s16(vget_low_s16(vc));
-    int32x4_t high_vc = vmovl_s16(vget_high_s16(vc));
-
-    const int32x4_t voffset = vdupq_n_s32(offset);
-
-    int row, col;
-    for (row = 0; row < height; row++)
-    {
-        for (col = 0; col < width; col += 4)
-        {
-            int32x4_t vsum;
-
-            int32x4_t input[N];
-
-            for (int i = 0; i < N; i++)
-            {
-                uint16x4_t in_tmp = vld1_u16(src + col + i * srcStride);
-                input[i] = vreinterpretq_s32_u32(vmovl_u16(in_tmp));
-            }
-            vsum = voffset;
-
-            vsum = vmlaq_laneq_s32(vsum, (input[0]), low_vc, 0);
-            vsum = vmlaq_laneq_s32(vsum, (input[1]), low_vc, 1);
-            vsum = vmlaq_laneq_s32(vsum, (input[2]), low_vc, 2);
-            vsum = vmlaq_laneq_s32(vsum, (input[3]), low_vc, 3);
-
-            if (N == 8)
-            {
-                vsum = vmlaq_laneq_s32(vsum, (input[4]), high_vc, 0);
-                vsum = vmlaq_laneq_s32(vsum, (input[5]), high_vc, 1);
-                vsum = vmlaq_laneq_s32(vsum, (input[6]), high_vc, 2);
-                vsum = vmlaq_laneq_s32(vsum, (input[7]), high_vc, 3);
-            }
-
-            uint16x4_t res = vqshrun_n_s32(vsum, IF_FILTER_PREC);
-            res = vmin_u16(res, vdup_n_u16(maxVal));
-            vst1_u16(dst + col, res);
-        }
-        src += srcStride;
-        dst += dstStride;
-    }
-}
-
-
-
-
-#else
-
-template<int N, int width, int height>
-void interp_vert_pp_neon(const uint8_t *src, intptr_t srcStride, uint8_t *dst, intptr_t dstStride, int coeffIdx)
+void interp_vert_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst,
+                         intptr_t dstStride, int coeffIdx)
 {
     if (N == 8)
     {
@@ -3507,9 +3787,6 @@ void interp_vert_pp_neon(const uint8_t *src, intptr_t srcStride, uint8_t *dst, i
         }
     }
 }
-
-#endif
-
 
 #if HIGH_BIT_DEPTH
 
@@ -3989,6 +4266,33 @@ void setupFilterPrimitives_neon(EncoderPrimitives &p)
     p.pu[LUMA_4x16].luma_hps                                = interp_horiz_ps_neon<8, 4, 16>;
     p.pu[LUMA_12x16].luma_hps                               = interp_horiz_ps_neon<8, 12, 16>;
 
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_2x4].filter_vpp   = interp_vert_pp_neon<4, 2, 4>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_2x8].filter_vpp   = interp_vert_pp_neon<4, 2, 8>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_4x2].filter_vpp   = interp_vert_pp_neon<4, 4, 2>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_4x4].filter_vpp   = interp_vert_pp_neon<4, 4, 4>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_4x8].filter_vpp   = interp_vert_pp_neon<4, 4, 8>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_4x16].filter_vpp  = interp_vert_pp_neon<4, 4, 16>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_6x8].filter_vpp   = interp_vert_pp_neon<4, 6, 8>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_12x16].filter_vpp = interp_vert_pp_neon<4, 12, 16>;
+
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_2x8].filter_vpp   = interp_vert_pp_neon<4, 2, 8>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_2x16].filter_vpp  = interp_vert_pp_neon<4, 2, 16>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x4].filter_vpp   = interp_vert_pp_neon<4, 4, 4>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x8].filter_vpp   = interp_vert_pp_neon<4, 4, 8>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x16].filter_vpp  = interp_vert_pp_neon<4, 4, 16>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x32].filter_vpp  = interp_vert_pp_neon<4, 4, 32>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_6x16].filter_vpp  = interp_vert_pp_neon<4, 6, 16>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_12x32].filter_vpp = interp_vert_pp_neon<4, 12, 32>;
+
+    p.chroma[X265_CSP_I444].pu[LUMA_4x4].filter_vpp         = interp_vert_pp_neon<4, 4, 4>;
+    p.chroma[X265_CSP_I444].pu[LUMA_4x8].filter_vpp         = interp_vert_pp_neon<4, 4, 8>;
+    p.chroma[X265_CSP_I444].pu[LUMA_4x16].filter_vpp        = interp_vert_pp_neon<4, 4, 16>;
+    p.chroma[X265_CSP_I444].pu[LUMA_12x16].filter_vpp       = interp_vert_pp_neon<4, 12, 16>;
+
+    p.pu[LUMA_4x4].luma_vpp                                 = interp_vert_pp_neon<8, 4, 4>;
+    p.pu[LUMA_4x8].luma_vpp                                 = interp_vert_pp_neon<8, 4, 8>;
+    p.pu[LUMA_4x16].luma_vpp                                = interp_vert_pp_neon<8, 4, 16>;
+    p.pu[LUMA_12x16].luma_vpp                               = interp_vert_pp_neon<8, 12, 16>;
 #endif // HIGH_BIT_DEPTH
 }
 
