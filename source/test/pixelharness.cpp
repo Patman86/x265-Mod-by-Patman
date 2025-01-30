@@ -2686,102 +2686,99 @@ bool PixelHarness::testCorrectness(const EncoderPrimitives& ref, const EncoderPr
             }
         }
 
-        if (i < BLOCK_64x64)
+        /* TU only primitives */
+
+        if (opt.cu[i].calcresidual[NONALIGNED])
         {
-            /* TU only primitives */
+            if (!check_calresidual(ref.cu[i].calcresidual[NONALIGNED], opt.cu[i].calcresidual[NONALIGNED]))
+            {
+                printf("calcresidual width: %d failed!\n", 4 << i);
+                return false;
+            }
+        }
 
-            if (opt.cu[i].calcresidual[NONALIGNED])
+        if (opt.cu[i].calcresidual[ALIGNED])
+        {
+            if (!check_calresidual_aligned(ref.cu[i].calcresidual[ALIGNED], opt.cu[i].calcresidual[ALIGNED]))
             {
-                if (!check_calresidual(ref.cu[i].calcresidual[NONALIGNED], opt.cu[i].calcresidual[NONALIGNED]))
-                {
-                    printf("calcresidual width: %d failed!\n", 4 << i);
-                    return false;
-                }
+                printf("calcresidual_aligned width: %d failed!\n", 4 << i);
+                return false;
             }
+        }
 
-            if (opt.cu[i].calcresidual[ALIGNED])
+        if (opt.cu[i].transpose)
+        {
+            if (!check_transpose(ref.cu[i].transpose, opt.cu[i].transpose))
             {
-                if (!check_calresidual_aligned(ref.cu[i].calcresidual[ALIGNED], opt.cu[i].calcresidual[ALIGNED]))
-                {
-                    printf("calcresidual_aligned width: %d failed!\n", 4 << i);
-                    return false;
-                }
+                printf("transpose[%dx%d] failed\n", 4 << i, 4 << i);
+                return false;
             }
+        }
+        if (opt.cu[i].ssd_s[NONALIGNED])
+        {
+            if (!check_ssd_s(ref.cu[i].ssd_s[NONALIGNED], opt.cu[i].ssd_s[NONALIGNED]))
+            {
+                printf("ssd_s[%dx%d]: failed!\n", 4 << i, 4 << i);
+                return false;
+            }
+        }
+        if (opt.cu[i].ssd_s[ALIGNED])
+        {
+            if (!check_ssd_s_aligned(ref.cu[i].ssd_s[ALIGNED], opt.cu[i].ssd_s[ALIGNED]))
+            {
+                printf("ssd_s_aligned[%dx%d]: failed!\n", 4 << i, 4 << i);
+                return false;
+            }
+        }
+        if (opt.cu[i].copy_cnt)
+        {
+            if (!check_copy_cnt_t(ref.cu[i].copy_cnt, opt.cu[i].copy_cnt))
+            {
+                printf("copy_cnt[%dx%d] failed!\n", 4 << i, 4 << i);
+                return false;
+            }
+        }
 
-            if (opt.cu[i].transpose)
+        if (opt.cu[i].cpy2Dto1D_shl)
+        {
+            if (!check_cpy2Dto1D_shl_t(ref.cu[i].cpy2Dto1D_shl, opt.cu[i].cpy2Dto1D_shl))
             {
-                if (!check_transpose(ref.cu[i].transpose, opt.cu[i].transpose))
-                {
-                    printf("transpose[%dx%d] failed\n", 4 << i, 4 << i);
-                    return false;
-                }
+                printf("cpy2Dto1D_shl[%dx%d] failed!\n", 4 << i, 4 << i);
+                return false;
             }
-            if (opt.cu[i].ssd_s[NONALIGNED])
-            {
-                if (!check_ssd_s(ref.cu[i].ssd_s[NONALIGNED], opt.cu[i].ssd_s[NONALIGNED]))
-                {
-                    printf("ssd_s[%dx%d]: failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
-            }
-            if (opt.cu[i].ssd_s[ALIGNED])
-            {
-                if (!check_ssd_s_aligned(ref.cu[i].ssd_s[ALIGNED], opt.cu[i].ssd_s[ALIGNED]))
-                {
-                    printf("ssd_s_aligned[%dx%d]: failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
-            }
-            if (opt.cu[i].copy_cnt)
-            {
-                if (!check_copy_cnt_t(ref.cu[i].copy_cnt, opt.cu[i].copy_cnt))
-                {
-                    printf("copy_cnt[%dx%d] failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
-            }
+        }
 
-            if (opt.cu[i].cpy2Dto1D_shl)
+        if (opt.cu[i].cpy2Dto1D_shr)
+        {
+            if (!check_cpy2Dto1D_shr_t(ref.cu[i].cpy2Dto1D_shr, opt.cu[i].cpy2Dto1D_shr))
             {
-                if (!check_cpy2Dto1D_shl_t(ref.cu[i].cpy2Dto1D_shl, opt.cu[i].cpy2Dto1D_shl))
-                {
-                    printf("cpy2Dto1D_shl[%dx%d] failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
+                printf("cpy2Dto1D_shr failed!\n");
+                return false;
             }
+        }
+        if (opt.cu[i].cpy1Dto2D_shl[NONALIGNED])
+        {
+            if (!check_cpy1Dto2D_shl_t(ref.cu[i].cpy1Dto2D_shl[NONALIGNED], opt.cu[i].cpy1Dto2D_shl[NONALIGNED]))
+            {
+                printf("cpy1Dto2D_shl[%dx%d] failed!\n", 4 << i, 4 << i);
+                return false;
+            }
+        }
+        if (opt.cu[i].cpy1Dto2D_shl[ALIGNED])
+        {
+            if (!check_cpy1Dto2D_shl_aligned_t(ref.cu[i].cpy1Dto2D_shl[ALIGNED], opt.cu[i].cpy1Dto2D_shl[ALIGNED]))
+            {
+                printf("cpy1Dto2D_shl_aligned[%dx%d] failed!\n", 4 << i, 4 << i);
+                return false;
+            }
+        }
 
-            if (opt.cu[i].cpy2Dto1D_shr)
+        if (opt.cu[i].cpy1Dto2D_shr)
+        {
+            if (!check_cpy1Dto2D_shr_t(ref.cu[i].cpy1Dto2D_shr, opt.cu[i].cpy1Dto2D_shr))
             {
-                if (!check_cpy2Dto1D_shr_t(ref.cu[i].cpy2Dto1D_shr, opt.cu[i].cpy2Dto1D_shr))
-                {
-                    printf("cpy2Dto1D_shr failed!\n");
-                    return false;
-                }
-            }
-            if (opt.cu[i].cpy1Dto2D_shl[NONALIGNED])
-            {
-                if (!check_cpy1Dto2D_shl_t(ref.cu[i].cpy1Dto2D_shl[NONALIGNED], opt.cu[i].cpy1Dto2D_shl[NONALIGNED]))
-                {
-                    printf("cpy1Dto2D_shl[%dx%d] failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
-            }
-            if (opt.cu[i].cpy1Dto2D_shl[ALIGNED])
-            {
-                if (!check_cpy1Dto2D_shl_aligned_t(ref.cu[i].cpy1Dto2D_shl[ALIGNED], opt.cu[i].cpy1Dto2D_shl[ALIGNED]))
-                {
-                    printf("cpy1Dto2D_shl_aligned[%dx%d] failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
-            }
-
-            if (opt.cu[i].cpy1Dto2D_shr)
-            {
-                if (!check_cpy1Dto2D_shr_t(ref.cu[i].cpy1Dto2D_shr, opt.cu[i].cpy1Dto2D_shr))
-                {
-                    printf("cpy1Dto2D_shr[%dx%d] failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
+                printf("cpy1Dto2D_shr[%dx%d] failed!\n", 4 << i, 4 << i);
+                return false;
             }
         }
     }
