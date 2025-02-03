@@ -404,27 +404,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     ALL_CHROMA_444_PU(p2s[NONALIGNED], filterPixelToShort, neon);
     ALL_LUMA_PU(convert_p2s[NONALIGNED], filterPixelToShort, neon);
 
-#if !HIGH_BIT_DEPTH
-    // Blockcopy_pp
-    ALL_LUMA_PU(copy_pp, blockcopy_pp, neon);
-    ALL_CHROMA_420_PU(copy_pp, blockcopy_pp, neon);
-    ALL_CHROMA_422_PU(copy_pp, blockcopy_pp, neon);
-    p.cu[BLOCK_4x4].copy_pp   = PFX(blockcopy_pp_4x4_neon);
-    p.cu[BLOCK_8x8].copy_pp   = PFX(blockcopy_pp_8x8_neon);
-    p.cu[BLOCK_16x16].copy_pp = PFX(blockcopy_pp_16x16_neon);
-    p.cu[BLOCK_32x32].copy_pp = PFX(blockcopy_pp_32x32_neon);
-    p.cu[BLOCK_64x64].copy_pp = PFX(blockcopy_pp_64x64_neon);
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_4x4].copy_pp = PFX(blockcopy_pp_4x4_neon);
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_8x8].copy_pp = PFX(blockcopy_pp_8x8_neon);
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_16x16].copy_pp = PFX(blockcopy_pp_16x16_neon);
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_32x32].copy_pp = PFX(blockcopy_pp_32x32_neon);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_4x8].copy_pp = PFX(blockcopy_pp_4x8_neon);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].copy_pp = PFX(blockcopy_pp_8x16_neon);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].copy_pp = PFX(blockcopy_pp_16x32_neon);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].copy_pp = PFX(blockcopy_pp_32x64_neon);
-
-#endif // !HIGH_BIT_DEPTH
-
     // Blockcopy_ss
     p.cu[BLOCK_4x4].copy_ss   = PFX(blockcopy_ss_4x4_neon);
     p.cu[BLOCK_8x8].copy_ss   = PFX(blockcopy_ss_8x8_neon);
@@ -693,18 +672,6 @@ void setupSvePrimitives(EncoderPrimitives &p)
     CHROMA_422_PU_SVE_FILTER_PIXEL_TO_SHORT(p2s[NONALIGNED]);
     CHROMA_444_PU_SVE_FILTER_PIXEL_TO_SHORT(p2s[NONALIGNED]);
     LUMA_PU_SVE_FILTER_PIXEL_TO_SHORT(convert_p2s[NONALIGNED]);
-
-#if !HIGH_BIT_DEPTH
-    // Blockcopy_pp
-    LUMA_PU_CAN_USE_SVE_EXCEPT_FILTER_PIXEL_TO_SHORT(copy_pp, blockcopy_pp);
-    CHROMA_420_PU_CAN_USE_SVE_EXCEPT_FILTER_PIXEL_TO_SHORT(copy_pp, blockcopy_pp);
-    CHROMA_422_PU_CAN_USE_SVE_EXCEPT_FILTER_PIXEL_TO_SHORT(copy_pp, blockcopy_pp);
-    p.cu[BLOCK_32x32].copy_pp = PFX(blockcopy_pp_32x32_sve);
-    p.cu[BLOCK_64x64].copy_pp = PFX(blockcopy_pp_64x64_sve);
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_32x32].copy_pp = PFX(blockcopy_pp_32x32_sve);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].copy_pp = PFX(blockcopy_pp_32x64_sve);
-
-#endif // !HIGH_BIT_DEPTH
 
     // Blockcopy_ss
     p.cu[BLOCK_16x16].copy_ss = PFX(blockcopy_ss_16x16_sve);

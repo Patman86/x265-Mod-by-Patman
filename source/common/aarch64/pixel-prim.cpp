@@ -942,45 +942,67 @@ void blockcopy_ps_neon(int16_t *a, intptr_t stridea, const pixel *b, intptr_t st
 }
 
 
-template<int bx, int by>
-void blockcopy_pp_neon(pixel *a, intptr_t stridea, const pixel *b, intptr_t strideb)
+template<int width, int height>
+void blockcopy_pp_neon(pixel *dst, intptr_t dst_stride, const pixel *src,
+                       intptr_t src_stride)
 {
-    for (int y = 0; y < by; y++)
+    for (int h = 0; h < height; h++)
     {
-        int x = 0;
+        int w = 0;
 #if HIGH_BIT_DEPTH
-        for (; (x + 8) <= bx; x += 8)
+        for (; w + 16 <= width; w += 16)
         {
-            vst1q_u16(a + x, vld1q_u16(b + x));
+            uint16x8_t s0_lo = vld1q_u16(src + w);
+            uint16x8_t s0_hi = vld1q_u16(src + w + 8);
+            vst1q_u16(dst + w, s0_lo);
+            vst1q_u16(dst + w + 8, s0_hi);
         }
-        if (bx & 4)
+        if (width & 8)
         {
-            vst1_u16(a + x, vld1_u16(b + x));
-            x += 4;
+            uint16x8_t s0 = vld1q_u16(src + w);
+            vst1q_u16(dst + w, s0);
+            w += 8;
+        }
+        if (width & 4)
+        {
+            uint16x4_t s0 = vld1_u16(src + w);
+            vst1_u16(dst + w, s0);
+            w += 4;
         }
 #else
-        for (; (x + 16) <= bx; x += 16)
+        for (; w + 32 <= width; w += 32)
         {
-            vst1q_u8(a + x, vld1q_u8(b + x));
+            uint8x16_t s0_lo = vld1q_u8(src + w);
+            uint8x16_t s0_hi = vld1q_u8(src + w + 16);
+            vst1q_u8(dst + w, s0_lo);
+            vst1q_u8(dst + w + 16, s0_hi);
         }
-        if (bx & 8)
+        if (width & 16)
         {
-            vst1_u8(a + x, vld1_u8(b + x));
-            x += 8;
+            uint8x16_t s0 = vld1q_u8(src + w);
+            vst1q_u8(dst + w, s0);
+            w += 16;
         }
-        if (bx & 4)
+        if (width & 8)
         {
-            store_u8x4x1(a + x, load_u8x4x1(b + x));
-            x += 4;
+            uint8x8_t s0 = vld1_u8(src + w);
+            vst1_u8(dst + w, s0);
+            w += 8;
+        }
+        if (width & 4)
+        {
+            uint8x8_t s0 = load_u8x4x1(src + w);
+            store_u8x4x1(dst + w, s0);
+            w += 4;
         }
 #endif
-        for (; x < bx; x++)
+        for (; w < width; w++)
         {
-            a[x] = b[x];
+            dst[w] = src[w];
         }
 
-        a += stridea;
-        b += strideb;
+        src += src_stride;
+        dst += dst_stride;
     }
 }
 
@@ -1816,11 +1838,11 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_64x64].var = pixel_var_neon<64>;
 #endif // !(HIGH_BIT_DEPTH)
 
-    p.cu[BLOCK_16x16].blockfill_s[NONALIGNED] = blockfill_s_neon<16>; 
+    p.cu[BLOCK_16x16].blockfill_s[NONALIGNED] = blockfill_s_neon<16>;
     p.cu[BLOCK_16x16].blockfill_s[ALIGNED]    = blockfill_s_neon<16>;
-    p.cu[BLOCK_32x32].blockfill_s[NONALIGNED] = blockfill_s_neon<32>; 
+    p.cu[BLOCK_32x32].blockfill_s[NONALIGNED] = blockfill_s_neon<32>;
     p.cu[BLOCK_32x32].blockfill_s[ALIGNED]    = blockfill_s_neon<32>;
-    p.cu[BLOCK_64x64].blockfill_s[NONALIGNED] = blockfill_s_neon<64>; 
+    p.cu[BLOCK_64x64].blockfill_s[NONALIGNED] = blockfill_s_neon<64>;
     p.cu[BLOCK_64x64].blockfill_s[ALIGNED]    = blockfill_s_neon<64>;
 
 
@@ -1999,8 +2021,8 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].sub_ps = pixel_sub_ps_neon<W, H>; \
     p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].add_ps[NONALIGNED] = pixel_add_ps_neon<W, H>; \
     p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].add_ps[ALIGNED] = pixel_add_ps_neon<W, H>;
-    
-    
+
+
     CHROMA_CU_S_422(4, 8)
     CHROMA_CU_422(8, 16)
     CHROMA_CU_422(16, 32)
