@@ -356,6 +356,17 @@ static void inline store_s16xnxm(const int16x8_t *src, int16_t *dst,
 }
 
 template<int N, int M>
+static void inline store_s16xnxm(const int16x4_t *src, int16_t *dst,
+                                 intptr_t dst_stride)
+{
+    switch (N)
+    {
+    case 2: return store_s16x2xn<M>(dst, dst_stride, src);
+    case 4: return store_s16x4xn<M>(dst, dst_stride, src);
+    }
+}
+
+template<int N, int M>
 static void inline store_u16xnxm(uint16_t *dst, intptr_t dst_stride,
                                  const uint16x8_t *src)
 {
