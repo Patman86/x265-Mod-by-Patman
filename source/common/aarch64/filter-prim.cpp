@@ -37,235 +37,256 @@ namespace {
 #define SHIFT_INTERP_PS (IF_FILTER_PREC - (IF_INTERNAL_PREC - X265_DEPTH))
 #endif
 
-void inline filter4_s16x8(int coeffIdx, const int16x8_t *s, const int16x4_t f,
-                          const int32x4_t c, int32x4_t &d0, int32x4_t &d1)
+template<bool coeff4, int shift>
+void inline filter4_s16x4(const int16x4_t *s, const int16x4_t f,
+                          const int32x4_t c, int16x4_t &d)
 {
-    if (coeffIdx == 4)
+    if (coeff4)
     {
         // { -4, 36, 36, -4 }
-        int16x8_t t0 = vaddq_s16(s[1], s[2]);
-        int16x8_t t1 = vaddq_s16(s[0], s[3]);
-        d0 = vmlal_n_s16(c, vget_low_s16(t0), 36);
-        d0 = vmlsl_n_s16(d0, vget_low_s16(t1), 4);
+        int16x4_t sum03 = vadd_s16(s[0], s[3]);
+        int16x4_t sum12 = vadd_s16(s[1], s[2]);
 
-        d1 = vmlal_n_s16(c, vget_high_s16(t0), 36);
-        d1 = vmlsl_n_s16(d1, vget_high_s16(t1), 4);
+        int32x4_t sum = vmlal_n_s16(c, sum12, 9);
+        sum = vsubw_s16(sum, sum03);
+
+        d = vshrn_n_s32(sum, shift - 2);
     }
     else
     {
-        d0 = vmlal_lane_s16(c, vget_low_s16(s[0]), f, 0);
-        d0 = vmlal_lane_s16(d0, vget_low_s16(s[1]), f, 1);
-        d0 = vmlal_lane_s16(d0, vget_low_s16(s[2]), f, 2);
-        d0 = vmlal_lane_s16(d0, vget_low_s16(s[3]), f, 3);
+        int32x4_t sum = vmlal_lane_s16(c, s[0], f, 0);
+        sum = vmlal_lane_s16(sum, s[1], f, 1);
+        sum = vmlal_lane_s16(sum, s[2], f, 2);
+        sum = vmlal_lane_s16(sum, s[3], f, 3);
 
-        d1 = vmlal_lane_s16(c, vget_high_s16(s[0]), f, 0);
-        d1 = vmlal_lane_s16(d1, vget_high_s16(s[1]), f, 1);
-        d1 = vmlal_lane_s16(d1, vget_high_s16(s[2]), f, 2);
-        d1 = vmlal_lane_s16(d1, vget_high_s16(s[3]), f, 3);
+        d = vshrn_n_s32(sum, shift);
+    }
+}
+
+template<bool coeff4, int shift>
+void inline filter4_s16x8(const int16x8_t *s, const int16x4_t f,
+                          const int32x4_t c, int16x8_t &d)
+{
+    if (coeff4)
+    {
+        // { -4, 36, 36, -4 }
+        int16x8_t sum03 = vaddq_s16(s[0], s[3]);
+        int16x8_t sum12 = vaddq_s16(s[1], s[2]);
+
+        int32x4_t sum_lo = vmlal_n_s16(c, vget_low_s16(sum12), 9);
+        int32x4_t sum_hi = vmlal_n_s16(c, vget_high_s16(sum12), 9);
+
+        sum_lo = vsubw_s16(sum_lo, vget_low_s16(sum03));
+        sum_hi = vsubw_s16(sum_hi, vget_high_s16(sum03));
+
+        d = vcombine_s16(vshrn_n_s32(sum_lo, shift - 2), vshrn_n_s32(sum_hi, shift - 2));
+    }
+    else
+    {
+        int32x4_t sum_lo = vmlal_lane_s16(c, vget_low_s16(s[0]), f, 0);
+        sum_lo = vmlal_lane_s16(sum_lo, vget_low_s16(s[1]), f, 1);
+        sum_lo = vmlal_lane_s16(sum_lo, vget_low_s16(s[2]), f, 2);
+        sum_lo = vmlal_lane_s16(sum_lo, vget_low_s16(s[3]), f, 3);
+
+        int32x4_t sum_hi = vmlal_lane_s16(c, vget_high_s16(s[0]), f, 0);
+        sum_hi = vmlal_lane_s16(sum_hi, vget_high_s16(s[1]), f, 1);
+        sum_hi = vmlal_lane_s16(sum_hi, vget_high_s16(s[2]), f, 2);
+        sum_hi = vmlal_lane_s16(sum_hi, vget_high_s16(s[3]), f, 3);
+
+        d = vcombine_s16(vshrn_n_s32(sum_lo, shift), vshrn_n_s32(sum_hi, shift));
     }
 }
 
 template<int coeffIdx>
-void inline filter8_s16x4(const int16x4_t *s, const int32x4_t c, int32x4_t &d)
+void inline filter8_s16x4(const int16x4_t *s, const int16x8_t filter,
+                          const int32x4_t c, int32x4_t &d)
 {
     if (coeffIdx == 1)
     {
-        // { -1, 4, -10, 58, 17, -5, 1, 0 }
         d = vsubl_s16(s[6], s[0]);
         d = vaddq_s32(d, c);
-        d = vmlal_n_s16(d, s[1], 4);
-        d = vmlsl_n_s16(d, s[2], 10);
-        d = vmlal_n_s16(d, s[3], 58);
-        d = vmlal_n_s16(d, s[4], 17);
-        d = vmlsl_n_s16(d, s[5], 5);
+        d = vmlal_laneq_s16(d, s[1], filter, 1);
+        d = vmlal_laneq_s16(d, s[2], filter, 2);
+        d = vmlal_laneq_s16(d, s[3], filter, 3);
+        d = vmlal_laneq_s16(d, s[4], filter, 4);
+        d = vmlal_laneq_s16(d, s[5], filter, 5);
     }
     else if (coeffIdx == 2)
     {
-        // { -1, 4, -11, 40, 40, -11, 4, -1 }
-        int32x4_t t0 = vaddl_s16(s[3], s[4]);
-        int32x4_t t1 = vaddl_s16(s[2], s[5]);
-        int32x4_t t2 = vaddl_s16(s[1], s[6]);
-        int32x4_t t3 = vaddl_s16(s[0], s[7]);
+        int16x4_t sum07 = vadd_s16(s[0], s[7]);
+        int16x4_t sum16 = vadd_s16(s[1], s[6]);
+        int16x4_t sum25 = vadd_s16(s[2], s[5]);
+        int16x4_t sum34 = vadd_s16(s[3], s[4]);
 
-        d = vmlaq_n_s32(c, t0, 40);
-        d = vmlaq_n_s32(d, t1, -11);
-        d = vmlaq_n_s32(d, t2, 4);
-        d = vmlaq_n_s32(d, t3, -1);
+        int32x4_t sum12356 =  vmlal_laneq_s16(c, sum16, filter, 1);
+        sum12356 = vmlal_laneq_s16(sum12356, sum25, filter, 2);
+        sum12356 = vmlal_laneq_s16(sum12356, sum34, filter, 3);
+
+        d = vsubw_s16(sum12356, sum07);
     }
     else
     {
-        // { 0, 1, -5, 17, 58, -10, 4, -1 }
         d = vsubl_s16(s[1], s[7]);
         d = vaddq_s32(d, c);
-        d = vmlal_n_s16(d, s[6], 4);
-        d = vmlsl_n_s16(d, s[5], 10);
-        d = vmlal_n_s16(d, s[4], 58);
-        d = vmlal_n_s16(d, s[3], 17);
-        d = vmlsl_n_s16(d, s[2], 5);
+        d = vmlal_laneq_s16(d, s[2], filter, 2);
+        d = vmlal_laneq_s16(d, s[3], filter, 3);
+        d = vmlal_laneq_s16(d, s[4], filter, 4);
+        d = vmlal_laneq_s16(d, s[5], filter, 5);
+        d = vmlal_laneq_s16(d, s[6], filter, 6);
     }
 }
 
 template<int coeffIdx>
-void inline filter8_s16x8(const int16x8_t *s, const int32x4_t c, int32x4_t &d0,
-                          int32x4_t &d1)
+void inline filter8_s16x8(const int16x8_t *s, const int16x8_t filter,
+                          const int32x4_t c, int32x4_t &d0, int32x4_t &d1)
 {
     if (coeffIdx == 1)
     {
-        // { -1, 4, -10, 58, 17, -5, 1, 0 }
         d0 = vsubl_s16(vget_low_s16(s[6]), vget_low_s16(s[0]));
         d0 = vaddq_s32(d0, c);
-        d0 = vmlal_n_s16(d0, vget_low_s16(s[1]), 4);
-        d0 = vmlsl_n_s16(d0, vget_low_s16(s[2]), 10);
-        d0 = vmlal_n_s16(d0, vget_low_s16(s[3]), 58);
-        d0 = vmlal_n_s16(d0, vget_low_s16(s[4]), 17);
-        d0 = vmlsl_n_s16(d0, vget_low_s16(s[5]), 5);
+        d0 = vmlal_laneq_s16(d0, vget_low_s16(s[1]), filter, 1);
+        d0 = vmlal_laneq_s16(d0, vget_low_s16(s[2]), filter, 2);
+        d0 = vmlal_laneq_s16(d0, vget_low_s16(s[3]), filter, 3);
+        d0 = vmlal_laneq_s16(d0, vget_low_s16(s[4]), filter, 4);
+        d0 = vmlal_laneq_s16(d0, vget_low_s16(s[5]), filter, 5);
 
         d1 = vsubl_s16(vget_high_s16(s[6]), vget_high_s16(s[0]));
         d1 = vaddq_s32(d1, c);
-        d1 = vmlal_n_s16(d1, vget_high_s16(s[1]), 4);
-        d1 = vmlsl_n_s16(d1, vget_high_s16(s[2]), 10);
-        d1 = vmlal_n_s16(d1, vget_high_s16(s[3]), 58);
-        d1 = vmlal_n_s16(d1, vget_high_s16(s[4]), 17);
-        d1 = vmlsl_n_s16(d1, vget_high_s16(s[5]), 5);
+        d1 = vmlal_laneq_s16(d1, vget_high_s16(s[1]), filter, 1);
+        d1 = vmlal_laneq_s16(d1, vget_high_s16(s[2]), filter, 2);
+        d1 = vmlal_laneq_s16(d1, vget_high_s16(s[3]), filter, 3);
+        d1 = vmlal_laneq_s16(d1, vget_high_s16(s[4]), filter, 4);
+        d1 = vmlal_laneq_s16(d1, vget_high_s16(s[5]), filter, 5);
     }
     else if (coeffIdx == 2)
     {
-        // { -1, 4, -11, 40, 40, -11, 4, -1 }
-        int32x4_t t0 = vaddl_s16(vget_low_s16(s[3]), vget_low_s16(s[4]));
-        int32x4_t t1 = vaddl_s16(vget_low_s16(s[2]), vget_low_s16(s[5]));
-        int32x4_t t2 = vaddl_s16(vget_low_s16(s[1]), vget_low_s16(s[6]));
-        int32x4_t t3 = vaddl_s16(vget_low_s16(s[0]), vget_low_s16(s[7]));
+        int16x8_t sum07 = vaddq_s16(s[0], s[7]);
+        int16x8_t sum16 = vaddq_s16(s[1], s[6]);
+        int16x8_t sum25 = vaddq_s16(s[2], s[5]);
+        int16x8_t sum34 = vaddq_s16(s[3], s[4]);
 
-        d0 = vmlaq_n_s32(c, t0, 40);
-        d0 = vmlaq_n_s32(d0, t1, -11);
-        d0 = vmlaq_n_s32(d0, t2, 4);
-        d0 = vmlaq_n_s32(d0, t3, -1);
+        int32x4_t sum123456_lo = vmlal_laneq_s16(c, vget_low_s16(sum16), filter, 1);
+        sum123456_lo = vmlal_laneq_s16(sum123456_lo, vget_low_s16(sum25), filter, 2);
+        sum123456_lo = vmlal_laneq_s16(sum123456_lo, vget_low_s16(sum34), filter, 3);
 
-        int32x4_t t4 = vaddl_s16(vget_high_s16(s[3]), vget_high_s16(s[4]));
-        int32x4_t t5 = vaddl_s16(vget_high_s16(s[2]), vget_high_s16(s[5]));
-        int32x4_t t6 = vaddl_s16(vget_high_s16(s[1]), vget_high_s16(s[6]));
-        int32x4_t t7 = vaddl_s16(vget_high_s16(s[0]), vget_high_s16(s[7]));
+        int32x4_t sum123456_hi = vmlal_laneq_s16(c, vget_high_s16(sum16), filter, 1);
+        sum123456_hi = vmlal_laneq_s16(sum123456_hi, vget_high_s16(sum25), filter, 2);
+        sum123456_hi = vmlal_laneq_s16(sum123456_hi, vget_high_s16(sum34), filter, 3);
 
-        d1 = vmlaq_n_s32(c, t4, 40);
-        d1 = vmlaq_n_s32(d1, t5, -11);
-        d1 = vmlaq_n_s32(d1, t6, 4);
-        d1 = vmlaq_n_s32(d1, t7, -1);
+        d0 = vsubw_s16(sum123456_lo, vget_low_s16(sum07));
+        d1 = vsubw_s16(sum123456_hi, vget_high_s16(sum07));
     }
     else
     {
-        // { 0, 1, -5, 17, 58, -10, 4, -1 }
-        d0 = vsubl_s16(vget_low_s16(s[1]), vget_low_s16(s[7]));
-        d0 = vaddq_s32(d0, c);
-        d0 = vmlal_n_s16(d0, vget_low_s16(s[6]), 4);
-        d0 = vmlsl_n_s16(d0, vget_low_s16(s[5]), 10);
-        d0 = vmlal_n_s16(d0, vget_low_s16(s[4]), 58);
-        d0 = vmlal_n_s16(d0, vget_low_s16(s[3]), 17);
-        d0 = vmlsl_n_s16(d0, vget_low_s16(s[2]), 5);
+        int16x8_t sum17 = vsubq_s16(s[1], s[7]);
+        d0 = vaddw_s16(c, vget_low_s16(sum17));
+        d1 = vaddw_s16(c, vget_high_s16(sum17));
 
-        d1 = vsubl_s16(vget_high_s16(s[1]), vget_high_s16(s[7]));
-        d1 = vaddq_s32(d1, c);
-        d1 = vmlal_n_s16(d1, vget_high_s16(s[6]), 4);
-        d1 = vmlsl_n_s16(d1, vget_high_s16(s[5]), 10);
-        d1 = vmlal_n_s16(d1, vget_high_s16(s[4]), 58);
-        d1 = vmlal_n_s16(d1, vget_high_s16(s[3]), 17);
-        d1 = vmlsl_n_s16(d1, vget_high_s16(s[2]), 5);
+        d0 = vmlal_laneq_s16(d0, vget_low_s16(s[2]), filter, 2);
+        d0 = vmlal_laneq_s16(d0, vget_low_s16(s[3]), filter, 3);
+        d0 = vmlal_laneq_s16(d0, vget_low_s16(s[4]), filter, 4);
+        d0 = vmlal_laneq_s16(d0, vget_low_s16(s[5]), filter, 5);
+        d0 = vmlal_laneq_s16(d0, vget_low_s16(s[6]), filter, 6);
+
+        d1 = vmlal_laneq_s16(d1, vget_high_s16(s[2]), filter, 2);
+        d1 = vmlal_laneq_s16(d1, vget_high_s16(s[3]), filter, 3);
+        d1 = vmlal_laneq_s16(d1, vget_high_s16(s[4]), filter, 4);
+        d1 = vmlal_laneq_s16(d1, vget_high_s16(s[5]), filter, 5);
+        d1 = vmlal_laneq_s16(d1, vget_high_s16(s[6]), filter, 6);
     }
 }
 
-template<int width, int height>
+template<bool coeff4, int width, int height>
 void interp4_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst,
                           intptr_t dstStride, int coeffIdx)
 {
     const int N_TAPS = 4;
-    src -= (N_TAPS / 2 - 1) * srcStride;
-
+    const int shift = IF_FILTER_PREC;
     const int16x4_t filter = vld1_s16(X265_NS::g_chromaFilter[coeffIdx]);
-
     // Zero constant in order to use filter helper functions (optimised away).
     const int32x4_t c = vdupq_n_s32(0);
 
-    if (width == 12)
+    src -= (N_TAPS / 2 - 1) * srcStride;
+
+    if (width % 8 != 0)
     {
-        const int16_t *s = src;
-        int16_t *d = dst;
-
-        int16x8_t in[7];
-        load_s16x8xn<3>(s, srcStride, in);
-        s += 3 * srcStride;
-
-        for (int row = 0; (row + 4) <= height; row += 4)
+        if (width == 12 || width == 6)
         {
-            load_s16x8xn<4>(s, srcStride, in + 3);
+            const int n_store = width == 12 ? 8 : 6;
+            const int16_t *s = src;
+            int16_t *d = dst;
 
-            int32x4_t sum_lo[4];
-            int32x4_t sum_hi[4];
-            filter4_s16x8(coeffIdx, in + 0, filter, c, sum_lo[0], sum_hi[0]);
-            filter4_s16x8(coeffIdx, in + 1, filter, c, sum_lo[1], sum_hi[1]);
-            filter4_s16x8(coeffIdx, in + 2, filter, c, sum_lo[2], sum_hi[2]);
-            filter4_s16x8(coeffIdx, in + 3, filter, c, sum_lo[3], sum_hi[3]);
+            int16x8_t in[7];
+            load_s16x8xn<3>(s, srcStride, in);
+            s += 3 * srcStride;
 
-            int16x8_t sum[4];
-            sum[0] = vcombine_s16(vshrn_n_s32(sum_lo[0], IF_FILTER_PREC),
-                                  vshrn_n_s32(sum_hi[0], IF_FILTER_PREC));
-            sum[1] = vcombine_s16(vshrn_n_s32(sum_lo[1], IF_FILTER_PREC),
-                                  vshrn_n_s32(sum_hi[1], IF_FILTER_PREC));
-            sum[2] = vcombine_s16(vshrn_n_s32(sum_lo[2], IF_FILTER_PREC),
-                                  vshrn_n_s32(sum_hi[2], IF_FILTER_PREC));
-            sum[3] = vcombine_s16(vshrn_n_s32(sum_lo[3], IF_FILTER_PREC),
-                                  vshrn_n_s32(sum_hi[3], IF_FILTER_PREC));
+            for (int row = 0; row + 4 <= height; row += 4)
+            {
+                load_s16x8xn<4>(s, srcStride, in + 3);
 
-            store_s16x8xn<4>(d, dstStride, sum);
+                int16x8_t res[4];
+                filter4_s16x8<coeff4, shift>(in + 0, filter, c, res[0]);
+                filter4_s16x8<coeff4, shift>(in + 1, filter, c, res[1]);
+                filter4_s16x8<coeff4, shift>(in + 2, filter, c, res[2]);
+                filter4_s16x8<coeff4, shift>(in + 3, filter, c, res[3]);
 
-            in[0] = in[4];
-            in[1] = in[5];
-            in[2] = in[6];
+                store_s16xnxm<n_store, 4>(res, d, dstStride);
 
-            s += 4 * srcStride;
-            d += 4 * dstStride;
+                in[0] = in[4];
+                in[1] = in[5];
+                in[2] = in[6];
+
+                s += 4 * srcStride;
+                d += 4 * dstStride;
+            }
+
+            if (width == 6)
+            {
+                return;
+            }
+
+            src += 8;
+            dst += 8;
         }
 
-        src += 8;
-        dst += 8;
-        s = src;
-        d = dst;
+        int16x4_t in[7];
+        load_s16x4xn<3>(src, srcStride, in);
+        src += 3 * srcStride;
 
-        load_s16x8xn<3>(s, srcStride, in);
-        s += 3 * srcStride;
-
-        for (int row = 0; (row + 4) <= height; row += 4)
+        const int n_store = width > 4 ? 4 : width;
+        for (int row = 0; row + 4 <= height; row += 4)
         {
-            load_s16x8xn<4>(s, srcStride, in + 3);
+            load_s16x4xn<4>(src, srcStride, in + 3);
 
-            int32x4_t sum_lo[4];
-            int32x4_t sum_hi[4];
-            filter4_s16x8(coeffIdx, in + 0, filter, c, sum_lo[0], sum_hi[0]);
-            filter4_s16x8(coeffIdx, in + 1, filter, c, sum_lo[1], sum_hi[1]);
-            filter4_s16x8(coeffIdx, in + 2, filter, c, sum_lo[2], sum_hi[2]);
-            filter4_s16x8(coeffIdx, in + 3, filter, c, sum_lo[3], sum_hi[3]);
+            int16x4_t res[4];
+            filter4_s16x4<coeff4, shift>(in + 0, filter, c, res[0]);
+            filter4_s16x4<coeff4, shift>(in + 1, filter, c, res[1]);
+            filter4_s16x4<coeff4, shift>(in + 2, filter, c, res[2]);
+            filter4_s16x4<coeff4, shift>(in + 3, filter, c, res[3]);
 
-            int16x8_t sum[4];
-            sum[0] = vcombine_s16(vshrn_n_s32(sum_lo[0], IF_FILTER_PREC),
-                                  vshrn_n_s32(sum_hi[0], IF_FILTER_PREC));
-            sum[1] = vcombine_s16(vshrn_n_s32(sum_lo[1], IF_FILTER_PREC),
-                                  vshrn_n_s32(sum_hi[1], IF_FILTER_PREC));
-            sum[2] = vcombine_s16(vshrn_n_s32(sum_lo[2], IF_FILTER_PREC),
-                                  vshrn_n_s32(sum_hi[2], IF_FILTER_PREC));
-            sum[3] = vcombine_s16(vshrn_n_s32(sum_lo[3], IF_FILTER_PREC),
-                                  vshrn_n_s32(sum_hi[3], IF_FILTER_PREC));
-
-            store_s16x4xn<4>(d, dstStride, sum);
+            store_s16xnxm<n_store, 4>(res, dst, dstStride);
 
             in[0] = in[4];
             in[1] = in[5];
             in[2] = in[6];
 
-            s += 4 * srcStride;
-            d += 4 * dstStride;
+            src += 4 * srcStride;
+            dst += 4 * dstStride;
+        }
+
+        if (height & 2)
+        {
+            load_s16x4xn<2>(src, srcStride, in + 3);
+
+            int16x4_t res[2];
+            filter4_s16x4<coeff4, shift>(in + 0, filter, c, res[0]);
+            filter4_s16x4<coeff4, shift>(in + 1, filter, c, res[1]);
+
+            store_s16xnxm<n_store, 2>(res, dst, dstStride);
         }
     }
     else
     {
-        const int n_store = (width < 8) ? width : 8;
         for (int col = 0; col < width; col += 8)
         {
             const int16_t *s = src;
@@ -275,32 +296,17 @@ void interp4_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst,
             load_s16x8xn<3>(s, srcStride, in);
             s += 3 * srcStride;
 
-            for (int row = 0; (row + 4) <= height; row += 4)
+            for (int row = 0; row + 4 <= height; row += 4)
             {
                 load_s16x8xn<4>(s, srcStride, in + 3);
 
-                int32x4_t sum_lo[4];
-                int32x4_t sum_hi[4];
-                filter4_s16x8(coeffIdx, in + 0, filter, c, sum_lo[0],
-                              sum_hi[0]);
-                filter4_s16x8(coeffIdx, in + 1, filter, c, sum_lo[1],
-                              sum_hi[1]);
-                filter4_s16x8(coeffIdx, in + 2, filter, c, sum_lo[2],
-                              sum_hi[2]);
-                filter4_s16x8(coeffIdx, in + 3, filter, c, sum_lo[3],
-                              sum_hi[3]);
+                int16x8_t res[4];
+                filter4_s16x8<coeff4, shift>(in + 0, filter, c, res[0]);
+                filter4_s16x8<coeff4, shift>(in + 1, filter, c, res[1]);
+                filter4_s16x8<coeff4, shift>(in + 2, filter, c, res[2]);
+                filter4_s16x8<coeff4, shift>(in + 3, filter, c, res[3]);
 
-                int16x8_t sum[4];
-                sum[0] = vcombine_s16(vshrn_n_s32(sum_lo[0], IF_FILTER_PREC),
-                                      vshrn_n_s32(sum_hi[0], IF_FILTER_PREC));
-                sum[1] = vcombine_s16(vshrn_n_s32(sum_lo[1], IF_FILTER_PREC),
-                                      vshrn_n_s32(sum_hi[1], IF_FILTER_PREC));
-                sum[2] = vcombine_s16(vshrn_n_s32(sum_lo[2], IF_FILTER_PREC),
-                                      vshrn_n_s32(sum_hi[2], IF_FILTER_PREC));
-                sum[3] = vcombine_s16(vshrn_n_s32(sum_lo[3], IF_FILTER_PREC),
-                                      vshrn_n_s32(sum_hi[3], IF_FILTER_PREC));
-
-                store_s16xnxm<n_store, 4>(sum, d, dstStride);
+                store_s16x8xn<4>(d, dstStride, res);
 
                 in[0] = in[4];
                 in[1] = in[5];
@@ -314,20 +320,11 @@ void interp4_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst,
             {
                 load_s16x8xn<2>(s, srcStride, in + 3);
 
-                int32x4_t sum_lo[2];
-                int32x4_t sum_hi[2];
-                filter4_s16x8(coeffIdx, in + 0, filter, c, sum_lo[0],
-                              sum_hi[0]);
-                filter4_s16x8(coeffIdx, in + 1, filter, c, sum_lo[1],
-                              sum_hi[1]);
+                int16x8_t res[2];
+                filter4_s16x8<coeff4, shift>(in + 0, filter, c, res[0]);
+                filter4_s16x8<coeff4, shift>(in + 1, filter, c, res[1]);
 
-                int16x8_t sum[2];
-                sum[0] = vcombine_s16(vshrn_n_s32(sum_lo[0], IF_FILTER_PREC),
-                                      vshrn_n_s32(sum_hi[0], IF_FILTER_PREC));
-                sum[1] = vcombine_s16(vshrn_n_s32(sum_lo[1], IF_FILTER_PREC),
-                                      vshrn_n_s32(sum_hi[1], IF_FILTER_PREC));
-
-                store_s16xnxm<n_store, 2>(sum, d, dstStride);
+                store_s16x8xn<2>(d, dstStride, res);
             }
 
             src += 8;
@@ -341,6 +338,8 @@ void interp8_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst,
                           intptr_t dstStride)
 {
     const int N_TAPS = 8;
+    const int16x8_t filter = vld1q_s16(X265_NS::g_lumaFilter[coeffIdx]);
+
     src -= (N_TAPS / 2 - 1) * srcStride;
 
     // Zero constant in order to use filter helper functions (optimised away).
@@ -362,10 +361,10 @@ void interp8_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst,
 
                 int32x4_t sum_lo[4];
                 int32x4_t sum_hi[4];
-                filter8_s16x8<coeffIdx>(in + 0, c, sum_lo[0], sum_hi[0]);
-                filter8_s16x8<coeffIdx>(in + 1, c, sum_lo[1], sum_hi[1]);
-                filter8_s16x8<coeffIdx>(in + 2, c, sum_lo[2], sum_hi[2]);
-                filter8_s16x8<coeffIdx>(in + 3, c, sum_lo[3], sum_hi[3]);
+                filter8_s16x8<coeffIdx>(in + 0, filter, c, sum_lo[0], sum_hi[0]);
+                filter8_s16x8<coeffIdx>(in + 1, filter, c, sum_lo[1], sum_hi[1]);
+                filter8_s16x8<coeffIdx>(in + 2, filter, c, sum_lo[2], sum_hi[2]);
+                filter8_s16x8<coeffIdx>(in + 3, filter, c, sum_lo[3], sum_hi[3]);
 
                 int16x8_t sum[4];
                 sum[0] = vcombine_s16(vshrn_n_s32(sum_lo[0], IF_FILTER_PREC),
@@ -404,10 +403,10 @@ void interp8_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst,
             load_s16x4xn<4>(s, srcStride, in + 7);
 
             int32x4_t sum[4];
-            filter8_s16x4<coeffIdx>(in + 0, c, sum[0]);
-            filter8_s16x4<coeffIdx>(in + 1, c, sum[1]);
-            filter8_s16x4<coeffIdx>(in + 2, c, sum[2]);
-            filter8_s16x4<coeffIdx>(in + 3, c, sum[3]);
+            filter8_s16x4<coeffIdx>(in + 0, filter, c, sum[0]);
+            filter8_s16x4<coeffIdx>(in + 1, filter, c, sum[1]);
+            filter8_s16x4<coeffIdx>(in + 2, filter, c, sum[2]);
+            filter8_s16x4<coeffIdx>(in + 3, filter, c, sum[3]);
 
             int16x4_t sum_s16[4];
             sum_s16[0] = vshrn_n_s32(sum[0], IF_FILTER_PREC);
@@ -446,10 +445,10 @@ void interp8_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst,
 
                 int32x4_t sum_lo[4];
                 int32x4_t sum_hi[4];
-                filter8_s16x8<coeffIdx>(in + 0, c, sum_lo[0], sum_hi[0]);
-                filter8_s16x8<coeffIdx>(in + 1, c, sum_lo[1], sum_hi[1]);
-                filter8_s16x8<coeffIdx>(in + 2, c, sum_lo[2], sum_hi[2]);
-                filter8_s16x8<coeffIdx>(in + 3, c, sum_lo[3], sum_hi[3]);
+                filter8_s16x8<coeffIdx>(in + 0, filter, c, sum_lo[0], sum_hi[0]);
+                filter8_s16x8<coeffIdx>(in + 1, filter, c, sum_lo[1], sum_hi[1]);
+                filter8_s16x8<coeffIdx>(in + 2, filter, c, sum_lo[2], sum_hi[2]);
+                filter8_s16x8<coeffIdx>(in + 3, filter, c, sum_lo[3], sum_hi[3]);
 
                 int16x8_t sum[4];
                 sum[0] = vcombine_s16(vshrn_n_s32(sum_lo[0], IF_FILTER_PREC),
@@ -1721,116 +1720,124 @@ void interp8_vert_ps_neon(const uint8_t *src, intptr_t srcStride, int16_t *dst,
     }
 }
 
-template<int width, int height>
+template<bool coeff4, int width, int height>
 void interp4_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
                           intptr_t dstStride, int coeffIdx)
 {
     assert(X265_DEPTH == 8);
+    const int N_TAPS = 4;
     const int headRoom = IF_INTERNAL_PREC - X265_DEPTH;
     const int shift = IF_FILTER_PREC + headRoom;
-    const int offset = (1 << (shift - 1)) + (IF_INTERNAL_OFFS <<
-        IF_FILTER_PREC);
-
-    const int N_TAPS = 4;
-    src -= (N_TAPS / 2 - 1) * srcStride;
 
     const int16x4_t filter = vld1_s16(X265_NS::g_chromaFilter[coeffIdx]);
-    const int32x4_t c = vdupq_n_s32(offset);
+    int32x4_t offset;
 
-    if (width == 12)
+    if (coeff4)
     {
-        const int16_t *s = src;
-        uint8_t *d = dst;
+        // The right shift by 2 is needed because we will divide the filter values by 4.
+        offset = vdupq_n_s32(((1 << (shift - 1)) +
+                              (IF_INTERNAL_OFFS << IF_FILTER_PREC)) >> 2);
+    }
+    else
+    {
+        offset = vdupq_n_s32((1 << (shift - 1)) +
+                             (IF_INTERNAL_OFFS << IF_FILTER_PREC));
+    }
 
-        int16x8_t in[7];
-        load_s16x8xn<3>(s, srcStride, in);
-        s += 3 * srcStride;
+    src -= (N_TAPS / 2 - 1) * srcStride;
 
-        for (int row = 0; (row + 4) <= height; row += 4)
+    if (width % 8 != 0)
+    {
+        if (width == 12 || width == 6)
         {
-            load_s16x8xn<4>(s, srcStride, in + 3);
+            const int n_store = width == 12 ? 8 : 6;
+            const int16_t *s = src;
+            uint8_t *d = dst;
 
-            int32x4_t sum_lo[4];
-            int32x4_t sum_hi[4];
-            filter4_s16x8(coeffIdx, in + 0, filter, c, sum_lo[0], sum_hi[0]);
-            filter4_s16x8(coeffIdx, in + 1, filter, c, sum_lo[1], sum_hi[1]);
-            filter4_s16x8(coeffIdx, in + 2, filter, c, sum_lo[2], sum_hi[2]);
-            filter4_s16x8(coeffIdx, in + 3, filter, c, sum_lo[3], sum_hi[3]);
+            int16x8_t in[7];
+            load_s16x8xn<3>(s, srcStride, in);
+            s += 3 * srcStride;
 
-            int16x8_t sum[4];
-            sum[0] = vcombine_s16(vshrn_n_s32(sum_lo[0], shift),
-                                  vshrn_n_s32(sum_hi[0], shift));
-            sum[1] = vcombine_s16(vshrn_n_s32(sum_lo[1], shift),
-                                  vshrn_n_s32(sum_hi[1], shift));
-            sum[2] = vcombine_s16(vshrn_n_s32(sum_lo[2], shift),
-                                  vshrn_n_s32(sum_hi[2], shift));
-            sum[3] = vcombine_s16(vshrn_n_s32(sum_lo[3], shift),
-                                  vshrn_n_s32(sum_hi[3], shift));
+            for (int row = 0; row + 4 <= height; row += 4)
+            {
+                load_s16x8xn<4>(s, srcStride, in + 3);
 
-            uint8x8_t sum_u8[4];
-            sum_u8[0] = vqmovun_s16(sum[0]);
-            sum_u8[1] = vqmovun_s16(sum[1]);
-            sum_u8[2] = vqmovun_s16(sum[2]);
-            sum_u8[3] = vqmovun_s16(sum[3]);
+                int16x8_t sum[4];
+                filter4_s16x8<coeff4, shift>(in + 0, filter, offset, sum[0]);
+                filter4_s16x8<coeff4, shift>(in + 1, filter, offset, sum[1]);
+                filter4_s16x8<coeff4, shift>(in + 2, filter, offset, sum[2]);
+                filter4_s16x8<coeff4, shift>(in + 3, filter, offset, sum[3]);
 
-            store_u8x8xn<4>(d, dstStride, sum_u8);
+                uint8x8_t res[4];
+                res[0] = vqmovun_s16(sum[0]);
+                res[1] = vqmovun_s16(sum[1]);
+                res[2] = vqmovun_s16(sum[2]);
+                res[3] = vqmovun_s16(sum[3]);
 
-            in[0] = in[4];
-            in[1] = in[5];
-            in[2] = in[6];
+                store_u8xnxm<n_store, 4>(d, dstStride, res);
 
-            s += 4 * srcStride;
-            d += 4 * dstStride;
+                in[0] = in[4];
+                in[1] = in[5];
+                in[2] = in[6];
+
+                s += 4 * srcStride;
+                d += 4 * dstStride;
+            }
+
+            if (width == 6)
+            {
+                return;
+            }
+
+            src += 8;
+            dst += 8;
         }
 
-        src += 8;
-        dst += 8;
-        s = src;
-        d = dst;
+        const int n_store = width > 4 ? 4 : width;
 
-        load_s16x8xn<3>(s, srcStride, in);
-        s += 3 * srcStride;
+        int16x4_t in[7];
+        load_s16x4xn<3>(src, srcStride, in);
+        src += 3 * srcStride;
 
-        for (int row = 0; (row + 4) <= height; row += 4)
+        for (int row = 0; row + 4 <= height; row += 4)
         {
-            load_s16x8xn<4>(s, srcStride, in + 3);
+            load_s16x4xn<4>(src, srcStride, in + 3);
 
-            int32x4_t sum_lo[4];
-            int32x4_t sum_hi[4];
-            filter4_s16x8(coeffIdx, in + 0, filter, c, sum_lo[0], sum_hi[0]);
-            filter4_s16x8(coeffIdx, in + 1, filter, c, sum_lo[1], sum_hi[1]);
-            filter4_s16x8(coeffIdx, in + 2, filter, c, sum_lo[2], sum_hi[2]);
-            filter4_s16x8(coeffIdx, in + 3, filter, c, sum_lo[3], sum_hi[3]);
+            int16x4_t sum[4];
+            filter4_s16x4<coeff4, shift>(in + 0, filter, offset, sum[0]);
+            filter4_s16x4<coeff4, shift>(in + 1, filter, offset, sum[1]);
+            filter4_s16x4<coeff4, shift>(in + 2, filter, offset, sum[2]);
+            filter4_s16x4<coeff4, shift>(in + 3, filter, offset, sum[3]);
 
-            int16x8_t sum[4];
-            sum[0] = vcombine_s16(vshrn_n_s32(sum_lo[0], shift),
-                                  vshrn_n_s32(sum_hi[0], shift));
-            sum[1] = vcombine_s16(vshrn_n_s32(sum_lo[1], shift),
-                                  vshrn_n_s32(sum_hi[1], shift));
-            sum[2] = vcombine_s16(vshrn_n_s32(sum_lo[2], shift),
-                                  vshrn_n_s32(sum_hi[2], shift));
-            sum[3] = vcombine_s16(vshrn_n_s32(sum_lo[3], shift),
-                                  vshrn_n_s32(sum_hi[3], shift));
+            uint8x8_t res[2];
+            res[0] = vqmovun_s16(vcombine_s16(sum[0], sum[1]));
+            res[1] = vqmovun_s16(vcombine_s16(sum[2], sum[3]));
 
-            uint8x8_t sum_u8[4];
-            sum_u8[0] = vqmovun_s16(sum[0]);
-            sum_u8[1] = vqmovun_s16(sum[1]);
-            sum_u8[2] = vqmovun_s16(sum[2]);
-            sum_u8[3] = vqmovun_s16(sum[3]);
-
-            store_u8x4xn<4>(d, dstStride, sum_u8);
+            store_u8xnxm_strided<n_store, 4>(dst, dstStride, res);
 
             in[0] = in[4];
             in[1] = in[5];
             in[2] = in[6];
 
-            s += 4 * srcStride;
-            d += 4 * dstStride;
+            src += 4 * srcStride;
+            dst += 4 * dstStride;
+        }
+
+        if (height & 2)
+        {
+            load_s16x4xn<2>(src, srcStride, in + 3);
+
+            int16x4_t sum[2];
+            filter4_s16x4<coeff4, shift>(in + 0, filter, offset, sum[0]);
+            filter4_s16x4<coeff4, shift>(in + 1, filter, offset, sum[1]);
+
+            uint8x8_t res = vqmovun_s16(vcombine_s16(sum[0], sum[1]));
+
+            store_u8xnxm_strided<n_store, 2>(dst, dstStride, &res);
         }
     }
     else
     {
-        const int n_store = (width < 8) ? width : 8;
         for (int col = 0; col < width; col += 8)
         {
             const int16_t *s = src;
@@ -1840,38 +1847,23 @@ void interp4_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
             load_s16x8xn<3>(s, srcStride, in);
             s += 3 * srcStride;
 
-            for (int row = 0; (row + 4) <= height; row += 4)
+            for (int row = 0; row + 4 <= height; row += 4)
             {
                 load_s16x8xn<4>(s, srcStride, in + 3);
 
-                int32x4_t sum_lo[4];
-                int32x4_t sum_hi[4];
-                filter4_s16x8(coeffIdx, in + 0, filter, c, sum_lo[0],
-                              sum_hi[0]);
-                filter4_s16x8(coeffIdx, in + 1, filter, c, sum_lo[1],
-                              sum_hi[1]);
-                filter4_s16x8(coeffIdx, in + 2, filter, c, sum_lo[2],
-                              sum_hi[2]);
-                filter4_s16x8(coeffIdx, in + 3, filter, c, sum_lo[3],
-                              sum_hi[3]);
-
                 int16x8_t sum[4];
-                sum[0] = vcombine_s16(vshrn_n_s32(sum_lo[0], shift),
-                                      vshrn_n_s32(sum_hi[0], shift));
-                sum[1] = vcombine_s16(vshrn_n_s32(sum_lo[1], shift),
-                                      vshrn_n_s32(sum_hi[1], shift));
-                sum[2] = vcombine_s16(vshrn_n_s32(sum_lo[2], shift),
-                                      vshrn_n_s32(sum_hi[2], shift));
-                sum[3] = vcombine_s16(vshrn_n_s32(sum_lo[3], shift),
-                                      vshrn_n_s32(sum_hi[3], shift));
+                filter4_s16x8<coeff4, shift>(in + 0, filter, offset, sum[0]);
+                filter4_s16x8<coeff4, shift>(in + 1, filter, offset, sum[1]);
+                filter4_s16x8<coeff4, shift>(in + 2, filter, offset, sum[2]);
+                filter4_s16x8<coeff4, shift>(in + 3, filter, offset, sum[3]);
 
-                uint8x8_t sum_u8[4];
-                sum_u8[0] = vqmovun_s16(sum[0]);
-                sum_u8[1] = vqmovun_s16(sum[1]);
-                sum_u8[2] = vqmovun_s16(sum[2]);
-                sum_u8[3] = vqmovun_s16(sum[3]);
+                uint8x8_t res[4];
+                res[0] = vqmovun_s16(sum[0]);
+                res[1] = vqmovun_s16(sum[1]);
+                res[2] = vqmovun_s16(sum[2]);
+                res[3] = vqmovun_s16(sum[3]);
 
-                store_u8xnxm<n_store, 4>(d, dstStride, sum_u8);
+                store_u8x8xn<4>(d, dstStride, res);
 
                 in[0] = in[4];
                 in[1] = in[5];
@@ -1885,24 +1877,15 @@ void interp4_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
             {
                 load_s16x8xn<2>(s, srcStride, in + 3);
 
-                int32x4_t sum_lo[2];
-                int32x4_t sum_hi[2];
-                filter4_s16x8(coeffIdx, in + 0, filter, c, sum_lo[0],
-                              sum_hi[0]);
-                filter4_s16x8(coeffIdx, in + 1, filter, c, sum_lo[1],
-                              sum_hi[1]);
-
                 int16x8_t sum[2];
-                sum[0] = vcombine_s16(vshrn_n_s32(sum_lo[0], shift),
-                                      vshrn_n_s32(sum_hi[0], shift));
-                sum[1] = vcombine_s16(vshrn_n_s32(sum_lo[1], shift),
-                                      vshrn_n_s32(sum_hi[1], shift));
+                filter4_s16x8<coeff4, shift>(in + 0, filter, offset, sum[0]);
+                filter4_s16x8<coeff4, shift>(in + 1, filter, offset, sum[1]);
 
-                uint8x8_t sum_u8[2];
-                sum_u8[0] = vqmovun_s16(sum[0]);
-                sum_u8[1] = vqmovun_s16(sum[1]);
+                uint8x8_t res[2];
+                res[0] = vqmovun_s16(sum[0]);
+                res[1] = vqmovun_s16(sum[1]);
 
-                store_u8xnxm<n_store, 2>(d, dstStride, sum_u8);
+                store_u8x8xn<2>(d, dstStride, res);
             }
 
             src += 8;
@@ -1924,6 +1907,7 @@ void interp8_vert_sp_neon(const int16_t *src, intptr_t srcStride, pixel *dst,
     const int N_TAPS = 8;
     src -= (N_TAPS / 2 - 1) * srcStride;
 
+    const int16x8_t filter = vld1q_s16(X265_NS::g_lumaFilter[coeffIdx]);
     const int32x4_t c = vdupq_n_s32(offset);
 
     if (width % 8 != 0)
@@ -1943,10 +1927,10 @@ void interp8_vert_sp_neon(const int16_t *src, intptr_t srcStride, pixel *dst,
 
                 int32x4_t sum_lo[4];
                 int32x4_t sum_hi[4];
-                filter8_s16x8<coeffIdx>(in + 0, c, sum_lo[0], sum_hi[0]);
-                filter8_s16x8<coeffIdx>(in + 1, c, sum_lo[1], sum_hi[1]);
-                filter8_s16x8<coeffIdx>(in + 2, c, sum_lo[2], sum_hi[2]);
-                filter8_s16x8<coeffIdx>(in + 3, c, sum_lo[3], sum_hi[3]);
+                filter8_s16x8<coeffIdx>(in + 0, filter, c, sum_lo[0], sum_hi[0]);
+                filter8_s16x8<coeffIdx>(in + 1, filter, c, sum_lo[1], sum_hi[1]);
+                filter8_s16x8<coeffIdx>(in + 2, filter, c, sum_lo[2], sum_hi[2]);
+                filter8_s16x8<coeffIdx>(in + 3, filter, c, sum_lo[3], sum_hi[3]);
 
                 int16x8_t sum[4];
                 sum[0] = vcombine_s16(vshrn_n_s32(sum_lo[0], shift),
@@ -1991,10 +1975,10 @@ void interp8_vert_sp_neon(const int16_t *src, intptr_t srcStride, pixel *dst,
             load_s16x4xn<4>(s, srcStride, in + 7);
 
             int32x4_t sum[4];
-            filter8_s16x4<coeffIdx>(in + 0, c, sum[0]);
-            filter8_s16x4<coeffIdx>(in + 1, c, sum[1]);
-            filter8_s16x4<coeffIdx>(in + 2, c, sum[2]);
-            filter8_s16x4<coeffIdx>(in + 3, c, sum[3]);
+            filter8_s16x4<coeffIdx>(in + 0, filter, c, sum[0]);
+            filter8_s16x4<coeffIdx>(in + 1, filter, c, sum[1]);
+            filter8_s16x4<coeffIdx>(in + 2, filter, c, sum[2]);
+            filter8_s16x4<coeffIdx>(in + 3, filter, c, sum[3]);
 
             int16x4_t sum_s16[4];
             sum_s16[0] = vshrn_n_s32(sum[0], shift);
@@ -2039,10 +2023,10 @@ void interp8_vert_sp_neon(const int16_t *src, intptr_t srcStride, pixel *dst,
 
                 int32x4_t sum_lo[4];
                 int32x4_t sum_hi[4];
-                filter8_s16x8<coeffIdx>(in + 0, c, sum_lo[0], sum_hi[0]);
-                filter8_s16x8<coeffIdx>(in + 1, c, sum_lo[1], sum_hi[1]);
-                filter8_s16x8<coeffIdx>(in + 2, c, sum_lo[2], sum_hi[2]);
-                filter8_s16x8<coeffIdx>(in + 3, c, sum_lo[3], sum_hi[3]);
+                filter8_s16x8<coeffIdx>(in + 0, filter, c, sum_lo[0], sum_hi[0]);
+                filter8_s16x8<coeffIdx>(in + 1, filter, c, sum_lo[1], sum_hi[1]);
+                filter8_s16x8<coeffIdx>(in + 2, filter, c, sum_lo[2], sum_hi[2]);
+                filter8_s16x8<coeffIdx>(in + 3, filter, c, sum_lo[3], sum_hi[3]);
 
                 int16x8_t sum[4];
                 sum[0] = vcombine_s16(vshrn_n_s32(sum_lo[0], shift),
@@ -4083,8 +4067,15 @@ void interp_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst, i
     }
     else
     {
-        return interp4_vert_ss_neon<width, height>(src, srcStride, dst,
-                                                   dstStride, coeffIdx);
+        switch (coeffIdx)
+        {
+        case 4:
+            return interp4_vert_ss_neon<true, width, height>(src, srcStride, dst,
+                                                             dstStride, coeffIdx);
+        default:
+            return interp4_vert_ss_neon<false, width, height>(src, srcStride, dst,
+                                                              dstStride, coeffIdx);
+        }
     }
 }
 
@@ -4258,8 +4249,15 @@ void interp_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
     }
     else
     {
-        return interp4_vert_sp_neon<width, height>(src, srcStride, dst,
-                                                   dstStride, coeffIdx);
+        switch (coeffIdx)
+        {
+        case 4:
+            return interp4_vert_sp_neon<true, width, height>(src, srcStride, dst,
+                                                             dstStride, coeffIdx);
+        default:
+            return interp4_vert_sp_neon<false, width, height>(src, srcStride, dst,
+                                                              dstStride, coeffIdx);
+        }
     }
 }
 

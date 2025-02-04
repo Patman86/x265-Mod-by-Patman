@@ -29,6 +29,22 @@
 #include <cassert>
 #include <stdint.h>
 
+using namespace X265_NS;
+
+template<int N>
+static void inline store_u8x2_strided_xN(uint8_t *d, intptr_t stride,
+                                         const uint8x8_t *s)
+{
+    X265_CHECK(N % 2 == 0, "N should be divisible by 2");
+    for (int i = 0; i < N / 2; ++i)
+    {
+        vst1_lane_u16((uint16_t *)d, vreinterpret_u16_u8(s[i]), 0);
+        d += stride;
+        vst1_lane_u16((uint16_t *)d, vreinterpret_u16_u8(s[i]), 2);
+        d += stride;
+    }
+}
+
 // Load 4 bytes into the low half of a uint8x8_t, zero the upper half.
 static uint8x8_t inline load_u8x4x1(const uint8_t *s)
 {
@@ -150,6 +166,17 @@ static void inline store_u8xnxm(uint8_t *dst, intptr_t dst_stride,
     case 4: return store_u8x4xn<M>(dst, dst_stride, src);
     case 6: return store_u8x6xn<M>(dst, dst_stride, src);
     case 8: return store_u8x8xn<M>(dst, dst_stride, src);
+    }
+}
+
+template<int N, int M>
+static void inline store_u8xnxm_strided(uint8_t *dst, intptr_t dst_stride,
+                                        const uint8x8_t *src)
+{
+    switch (N)
+    {
+    case 2: return store_u8x2_strided_xN<M>(dst, dst_stride, src);
+    case 4: return store_u8x4_strided_xN<M>(dst, dst_stride, src);
     }
 }
 
