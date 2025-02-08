@@ -23,8 +23,8 @@ using func_t = void*;
 
 #define LOAD_AVS_FUNC(name) \
 {\
-	h->func.name = reinterpret_cast<decltype(h->func.name)>((void*)avs_address(#name));\
-	if (!h->func.name) goto fail;\
+    h->func.name = reinterpret_cast<decltype(h->func.name)>((void*)avs_address(#name));\
+    if (!h->func.name) goto fail;\
 }
 
 namespace X265_NS {
@@ -32,13 +32,14 @@ namespace X265_NS {
 
 typedef struct
 {
-	AVS_Clip *clip;
-	AVS_ScriptEnvironment *env;
-	lib_t library;
-	/* declare function pointers for the utilized functions to be loaded without __declspec,
-	   as the avisynth header does not compensate for this type of usage */
-	struct
-	{
+    AVS_Clip *clip;
+    AVS_ScriptEnvironment *env;
+    const AVS_VideoInfo* vi;
+    lib_t library;
+    /* declare function pointers for the utilized functions to be loaded without __declspec,
+       as the avisynth header does not compensate for this type of usage */
+    struct
+    {
         const char *(__stdcall *avs_clip_get_error)( AVS_Clip *clip );
         AVS_ScriptEnvironment *(__stdcall *avs_create_script_environment)( int version );
         void (__stdcall *avs_delete_script_environment)( AVS_ScriptEnvironment *env );
@@ -52,14 +53,25 @@ typedef struct
         void (__stdcall *avs_release_value)( AVS_Value value );
         void (__stdcall *avs_release_video_frame)( AVS_VideoFrame *frame );
         AVS_Clip *(__stdcall *avs_take_clip)( AVS_Value, AVS_ScriptEnvironment *env );
-        int (__stdcall *avs_is_y8)(const AVS_VideoInfo * p);
+        void (__stdcall *avs_bit_blt)(AVS_ScriptEnvironment*, BYTE* dstp, int dst_pitch, const BYTE* srcp, int src_pitch, int row_size, int height);
+        int (__stdcall *avs_is_color_space)(const AVS_VideoInfo* p, int c_space);
+        int (__stdcall *avs_is_y)(const AVS_VideoInfo * p);
         int (__stdcall *avs_is_420)(const AVS_VideoInfo * p);
         int (__stdcall *avs_is_422)(const AVS_VideoInfo * p);
         int (__stdcall *avs_is_444)(const AVS_VideoInfo * p);
+        int (__stdcall *avs_is_rgb48)(const AVS_VideoInfo* p);
+        int (__stdcall *avs_is_rgb64)(const AVS_VideoInfo* p);
+        int (__stdcall *avs_is_planar_rgb)(const AVS_VideoInfo* p);
+        int (__stdcall *avs_is_planar_rgba)(const AVS_VideoInfo* p);
         int (__stdcall *avs_bits_per_component)(const AVS_VideoInfo * p);
-	} func;
+        int (__stdcall *avs_get_pitch_p)(const AVS_VideoFrame* p, int plane);
+        int (__stdcall *avs_get_row_size_p)(const AVS_VideoFrame* p, int plane);
+        int (__stdcall *avs_get_height_p)(const AVS_VideoFrame* p, int plane);
+        const BYTE *(__stdcall *avs_get_read_ptr_p)(const AVS_VideoFrame* p, int plane);
+    } func;
     int next_frame;
     int plane_count;
+    const int* planes;
 } avs_hnd_t;
 
 class AVSInput : public InputFile
@@ -96,6 +108,12 @@ protected:
 
 public:
 
+    static const int avs_planes_packed[1];
+    static const int avs_planes_grey[1];
+    static const int avs_planes_yuv[3];
+    static const int avs_planes_rgb[3];
+    static const int avs_planes_yuva[4];
+    static const int avs_planes_rgba[4];
     AVSInput(InputFileInfo& info)
     {
         h = &handle;
