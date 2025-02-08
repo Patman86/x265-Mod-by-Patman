@@ -511,8 +511,6 @@ function PFX(addAvg_16x\h\()_sve2)
     cbnz            w12, .Loop_eq_16_sve2_addavg_16x\h
     ret
 .vl_gt_16_addAvg_16x\h\():
-    cmp             x9, #32
-    bgt             .vl_gt_32_addAvg_16x\h
     ptrue           p0.b, vl32
 .Loop_gt_16_sve2_addavg_16x\h\():
     sub             w12, w12, #1
@@ -523,25 +521,9 @@ function PFX(addAvg_16x\h\()_sve2)
     add             z0.h, p0/m, z0.h, z1.h
     sqrshrnb        z0.b, z0.h, #7
     add             z0.b, z0.b, #0x80
-    st1b            {z0.h}, p1, [x2]
-    add             x2, x2, x5
-    cbnz            w12, .Loop_gt_16_sve2_addavg_16x\h
-    ret
-.vl_gt_32_addAvg_16x\h\():
-    mov             x10, #48
-    mov             x11, #0
-    whilelt         p0.b, x11, x10
-.Loop_gt_32_sve2_addavg_16x\h\():
-    sub             w12, w12, #1
-    ld1b            {z0.b}, p0/z, [x0]
-    add             x0, x0, x3, lsl #1
-    add             x1, x1, x4, lsl #1
-    add             z0.h, p0/m, z0.h, z1.h
-    sqrshrnb        z0.b, z0.h, #7
-    add             z0.b, z0.b, #0x80
     st1b            {z0.h}, p0, [x2]
     add             x2, x2, x5
-    cbnz            w12, .Loop_gt_32_sve2_addavg_16x\h
+    cbnz            w12, .Loop_gt_16_sve2_addavg_16x\h
     ret
 endfunc
 .endm
@@ -674,9 +656,9 @@ function PFX(addAvg_32x\h\()_sve2)
     add             z0.h, p0/m, z0.h, z2.h
     add             z1.h, p0/m, z1.h, z3.h
     sqrshrnb        z0.b, z0.h, #7
-    add             z1.b, z1.b, #0x80
-    sqrshrnb        z1.b, z1.h, #7
     add             z0.b, z0.b, #0x80
+    sqrshrnb        z1.b, z1.h, #7
+    add             z1.b, z1.b, #0x80
     st1b            {z0.h}, p0, [x2]
     st1b            {z1.h}, p0, [x2, #1, mul vl]
     add             x2, x2, x5

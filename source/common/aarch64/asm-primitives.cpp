@@ -969,8 +969,7 @@ void setupSve2Primitives(EncoderPrimitives &p)
     p.scale1D_128to64[NONALIGNED] = PFX(scale1D_128to64_sve2);
     p.scale1D_128to64[ALIGNED] = PFX(scale1D_128to64_sve2);
 
-    // dequant_scaling
-    p.dequant_scaling = PFX(dequant_scaling_sve2);
+    // dequant_normal
     p.dequant_normal  = PFX(dequant_normal_sve2);
 
     // ssim_4x4x2_core

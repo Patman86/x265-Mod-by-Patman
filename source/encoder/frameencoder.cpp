@@ -2435,7 +2435,7 @@ void FrameEncoder::vmafFrameLevelScore()
 
 Frame** FrameEncoder::getEncodedPicture(NALList& output)
 {
-    if (m_frame[0] && (m_param->numLayers <= 1 || m_frame[1]))
+    if (m_frame[0] && (m_param->numLayers <= 1 || (MAX_LAYERS > 1 && m_frame[1])))
     {
         /* block here until worker thread completes */
         m_done.wait();

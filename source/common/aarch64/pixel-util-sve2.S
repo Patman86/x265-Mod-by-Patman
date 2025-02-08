@@ -74,6 +74,7 @@ function PFX(pixel_var_16x16_sve2)
 .vl_gt_16_pixel_var_16x16:
     ptrue           p0.h, vl16
     mov             z0.d, #0
+    mov             z1.d, #0
 .rept 16
     ld1b            {z4.h}, p0/z, [x0]
     add             x0, x0, x1
@@ -194,7 +195,7 @@ function PFX(pixel_var_64x64_sve2)
     bgt             .vl_gt_112_pixel_var_64x64
     ptrue           p0.b, vl64
     mov             z0.d, #0
-    mov             z1.d, #0
+    mov             z2.d, #0
 .rept 64
     ld1b            {z4.b}, p0/z, [x0]
     add             x0, x0, x1
@@ -407,8 +408,8 @@ function PFX(pixel_sub_ps_64x64_sve2)
     ret
 .vl_gt_16_pixel_sub_ps_64x64:
     rdvl            x9, #1
-    cmp             x9, #16
-    bgt             .vl_gt_16_pixel_sub_ps_64x64
+    cmp             x9, #32
+    bgt             .vl_gt_48_pixel_sub_ps_64x64
     ptrue           p0.b, vl32
     mov             w12, #16
 .vl_gt_16_loop_sub_ps_64_sve2:
@@ -863,85 +864,6 @@ function PFX(scale1D_128to64_sve2)
     st1b            {z0.b}, p0, [x0]
     add             x0, x0, #64
 .endr
-    ret
-endfunc
-
-/***** dequant_scaling*****/
-// void dequant_scaling_c(const int16_t* quantCoef, const int32_t* deQuantCoef, int16_t* coef, int num, int per, int shift)
-function PFX(dequant_scaling_sve2)
-    ptrue           p0.h, vl8
-    add             x5, x5, #4              // shift + 4
-    lsr             x3, x3, #3              // num / 8
-    cmp             x5, x4
-    blt             .dequant_skip_sve2
-
-    mov             x12, #1
-    sub             x6, x5, x4          // shift - per
-    sub             x6, x6, #1          // shift - per - 1
-    lsl             x6, x12, x6         // 1 << shift - per - 1 (add)
-    mov             z0.s, w6
-    sub             x7, x4, x5          // per - shift
-    mov             z3.s, w7
-
-.dequant_loop1_sve2:
-    ld1h            {z19.h}, p0/z, [x0]
-    ld1w            {z2.s}, p0/z, [x1]
-    add             x1, x1, #16
-    ld1w            {z20.s}, p0/z, [x1]
-    add             x0, x0, #16
-    add             x1, x1, #16
-
-    sub             x3, x3, #1
-    sunpklo         z1.s, z19.h
-    sunpkhi         z19.s, z19.h
-
-    mul             z1.s, z1.s, z2.s // quantCoef * deQuantCoef
-    mul             z19.s, z19.s, z20.s
-    add             z1.s, z1.s, z0.s // quantCoef * deQuantCoef + add
-    add             z19.s, z19.s, z0.s
-
-    // No equivalent instructions in SVE2 for sshl
-    // as sqshl has double latency
-    sshl            v1.4s, v1.4s, v3.4s
-    sshl            v19.4s, v19.4s, v3.4s
-
-    sqxtnb          z16.h, z1.s
-    sqxtnb          z17.h, z19.s
-    st1h            {z16.s}, p0, [x2]
-    st1h            {z17.s}, p0, [x2, #1, mul vl]
-    add             x2, x2, #16
-    cbnz            x3, .dequant_loop1_sve2
-    ret
-
-.dequant_skip_sve2:
-    sub             x6, x4, x5          // per - shift
-    mov             z0.h, w6
-
-.dequant_loop2_sve2:
-    ld1h            {z19.h}, p0/z, [x0]
-    ld1w            {z2.s}, p0/z, [x1]
-    add             x1, x1, #16
-    ld1w            {z20.s}, p0/z, [x1]
-    add             x0, x0, #16
-    add             x1, x1, #16
-
-
-    sub             x3, x3, #1
-    sunpklo         z1.s, z19.h
-    sunpkhi         z19.s, z19.h
-
-    mul             z1.s, z1.s, z2.s // quantCoef * deQuantCoef
-    mul             z19.s, z19.s, z20.s
-
-    // Keeping NEON instructions here in order to have
-    // one sqshl later
-    sqxtn           v16.4h, v1.4s       // x265_clip3
-    sqxtn2          v16.8h, v19.4s
-
-    sqshl           z16.h, p0/m, z16.h, z0.h // coefQ << per - shift
-    st1h            {z16.h}, p0, [x2]
-    add             x2, x2, #16
-    cbnz            x3, .dequant_loop2_sve2
     ret
 endfunc
 
@@ -1417,12 +1339,13 @@ function PFX(ssimDist64_sve2)
 .vl_gt_112_ssimDist64:
     ssimDist_start_sve2
     ptrue           p0.s, vl32
+    mov             x5, #32
 .vl_gt_112_loop_ssimDist64_sve2:
     sub             w12, w12, #1
     ld1b            {z2.s}, p0/z, [x0]
-    ld1b            {z3.s}, p0/z, [x0, #1, mul vl]
+    ld1b            {z3.s}, p0/z, [x0, x5]
     ld1b            {z23.s}, p0/z, [x2]
-    ld1b            {z24.s}, p0/z, [x2, #1, mul vl]
+    ld1b            {z24.s}, p0/z, [x2, x5]
     ssimDist_1_sve2 z2, z3, z23, z24
     add             x0, x0, x1
     add             x2, x2, x3
@@ -1674,10 +1597,11 @@ function PFX(normFact64_sve2)
 .vl_gt_112_normFact64:
     normFact_start_sve2
     ptrue           p0.s, vl32
+    mov             x4, #32
 .vl_gt_112_loop_normFact64_sve2:
     sub             w12, w12, #1
     ld1b            {z4.s}, p0/z, [x0]
-    ld1b            {z5.s}, p0/z, [x0, #1, mul vl]
+    ld1b            {z5.s}, p0/z, [x0, x4]
     normFact_1_sve2 z4, z5
     add             x0, x0, x1
     cbnz            w12, .vl_gt_112_loop_normFact64_sve2

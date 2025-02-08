@@ -2741,14 +2741,14 @@ char* Encoder::statsString(EncStats& stat, char* buffer, size_t bufferSize)
 
     if (m_param->bEnablePsnr)
     {
-        len += snprintf(buffer + len, sizeof(buffer) - len,"  PSNR Mean: Y:%.3lf U:%.3lf V:%.3lf",
+        len += snprintf(buffer + len, bufferSize - len,"  PSNR Mean: Y:%.3lf U:%.3lf V:%.3lf",
                        stat.m_psnrSumY / (double)stat.m_numPics,
                        stat.m_psnrSumU / (double)stat.m_numPics,
                        stat.m_psnrSumV / (double)stat.m_numPics);
     }
     if (m_param->bEnableSsim)
     {
-        snprintf(buffer + len, sizeof(buffer) - len, "  SSIM Mean: %.6lf (%.3lfdB)",
+        snprintf(buffer + len, bufferSize - len, "  SSIM Mean: %.6lf (%.3lfdB)",
                 stat.m_globalSsim / (double)stat.m_numPics,
                 x265_ssim2dB(stat.m_globalSsim / (double)stat.m_numPics));
     }
