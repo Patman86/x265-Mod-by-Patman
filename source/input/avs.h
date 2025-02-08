@@ -52,7 +52,7 @@ typedef struct
         void (__stdcall *avs_release_value)( AVS_Value value );
         void (__stdcall *avs_release_video_frame)( AVS_VideoFrame *frame );
         AVS_Clip *(__stdcall *avs_take_clip)( AVS_Value, AVS_ScriptEnvironment *env );
-        int (__stdcall *avs_is_y8)(const AVS_VideoInfo * p);
+        int (__stdcall *avs_is_y)(const AVS_VideoInfo * p);
         int (__stdcall *avs_is_420)(const AVS_VideoInfo * p);
         int (__stdcall *avs_is_422)(const AVS_VideoInfo * p);
         int (__stdcall *avs_is_444)(const AVS_VideoInfo * p);

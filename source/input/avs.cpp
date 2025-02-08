@@ -98,7 +98,7 @@ void AVSInput::load_avs()
     LOAD_AVS_FUNC(avs_release_value);
     LOAD_AVS_FUNC(avs_release_video_frame);
     LOAD_AVS_FUNC(avs_take_clip);
-    LOAD_AVS_FUNC(avs_is_y8);
+    LOAD_AVS_FUNC(avs_is_y);
     LOAD_AVS_FUNC(avs_is_420);
     LOAD_AVS_FUNC(avs_is_422);
     LOAD_AVS_FUNC(avs_is_444);
@@ -141,7 +141,7 @@ void AVSInput::openfile(InputFileInfo& info)
     info.frameCount = vi->num_frames;
     info.depth = h->func.avs_bits_per_component(vi);
     h->plane_count = 3;
-    if (h->func.avs_is_y8(vi))
+    if (h->func.avs_is_y(vi))
     {
         h->plane_count = 1;
         info.csp = X265_CSP_I400;
