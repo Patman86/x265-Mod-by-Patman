@@ -5097,6 +5097,24 @@ void setupFilterPrimitives_neon(EncoderPrimitives &p)
     p.pu[LUMA_4x16].luma_hvpp                               = interp_hv_pp_neon<8, 4, 16>;
     p.pu[LUMA_12x16].luma_hvpp                              = interp_hv_pp_neon<8, 12, 16>;
 
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_2x8].filter_vss   = interp_vert_ss_neon<4, 2, 8>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_2x16].filter_vss  = interp_vert_ss_neon<4, 2, 16>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x4].filter_vss   = interp_vert_ss_neon<4, 4, 4>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x8].filter_vss   = interp_vert_ss_neon<4, 4, 8>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x16].filter_vss  = interp_vert_ss_neon<4, 4, 16>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x32].filter_vss  = interp_vert_ss_neon<4, 4, 32>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_6x16].filter_vss  = interp_vert_ss_neon<4, 6, 16>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_12x32].filter_vss = interp_vert_ss_neon<4, 12, 32>;
+
+    p.chroma[X265_CSP_I444].pu[LUMA_4x4].filter_vss         = interp_vert_ss_neon<4, 4, 4>;
+    p.chroma[X265_CSP_I444].pu[LUMA_4x8].filter_vss         = interp_vert_ss_neon<4, 4, 8>;
+    p.chroma[X265_CSP_I444].pu[LUMA_4x16].filter_vss        = interp_vert_ss_neon<4, 4, 16>;
+    p.chroma[X265_CSP_I444].pu[LUMA_12x16].filter_vss       = interp_vert_ss_neon<4, 12, 16>;
+
+    p.pu[LUMA_4x4].luma_vss                                 = interp_vert_ss_neon<8, 4, 4>;
+    p.pu[LUMA_4x8].luma_vss                                 = interp_vert_ss_neon<8, 4, 8>;
+    p.pu[LUMA_4x16].luma_vss                                = interp_vert_ss_neon<8, 4, 16>;
+    p.pu[LUMA_12x16].luma_vss                               = interp_vert_ss_neon<8, 12, 16>;
 #endif // HIGH_BIT_DEPTH
 }
 
