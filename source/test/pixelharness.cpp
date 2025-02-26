@@ -2160,13 +2160,12 @@ bool PixelHarness::check_pelFilterLumaStrong_V(pelFilterLumaStrong_t ref, pelFil
 bool PixelHarness::check_pelFilterChroma_H(pelFilterChroma_t ref, pelFilterChroma_t opt)
 {
     intptr_t srcStep = 1, offset = 64;
-    int32_t maskP, maskQ, tc;
     intptr_t j = 0;
     const int NUM_MASKS = 3;
 
     pixel pixel_test_buff1[TEST_CASES][BUFFSIZE];
     for (int i = 0; i < TEST_CASES; i++)
-        memcpy(pixel_test_buff1[i], pixel_test_buff[i], sizeof(pixel)* BUFFSIZE);
+        memcpy(pixel_test_buff1[i], pixel_test_buff[i], sizeof(pixel) * BUFFSIZE);
 
     int32_t masks[NUM_MASKS][2] = {{-1, -1}, {-1, 0}, {0, -1}};
 
@@ -2174,11 +2173,9 @@ bool PixelHarness::check_pelFilterChroma_H(pelFilterChroma_t ref, pelFilterChrom
     {
         int32_t maskP = masks[i][0];
         int32_t maskQ = masks[i][1];
-
-        for (int i = 0; i < ITERS; i++)
+        for (int k = 0; k < ITERS; k++)
         {
-            tc = rand() % PIXEL_MAX;
-
+            int32_t tc = rand() % PIXEL_MAX;
             int index = rand() % 3;
 
             ref(pixel_test_buff[index] + 2 * offset + j, srcStep, offset, tc, maskP, maskQ);
@@ -2187,7 +2184,7 @@ bool PixelHarness::check_pelFilterChroma_H(pelFilterChroma_t ref, pelFilterChrom
             if (memcmp(pixel_test_buff[index], pixel_test_buff1[index], sizeof(pixel) * BUFFSIZE))
                 return false;
 
-            reportfail()
+            reportfail();
             j += INCR;
         }
     }
@@ -2198,13 +2195,12 @@ bool PixelHarness::check_pelFilterChroma_H(pelFilterChroma_t ref, pelFilterChrom
 bool PixelHarness::check_pelFilterChroma_V(pelFilterChroma_t ref, pelFilterChroma_t opt)
 {
     intptr_t srcStep = 64, offset = 1;
-    int32_t maskP, maskQ, tc;
     intptr_t j = 0;
     const int NUM_MASKS = 3;
 
     pixel pixel_test_buff1[TEST_CASES][BUFFSIZE];
     for (int i = 0; i < TEST_CASES; i++)
-        memcpy(pixel_test_buff1[i], pixel_test_buff[i], sizeof(pixel)* BUFFSIZE);
+        memcpy(pixel_test_buff1[i], pixel_test_buff[i], sizeof(pixel) * BUFFSIZE);
 
     int32_t masks[NUM_MASKS][2] = {{-1, -1}, {-1, 0}, {0, -1}};
 
@@ -2212,11 +2208,9 @@ bool PixelHarness::check_pelFilterChroma_V(pelFilterChroma_t ref, pelFilterChrom
     {
         int32_t maskP = masks[i][0];
         int32_t maskQ = masks[i][1];
-
-        for (int i = 0; i < ITERS; i++)
+        for (int k = 0; k < ITERS; k++)
         {
-            tc = rand() % PIXEL_MAX;
-
+            int32_t tc = rand() % PIXEL_MAX;
             int index = rand() % 3;
 
             ref(pixel_test_buff[index] + 2 * offset + j, srcStep, offset, tc, maskP, maskQ);
@@ -2225,7 +2219,7 @@ bool PixelHarness::check_pelFilterChroma_V(pelFilterChroma_t ref, pelFilterChrom
             if (memcmp(pixel_test_buff[index], pixel_test_buff1[index], sizeof(pixel) * BUFFSIZE))
                 return false;
 
-            reportfail()
+            reportfail();
             j += INCR;
         }
     }
