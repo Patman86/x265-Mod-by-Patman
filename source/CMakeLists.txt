@@ -835,6 +835,18 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
                     DEPENDS ${ASM_SRC})
             endforeach()
         endif()
+        if(CPU_HAS_SVE2_BITPERM)
+            foreach(ASM ${ARM_ASMS_SVE2_BITPERM})
+                set(ASM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/common/aarch64/${ASM})
+                list(APPEND ASM_SRCS ${ASM_SRC})
+                list(APPEND ASM_OBJS ${ASM}.${SUFFIX})
+                add_custom_command(
+                    OUTPUT ${ASM}.${SUFFIX}
+                    COMMAND ${CMAKE_CXX_COMPILER}
+                    ARGS ${ARM_ARGS} ${ASM_FLAGS} ${AARCH64_SVE2_BITPERM_FLAG} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                    DEPENDS ${ASM_SRC})
+            endforeach()
+        endif()
     elseif(X86)
     # compile X86 arch asm files here
         foreach(ASM ${MSVC_ASMS})

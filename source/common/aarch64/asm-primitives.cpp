@@ -645,6 +645,13 @@ void setupSve2Primitives(EncoderPrimitives &p)
 }
 #endif // defined(HAVE_SVE2)
 
+#if defined(HAVE_SVE2_BITPERM)
+void setupSve2BitPermPrimitives(EncoderPrimitives &p)
+{
+    p.scanPosLast = PFX(scanPosLast_sve2_bitperm);
+}
+#endif // defined(HAVE_SVE2_BITPERM)
+
 #ifdef HAVE_NEON_DOTPROD
 #if !HIGH_BIT_DEPTH
 void setupNeonDotProdPrimitives(EncoderPrimitives &p)
@@ -693,6 +700,12 @@ void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask)
     if (cpuMask & X265_CPU_SVE2)
     {
         setupSve2Primitives(p);
+    }
+#endif
+#ifdef HAVE_SVE2_BITPERM
+    if (cpuMask & X265_CPU_SVE2_BITPERM)
+    {
+        setupSve2BitPermPrimitives(p);
     }
 #endif
 }

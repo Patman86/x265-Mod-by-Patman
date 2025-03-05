@@ -245,4 +245,5 @@ void PFX(ssim_4x4x2_core_sve2(const pixel* pix1, intptr_t stride1, const pixel* 
 
 int PFX(psyCost_8x8_sve2)(const pixel* source, intptr_t sstride, const pixel* recon, intptr_t rstride);
 void PFX(weight_sp_sve2)(const int16_t* src, pixel* dst, intptr_t srcStride, intptr_t dstStride, int width, int height, int w0, int round, int shift, int offset);
-int PFX(scanPosLast_sve2)(const uint16_t *scan, const coeff_t *coeff, uint16_t *coeffSign, uint16_t *coeffFlag, uint8_t *coeffNum, int numSig, const uint16_t* scanCG4x4, const int trSize);
+
+int PFX(scanPosLast_sve2_bitperm)(const uint16_t *scan, const coeff_t *coeff, uint16_t *coeffSign, uint16_t *coeffFlag, uint8_t *coeffNum, int numSig, const uint16_t* scanCG4x4, const int trSize);
