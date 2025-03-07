@@ -711,7 +711,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
 
     // dequant_scaling
     p.dequant_scaling = PFX(dequant_scaling_neon);
-    p.dequant_normal  = PFX(dequant_normal_neon);
 
     // ssim_4x4x2_core
     p.ssim_4x4x2_core = PFX(ssim_4x4x2_core_neon);
@@ -739,6 +738,7 @@ void setupNeonPrimitives(EncoderPrimitives &p)
 #endif
 
     // quant
+    p.dequant_normal = PFX(dequant_normal_neon);
     p.quant = PFX(quant_neon);
     p.nquant = PFX(nquant_neon);
 }
