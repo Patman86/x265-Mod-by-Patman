@@ -60,6 +60,8 @@ int no_atomic_add(int* ptr, int val);
 
 #define CLZ(id, x)            id = (unsigned long)__builtin_clz(x) ^ 31
 #define CTZ(id, x)            id = (unsigned long)__builtin_ctz(x)
+#define CLZ64(id, x)          id = (unsigned long)__builtin_clzll(x) ^ 63
+#define CTZ64(id, x)          id = (unsigned long)__builtin_ctzll(x)
 #define ATOMIC_OR(ptr, mask)  no_atomic_or((int*)ptr, mask)
 #define ATOMIC_AND(ptr, mask) no_atomic_and((int*)ptr, mask)
 #define ATOMIC_INC(ptr)       no_atomic_inc((int*)ptr)
@@ -74,6 +76,8 @@ int no_atomic_add(int* ptr, int val);
 
 #define CLZ(id, x)            id = (unsigned long)__builtin_clz(x) ^ 31
 #define CTZ(id, x)            id = (unsigned long)__builtin_ctz(x)
+#define CLZ64(id, x)          id = (unsigned long)__builtin_clzll(x) ^ 63
+#define CTZ64(id, x)          id = (unsigned long)__builtin_ctzll(x)
 #define ATOMIC_OR(ptr, mask)  __sync_fetch_and_or(ptr, mask)
 #define ATOMIC_AND(ptr, mask) __sync_fetch_and_and(ptr, mask)
 #define ATOMIC_INC(ptr)       __sync_add_and_fetch((volatile int32_t*)ptr, 1)
@@ -87,6 +91,8 @@ int no_atomic_add(int* ptr, int val);
 
 #define CLZ(id, x)            _BitScanReverse(&id, x)
 #define CTZ(id, x)            _BitScanForward(&id, x)
+#define CLZ64(id, x)          _BitScanReverse64(&id, x)
+#define CTZ64(id, x)          _BitScanForward64(&id, x)
 #define ATOMIC_INC(ptr)       InterlockedIncrement((volatile LONG*)ptr)
 #define ATOMIC_DEC(ptr)       InterlockedDecrement((volatile LONG*)ptr)
 #define ATOMIC_ADD(ptr, val)  InterlockedExchangeAdd((volatile LONG*)ptr, val)

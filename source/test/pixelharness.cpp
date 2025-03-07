@@ -3696,7 +3696,6 @@ void PixelHarness::measureSpeed(const EncoderPrimitives& ref, const EncoderPrimi
 
     if (opt.findPosFirstLast)
     {
-        HEADER0("findPosFirstLast");
         coeff_t coefBuf[32 * MLS_CG_SIZE];
         memset(coefBuf, 0, sizeof(coefBuf));
         // every CG can't be all zeros!
@@ -3704,7 +3703,16 @@ void PixelHarness::measureSpeed(const EncoderPrimitives& ref, const EncoderPrimi
         coefBuf[3 + 1 * 32] = 0x0BAD;
         coefBuf[3 + 2 * 32] = 0x0BAD;
         coefBuf[3 + 3 * 32] = 0x0BAD;
-        REPORT_SPEEDUP(opt.findPosFirstLast, ref.findPosFirstLast, coefBuf, 32, g_scan4x4[SCAN_DIAG]);
+        const intptr_t trSize = 32;
+        HEADER0("findPosFirstLast[SCAN_DIAG]");
+        REPORT_SPEEDUP(opt.findPosFirstLast, ref.findPosFirstLast, coefBuf, trSize,
+                       g_scan4x4[SCAN_DIAG]);
+        HEADER0("findPosFirstLast[SCAN_HOR]");
+        REPORT_SPEEDUP(opt.findPosFirstLast, ref.findPosFirstLast, coefBuf, trSize,
+                       g_scan4x4[SCAN_HOR]);
+        HEADER0("findPosFirstLast[SCAN_VER]");
+        REPORT_SPEEDUP(opt.findPosFirstLast, ref.findPosFirstLast, coefBuf, trSize,
+                       g_scan4x4[SCAN_VER]);
     }
 
     if (opt.costCoeffNxN)
