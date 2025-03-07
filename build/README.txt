@@ -112,6 +112,7 @@ The following AArch64 ISA features are turned on by default when cross-compiling
 * Neon I8MM, mandatory from Armv8.6
 * SVE, mandatory from Armv9.0
 * SVE2, mandatory from Armv9.0
+* SVE2 BitPerm, optional from Armv9.0
 
 If the target platform does not support Armv8.4 Neon DotProd instructions, the
 ENABLE_NEON_DOTPROD CMake option should be set to OFF:
@@ -143,5 +144,14 @@ set to OFF:
 Note: when any of ENABLE_NEON_DOTPROD, ENABLE_NEON_I8MM, or ENABLE_SVE are set to
 OFF, the build configuration will disable SVE2, as we impose the constraint that
 SVE2 implies Neon I8MM, as well as Neon DotProd and SVE.
+
+If the target platform does not support SVE2 BitPerm instructions, the
+ENABLE_SVE2_BITPERM CMake option should be set to OFF:
+
+* cmake -DENABLE_SVE2_BITPERM=OFF  <other configuration options...>
+
+Note: when any of ENABLE_NEON_DOTPROD, ENABLE_NEON_I8MM, ENABLE_SVE, or
+ENABLE_SVE2 are set to OFF, the build configuration will disable SVE2 BitPerm,
+as SVE2 BitPerm requires that SVE2 is also present and enabled.
 
 Then, the normal build process can be followed.

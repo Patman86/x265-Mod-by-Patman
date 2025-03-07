@@ -123,6 +123,9 @@ const cpu_name_t cpu_names[] =
 #if defined(HAVE_NEON_I8MM)
     { "Neon_I8MM",       X265_CPU_NEON_I8MM },
 #endif
+#if defined(HAVE_SVE2_BITPERM)
+    { "SVE2_BitPerm",    X265_CPU_SVE2_BITPERM },
+#endif
 #elif X265_ARCH_POWER8
     { "Altivec",         X265_CPU_ALTIVEC },
 
