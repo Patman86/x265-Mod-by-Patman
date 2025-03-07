@@ -31,7 +31,7 @@ namespace X265_NS {
 typedef struct
 {
     uint32_t maxLumaSamples;
-    uint32_t maxLumaSamplesPerSecond;
+    uint64_t maxLumaSamplesPerSecond;
     uint32_t maxBitrateMain;
     uint32_t maxBitrateHigh;
     uint32_t maxCpbSizeMain;
@@ -44,20 +44,24 @@ typedef struct
 
 LevelSpec levels[] =
 {
-    { 36864,    552960,     128,      MAX_UINT, 350,    MAX_UINT, 2, Level::LEVEL1,   "1",   10 },
-    { 122880,   3686400,    1500,     MAX_UINT, 1500,   MAX_UINT, 2, Level::LEVEL2,   "2",   20 },
-    { 245760,   7372800,    3000,     MAX_UINT, 3000,   MAX_UINT, 2, Level::LEVEL2_1, "2.1", 21 },
-    { 552960,   16588800,   6000,     MAX_UINT, 6000,   MAX_UINT, 2, Level::LEVEL3,   "3",   30 },
-    { 983040,   33177600,   10000,    MAX_UINT, 10000,  MAX_UINT, 2, Level::LEVEL3_1, "3.1", 31 },
-    { 2228224,  66846720,   12000,    30000,    12000,  30000,    4, Level::LEVEL4,   "4",   40 },
-    { 2228224,  133693440,  20000,    50000,    20000,  50000,    4, Level::LEVEL4_1, "4.1", 41 },
-    { 8912896,  267386880,  25000,    100000,   25000,  100000,   6, Level::LEVEL5,   "5",   50 },
-    { 8912896,  534773760,  40000,    160000,   40000,  160000,   8, Level::LEVEL5_1, "5.1", 51 },
-    { 8912896,  1069547520, 60000,    240000,   60000,  240000,   8, Level::LEVEL5_2, "5.2", 52 },
-    { 35651584, 1069547520, 60000,    240000,   60000,  240000,   8, Level::LEVEL6,   "6",   60 },
-    { 35651584, 2139095040, 120000,   480000,   120000, 480000,   8, Level::LEVEL6_1, "6.1", 61 },
-    { 35651584, 4278190080U, 240000,  800000,   240000, 800000,   6, Level::LEVEL6_2, "6.2", 62 },
-    { MAX_UINT, MAX_UINT, MAX_UINT, MAX_UINT, MAX_UINT, MAX_UINT, 1, Level::LEVEL8_5, "8.5", 85 },
+    { 36864,      552960,         128,      MAX_UINT, 350,     MAX_UINT, 2, Level::LEVEL1,   "1",   10 },
+    { 122880,     3686400,        1500,     MAX_UINT, 1500,    MAX_UINT, 2, Level::LEVEL2,   "2",   20 },
+    { 245760,     7372800,        3000,     MAX_UINT, 3000,    MAX_UINT, 2, Level::LEVEL2_1, "2.1", 21 },
+    { 552960,     16588800,       6000,     MAX_UINT, 6000,    MAX_UINT, 2, Level::LEVEL3,   "3",   30 },
+    { 983040,     33177600,       10000,    MAX_UINT, 10000,   MAX_UINT, 2, Level::LEVEL3_1, "3.1", 31 },
+    { 2228224,    66846720,       12000,    30000,    12000,   30000,    4, Level::LEVEL4,   "4",   40 },
+    { 2228224,    133693440,      20000,    50000,    20000,   50000,    4, Level::LEVEL4_1, "4.1", 41 },
+    { 8912896,    267386880,      25000,    100000,   25000,   100000,   6, Level::LEVEL5,   "5",   50 },
+    { 8912896,    534773760,      40000,    160000,   40000,   160000,   8, Level::LEVEL5_1, "5.1", 51 },
+    { 8912896,    1069547520,     60000,    240000,   60000,   240000,   8, Level::LEVEL5_2, "5.2", 52 },
+    { 35651584,   1069547520,     60000,    240000,   60000,   240000,   8, Level::LEVEL6,   "6",   60 },
+    { 35651584,   2139095040,     120000,   480000,   120000,  480000,   8, Level::LEVEL6_1, "6.1", 61 },
+    { 35651584,   4278190080U,    240000,   800000,   240000,  800000,   6, Level::LEVEL6_2, "6.2", 62 },
+    { 80216064,   4812963840ULL,  320000,   1600000,  240000,  1600000,  6, Level::LEVEL6_3, "6.3", 63 },
+    { 142606336,  4812963840ULL,  320000,   1600000,  240000,  1600000,  6, Level::LEVEL7,   "7",   70 },
+    { 142606336,  8556380160ULL,  480000,   3200000,  480000,  3200000,  6, Level::LEVEL7_1, "7.1", 71 },
+    { 142606336,  17112760320ULL, 960000,   6400000,  960000,  6400000,  6, Level::LEVEL7_2, "7.2", 72 },
+    { MAX_UINT, MAX_UINT64, MAX_UINT, MAX_UINT, MAX_UINT, MAX_UINT, 1, Level::LEVEL8_5, "8.5", 85 },
 };
 
 static inline int _confirm(x265_param* param, bool bflag, const char* message)
@@ -153,7 +157,7 @@ void determineLevel(const x265_param &param, VPS& vps)
 #endif
 
     uint32_t lumaSamples = param.sourceWidth * param.sourceHeight;
-    uint32_t samplesPerSec = (uint32_t)(lumaSamples * ((double)param.fpsNum / param.fpsDenom));
+    uint64_t samplesPerSec = (uint64_t)(lumaSamples * ((double)param.fpsNum / param.fpsDenom));
     uint32_t bitrate = param.rc.vbvMaxBitrate ? param.rc.vbvMaxBitrate : param.rc.bitrate;
 
     const uint32_t MaxDpbPicBuf = param.bEnableSCC ? 7 : 6;
@@ -164,9 +168,9 @@ void determineLevel(const x265_param &param, VPS& vps)
     uint32_t i;
     if (param.bLossless)
     {
-        i = 13;
+        i = NumLevels - 1;
         vps.ptl.minCrForLevel = 1;
-        vps.ptl.maxLumaSrForLevel = MAX_UINT;
+        vps.ptl.maxLumaSrForLevel = MAX_UINT64;
         vps.ptl.levelIdc = Level::LEVEL8_5;
         vps.ptl.tierFlag = Level::MAIN;
     }
@@ -401,7 +405,7 @@ bool enforceLevel(x265_param& param, VPS& vps)
     bool allowHighTier = l.maxBitrateHigh < MAX_UINT && param.bHighTier;
 
     uint32_t lumaSamples = param.sourceWidth * param.sourceHeight;
-    uint32_t samplesPerSec = (uint32_t)(lumaSamples * ((double)param.fpsNum / param.fpsDenom));
+    uint64_t samplesPerSec = (uint64_t)(lumaSamples * ((double)param.fpsNum / param.fpsDenom));
     bool ok = true;
     if (lumaSamples > l.maxLumaSamples)
         ok = false;

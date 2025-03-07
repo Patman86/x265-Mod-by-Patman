@@ -1749,7 +1749,6 @@ bool PixelHarness::check_scanPosLast(scanPosLast_t ref, scanPosLast_t opt)
     {
         ref_src[32 * 32 + i] = 0x1234;
     }
-    
 
     memset(ref_coeffNum, 0xCD, sizeof(ref_coeffNum));
     memset(ref_coeffSign, 0xCD, sizeof(ref_coeffSign));
@@ -2096,7 +2095,7 @@ bool PixelHarness::check_pelFilterLumaStrong_H(pelFilterLumaStrong_t ref, pelFil
 {
     intptr_t srcStep = 1, offset = 64;
     int32_t tcP, tcQ, maskP, maskQ, tc;
-    int j = 0;
+    intptr_t j = 0;
 
     pixel pixel_test_buff1[TEST_CASES][BUFFSIZE];
     for (int i = 0; i < TEST_CASES; i++)
@@ -2112,7 +2111,7 @@ bool PixelHarness::check_pelFilterLumaStrong_H(pelFilterLumaStrong_t ref, pelFil
 
         int index = rand() % 3;
 
-        ref(pixel_test_buff[index]  + 4 * offset + j, srcStep, offset, tcP, tcQ);
+        ref(pixel_test_buff[index] + 4 * offset + j, srcStep, offset, tcP, tcQ);
         checked(opt, pixel_test_buff1[index] + 4 * offset + j, srcStep, offset, tcP, tcQ);
 
         if (memcmp(pixel_test_buff[index], pixel_test_buff1[index], sizeof(pixel) * BUFFSIZE))
@@ -2129,7 +2128,7 @@ bool PixelHarness::check_pelFilterLumaStrong_V(pelFilterLumaStrong_t ref, pelFil
 {
     intptr_t srcStep = 64, offset = 1;
     int32_t tcP, tcQ, maskP, maskQ, tc;
-    int j = 0;
+    intptr_t j = 0;
 
     pixel pixel_test_buff1[TEST_CASES][BUFFSIZE];
     for (int i = 0; i < TEST_CASES; i++)
@@ -2145,8 +2144,8 @@ bool PixelHarness::check_pelFilterLumaStrong_V(pelFilterLumaStrong_t ref, pelFil
 
         int index = rand() % 3;
 
-        ref(pixel_test_buff[index]  + 4 + j, srcStep, offset, tcP, tcQ);
-        checked(opt, pixel_test_buff1[index] + 4 + j, srcStep, offset, tcP, tcQ);
+        ref(pixel_test_buff[index] + 4 * offset + j, srcStep, offset, tcP, tcQ);
+        checked(opt, pixel_test_buff1[index] + 4 * offset + j, srcStep, offset, tcP, tcQ);
 
         if (memcmp(pixel_test_buff[index], pixel_test_buff1[index], sizeof(pixel) * BUFFSIZE))
             return false;
@@ -2161,29 +2160,33 @@ bool PixelHarness::check_pelFilterLumaStrong_V(pelFilterLumaStrong_t ref, pelFil
 bool PixelHarness::check_pelFilterChroma_H(pelFilterChroma_t ref, pelFilterChroma_t opt)
 {
     intptr_t srcStep = 1, offset = 64;
-    int32_t maskP, maskQ, tc;
-    int j = 0;
+    intptr_t j = 0;
+    const int NUM_MASKS = 3;
 
     pixel pixel_test_buff1[TEST_CASES][BUFFSIZE];
     for (int i = 0; i < TEST_CASES; i++)
-        memcpy(pixel_test_buff1[i], pixel_test_buff[i], sizeof(pixel)* BUFFSIZE);
+        memcpy(pixel_test_buff1[i], pixel_test_buff[i], sizeof(pixel) * BUFFSIZE);
 
-    for (int i = 0; i < ITERS; i++)
+    int32_t masks[NUM_MASKS][2] = {{-1, -1}, {-1, 0}, {0, -1}};
+
+    for (int i = 0; i < NUM_MASKS; i++)
     {
-        tc = rand() % PIXEL_MAX;
-        maskP = (rand() % PIXEL_MAX) - 1;
-        maskQ = (rand() % PIXEL_MAX) - 1;
+        int32_t maskP = masks[i][0];
+        int32_t maskQ = masks[i][1];
+        for (int k = 0; k < ITERS; k++)
+        {
+            int32_t tc = rand() % PIXEL_MAX;
+            int index = rand() % 3;
 
-        int index = rand() % 3;
+            ref(pixel_test_buff[index] + 2 * offset + j, srcStep, offset, tc, maskP, maskQ);
+            checked(opt, pixel_test_buff1[index] + 2 * offset + j, srcStep, offset, tc, maskP, maskQ);
 
-        ref(pixel_test_buff[index] + 4 * offset + j, srcStep, offset, tc, maskP, maskQ);
-        checked(opt, pixel_test_buff1[index] + 4 * offset + j, srcStep, offset, tc, maskP, maskQ);
+            if (memcmp(pixel_test_buff[index], pixel_test_buff1[index], sizeof(pixel) * BUFFSIZE))
+                return false;
 
-        if (memcmp(pixel_test_buff[index], pixel_test_buff1[index], sizeof(pixel)* BUFFSIZE))
-            return false;
-
-        reportfail()
-        j += INCR;
+            reportfail();
+            j += INCR;
+        }
     }
 
     return true;
@@ -2192,29 +2195,33 @@ bool PixelHarness::check_pelFilterChroma_H(pelFilterChroma_t ref, pelFilterChrom
 bool PixelHarness::check_pelFilterChroma_V(pelFilterChroma_t ref, pelFilterChroma_t opt)
 {
     intptr_t srcStep = 64, offset = 1;
-    int32_t maskP, maskQ, tc;
-    int j = 0;
+    intptr_t j = 0;
+    const int NUM_MASKS = 3;
 
     pixel pixel_test_buff1[TEST_CASES][BUFFSIZE];
     for (int i = 0; i < TEST_CASES; i++)
-        memcpy(pixel_test_buff1[i], pixel_test_buff[i], sizeof(pixel)* BUFFSIZE);
+        memcpy(pixel_test_buff1[i], pixel_test_buff[i], sizeof(pixel) * BUFFSIZE);
 
-    for (int i = 0; i < ITERS; i++)
+    int32_t masks[NUM_MASKS][2] = {{-1, -1}, {-1, 0}, {0, -1}};
+
+    for (int i = 0; i < NUM_MASKS; i++)
     {
-        tc = rand() % PIXEL_MAX;
-        maskP = (rand() % PIXEL_MAX) - 1;
-        maskQ = (rand() % PIXEL_MAX) - 1;
+        int32_t maskP = masks[i][0];
+        int32_t maskQ = masks[i][1];
+        for (int k = 0; k < ITERS; k++)
+        {
+            int32_t tc = rand() % PIXEL_MAX;
+            int index = rand() % 3;
 
-        int index = rand() % 3;
+            ref(pixel_test_buff[index] + 2 * offset + j, srcStep, offset, tc, maskP, maskQ);
+            checked(opt, pixel_test_buff1[index] + 2 * offset + j, srcStep, offset, tc, maskP, maskQ);
 
-        ref(pixel_test_buff[index] + 4 + j, srcStep, offset, tc, maskP, maskQ);
-        checked(opt, pixel_test_buff1[index] + 4 + j, srcStep, offset, tc, maskP, maskQ);
+            if (memcmp(pixel_test_buff[index], pixel_test_buff1[index], sizeof(pixel) * BUFFSIZE))
+                return false;
 
-        if (memcmp(pixel_test_buff[index], pixel_test_buff1[index], sizeof(pixel)* BUFFSIZE))
-            return false;
-
-        reportfail()
-        j += INCR;
+            reportfail();
+            j += INCR;
+        }
     }
 
     return true;
@@ -2686,102 +2693,99 @@ bool PixelHarness::testCorrectness(const EncoderPrimitives& ref, const EncoderPr
             }
         }
 
-        if (i < BLOCK_64x64)
+        /* TU only primitives */
+
+        if (opt.cu[i].calcresidual[NONALIGNED])
         {
-            /* TU only primitives */
+            if (!check_calresidual(ref.cu[i].calcresidual[NONALIGNED], opt.cu[i].calcresidual[NONALIGNED]))
+            {
+                printf("calcresidual width: %d failed!\n", 4 << i);
+                return false;
+            }
+        }
 
-            if (opt.cu[i].calcresidual[NONALIGNED])
+        if (opt.cu[i].calcresidual[ALIGNED])
+        {
+            if (!check_calresidual_aligned(ref.cu[i].calcresidual[ALIGNED], opt.cu[i].calcresidual[ALIGNED]))
             {
-                if (!check_calresidual(ref.cu[i].calcresidual[NONALIGNED], opt.cu[i].calcresidual[NONALIGNED]))
-                {
-                    printf("calcresidual width: %d failed!\n", 4 << i);
-                    return false;
-                }
+                printf("calcresidual_aligned width: %d failed!\n", 4 << i);
+                return false;
             }
+        }
 
-            if (opt.cu[i].calcresidual[ALIGNED])
+        if (opt.cu[i].transpose)
+        {
+            if (!check_transpose(ref.cu[i].transpose, opt.cu[i].transpose))
             {
-                if (!check_calresidual_aligned(ref.cu[i].calcresidual[ALIGNED], opt.cu[i].calcresidual[ALIGNED]))
-                {
-                    printf("calcresidual_aligned width: %d failed!\n", 4 << i);
-                    return false;
-                }
+                printf("transpose[%dx%d] failed\n", 4 << i, 4 << i);
+                return false;
             }
+        }
+        if (opt.cu[i].ssd_s[NONALIGNED])
+        {
+            if (!check_ssd_s(ref.cu[i].ssd_s[NONALIGNED], opt.cu[i].ssd_s[NONALIGNED]))
+            {
+                printf("ssd_s[%dx%d]: failed!\n", 4 << i, 4 << i);
+                return false;
+            }
+        }
+        if (opt.cu[i].ssd_s[ALIGNED])
+        {
+            if (!check_ssd_s_aligned(ref.cu[i].ssd_s[ALIGNED], opt.cu[i].ssd_s[ALIGNED]))
+            {
+                printf("ssd_s_aligned[%dx%d]: failed!\n", 4 << i, 4 << i);
+                return false;
+            }
+        }
+        if (opt.cu[i].copy_cnt)
+        {
+            if (!check_copy_cnt_t(ref.cu[i].copy_cnt, opt.cu[i].copy_cnt))
+            {
+                printf("copy_cnt[%dx%d] failed!\n", 4 << i, 4 << i);
+                return false;
+            }
+        }
 
-            if (opt.cu[i].transpose)
+        if (opt.cu[i].cpy2Dto1D_shl)
+        {
+            if (!check_cpy2Dto1D_shl_t(ref.cu[i].cpy2Dto1D_shl, opt.cu[i].cpy2Dto1D_shl))
             {
-                if (!check_transpose(ref.cu[i].transpose, opt.cu[i].transpose))
-                {
-                    printf("transpose[%dx%d] failed\n", 4 << i, 4 << i);
-                    return false;
-                }
+                printf("cpy2Dto1D_shl[%dx%d] failed!\n", 4 << i, 4 << i);
+                return false;
             }
-            if (opt.cu[i].ssd_s[NONALIGNED])
-            {
-                if (!check_ssd_s(ref.cu[i].ssd_s[NONALIGNED], opt.cu[i].ssd_s[NONALIGNED]))
-                {
-                    printf("ssd_s[%dx%d]: failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
-            }
-            if (opt.cu[i].ssd_s[ALIGNED])
-            {
-                if (!check_ssd_s_aligned(ref.cu[i].ssd_s[ALIGNED], opt.cu[i].ssd_s[ALIGNED]))
-                {
-                    printf("ssd_s_aligned[%dx%d]: failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
-            }
-            if (opt.cu[i].copy_cnt)
-            {
-                if (!check_copy_cnt_t(ref.cu[i].copy_cnt, opt.cu[i].copy_cnt))
-                {
-                    printf("copy_cnt[%dx%d] failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
-            }
+        }
 
-            if (opt.cu[i].cpy2Dto1D_shl)
+        if (opt.cu[i].cpy2Dto1D_shr)
+        {
+            if (!check_cpy2Dto1D_shr_t(ref.cu[i].cpy2Dto1D_shr, opt.cu[i].cpy2Dto1D_shr))
             {
-                if (!check_cpy2Dto1D_shl_t(ref.cu[i].cpy2Dto1D_shl, opt.cu[i].cpy2Dto1D_shl))
-                {
-                    printf("cpy2Dto1D_shl[%dx%d] failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
+                printf("cpy2Dto1D_shr failed!\n");
+                return false;
             }
+        }
+        if (opt.cu[i].cpy1Dto2D_shl[NONALIGNED])
+        {
+            if (!check_cpy1Dto2D_shl_t(ref.cu[i].cpy1Dto2D_shl[NONALIGNED], opt.cu[i].cpy1Dto2D_shl[NONALIGNED]))
+            {
+                printf("cpy1Dto2D_shl[%dx%d] failed!\n", 4 << i, 4 << i);
+                return false;
+            }
+        }
+        if (opt.cu[i].cpy1Dto2D_shl[ALIGNED])
+        {
+            if (!check_cpy1Dto2D_shl_aligned_t(ref.cu[i].cpy1Dto2D_shl[ALIGNED], opt.cu[i].cpy1Dto2D_shl[ALIGNED]))
+            {
+                printf("cpy1Dto2D_shl_aligned[%dx%d] failed!\n", 4 << i, 4 << i);
+                return false;
+            }
+        }
 
-            if (opt.cu[i].cpy2Dto1D_shr)
+        if (opt.cu[i].cpy1Dto2D_shr)
+        {
+            if (!check_cpy1Dto2D_shr_t(ref.cu[i].cpy1Dto2D_shr, opt.cu[i].cpy1Dto2D_shr))
             {
-                if (!check_cpy2Dto1D_shr_t(ref.cu[i].cpy2Dto1D_shr, opt.cu[i].cpy2Dto1D_shr))
-                {
-                    printf("cpy2Dto1D_shr failed!\n");
-                    return false;
-                }
-            }
-            if (opt.cu[i].cpy1Dto2D_shl[NONALIGNED])
-            {
-                if (!check_cpy1Dto2D_shl_t(ref.cu[i].cpy1Dto2D_shl[NONALIGNED], opt.cu[i].cpy1Dto2D_shl[NONALIGNED]))
-                {
-                    printf("cpy1Dto2D_shl[%dx%d] failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
-            }
-            if (opt.cu[i].cpy1Dto2D_shl[ALIGNED])
-            {
-                if (!check_cpy1Dto2D_shl_aligned_t(ref.cu[i].cpy1Dto2D_shl[ALIGNED], opt.cu[i].cpy1Dto2D_shl[ALIGNED]))
-                {
-                    printf("cpy1Dto2D_shl_aligned[%dx%d] failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
-            }
-
-            if (opt.cu[i].cpy1Dto2D_shr)
-            {
-                if (!check_cpy1Dto2D_shr_t(ref.cu[i].cpy1Dto2D_shr, opt.cu[i].cpy1Dto2D_shr))
-                {
-                    printf("cpy1Dto2D_shr[%dx%d] failed!\n", 4 << i, 4 << i);
-                    return false;
-                }
+                printf("cpy1Dto2D_shr[%dx%d] failed!\n", 4 << i, 4 << i);
+                return false;
             }
         }
     }
@@ -3085,7 +3089,6 @@ bool PixelHarness::testCorrectness(const EncoderPrimitives& ref, const EncoderPr
             return false;
         }
     }
-    
 
     if (opt.pelFilterLumaStrong[0])
     {
@@ -3151,7 +3154,6 @@ bool PixelHarness::testCorrectness(const EncoderPrimitives& ref, const EncoderPr
             return false;
         }
     }
-
 
     for (int k = 0; k < NUM_INTEGRAL_SIZE; k++)
     {
@@ -3749,7 +3751,8 @@ void PixelHarness::measureSpeed(const EncoderPrimitives& ref, const EncoderPrimi
         int32_t tcP = (rand() % PIXEL_MAX) - 1;
         int32_t tcQ = (rand() % PIXEL_MAX) - 1;
         HEADER0("pelFilterLumaStrong_Vertical");
-        REPORT_SPEEDUP(opt.pelFilterLumaStrong[0], ref.pelFilterLumaStrong[0], pbuf1, STRIDE, 1, tcP, tcQ);
+        REPORT_SPEEDUP(opt.pelFilterLumaStrong[0], ref.pelFilterLumaStrong[0], pbuf1 + 4,
+                       STRIDE, 1, tcP, tcQ);
     }
 
     if (opt.pelFilterLumaStrong[1])
@@ -3757,25 +3760,38 @@ void PixelHarness::measureSpeed(const EncoderPrimitives& ref, const EncoderPrimi
         int32_t tcP = (rand() % PIXEL_MAX) - 1;
         int32_t tcQ = (rand() % PIXEL_MAX) - 1;
         HEADER0("pelFilterLumaStrong_Horizontal");
-        REPORT_SPEEDUP(opt.pelFilterLumaStrong[1], ref.pelFilterLumaStrong[1], pbuf1, 1, STRIDE, tcP, tcQ);
+        REPORT_SPEEDUP(opt.pelFilterLumaStrong[1], ref.pelFilterLumaStrong[1], pbuf1 + 4 * STRIDE,
+                       1, STRIDE, tcP, tcQ);
     }
 
     if (opt.pelFilterChroma[0])
     {
+        const int NUM_MASKS = 3;
+        int32_t masks[NUM_MASKS][2] = {{-1, -1}, {-1, 0}, {0, -1}};
         int32_t tc = (rand() % PIXEL_MAX);
-        int32_t maskP = (rand() % PIXEL_MAX) - 1;
-        int32_t maskQ = (rand() % PIXEL_MAX) - 1;
-        HEADER0("pelFilterChroma_Vertical");
-        REPORT_SPEEDUP(opt.pelFilterChroma[0], ref.pelFilterChroma[0], pbuf1, STRIDE, 1, tc, maskP, maskQ);
+        for (int i = 0; i < NUM_MASKS; i++)
+        {
+            int32_t maskP = masks[i][0];
+            int32_t maskQ = masks[i][1];
+            HEADER("pelFilterChroma_Vertical[MaskP: %d, MaskQ: %d]", maskP, maskQ);
+            REPORT_SPEEDUP(opt.pelFilterChroma[0], ref.pelFilterChroma[0], pbuf1 + 2,
+                           STRIDE, 1, tc, maskP, maskQ);
+        }
     }
 
     if (opt.pelFilterChroma[1])
     {
+        const int NUM_MASKS = 3;
+        int32_t masks[NUM_MASKS][2] = {{-1, -1}, {-1, 0}, {0, -1}};
         int32_t tc = (rand() % PIXEL_MAX);
-        int32_t maskP = (rand() % PIXEL_MAX) - 1;
-        int32_t maskQ = (rand() % PIXEL_MAX) - 1;
-        HEADER0("pelFilterChroma_Horizontal");
-        REPORT_SPEEDUP(opt.pelFilterChroma[1], ref.pelFilterChroma[1], pbuf1, 1, STRIDE, tc, maskP, maskQ);
+        for (int i = 0; i < NUM_MASKS; i++)
+        {
+            int32_t maskP = masks[i][0];
+            int32_t maskQ = masks[i][1];
+            HEADER("pelFilterChroma_Horizontal[MaskP: %d, MaskQ: %d]", maskP, maskQ);
+            REPORT_SPEEDUP(opt.pelFilterChroma[1], ref.pelFilterChroma[1], pbuf1 + 2 * STRIDE,
+                           1, STRIDE, tc, maskP, maskQ);
+        }
     }
 
     for (int k = 0; k < NUM_INTEGRAL_SIZE; k++)

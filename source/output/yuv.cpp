@@ -57,8 +57,7 @@ bool YUVOutput::writePicture(const x265_picture& pic)
     X265_CHECK(pic.colorSpace == colorSpace, "invalid chroma subsampling\n");
     X265_CHECK(pic.bitDepth == (int)depth, "invalid bit depth\n");
 
-    if (inputDepth > 8)
-    {
+#if HIGH_BIT_DEPTH
 	if (depth == 8)
 	{
 		int shift = pic.bitDepth - 8;
@@ -89,9 +88,7 @@ bool YUVOutput::writePicture(const x265_picture& pic)
 			}
 		}
 	}
-    }
-    else
-    {
+#else
 	ofs.seekp((std::streamoff)fileOffset);
 	for (int i = 0; i < x265_cli_csps[colorSpace].planes; i++)
 	{
@@ -102,7 +99,7 @@ bool YUVOutput::writePicture(const x265_picture& pic)
 			src += pic.stride[i] / sizeof(*src);
 		}
 	}
-    }
+#endif
 
     return true;
 }

@@ -1685,7 +1685,8 @@ int x265_check_params(x265_param* param)
 {
 #define CHECK(expr, msg) check_failed |= _confirm(param, expr, msg)
     int check_failed = 0; /* abort if there is a fatal configuration problem */
-    CHECK((param->sourceWidth > 8192 && param->sourceHeight > 4320), "Input video resolution exceeds the maximum supported 8K resolution of 8192x4320");
+    CHECK((uint64_t)param->sourceWidth * param->sourceHeight > 142606336,
+          "Input video resolution exceeds the maximum supported luma samples 142,606,336 (16384x8704) of Level 7.2.");
     CHECK(param->uhdBluray == 1 && (X265_DEPTH != 10 || param->internalCsp != 1 || param->interlaceMode != 0),
         "uhd-bd: bit depth, chroma subsample, source picture type must be 10, 4:2:0, progressive");
     CHECK(param->maxCUSize != 64 && param->maxCUSize != 32 && param->maxCUSize != 16,
@@ -2042,6 +2043,19 @@ int x265_check_params(x265_param* param)
         if (checkValid)     x265_log(param, X265_LOG_WARNING, "Invalid intra constraint flag, bit depth constraint flag and chroma format constraint flag combination for a RExt profile. Disabling SCC \n");
         if (checkValid)
             param->bEnableSCC = 0;
+    }
+    if (!!param->bEnableSCC)
+    {
+        if (param->bEnableRdRefine && param->bDynamicRefine)
+        {
+            param->bEnableRdRefine = 0;
+            x265_log(param, X265_LOG_WARNING, "Disabling rd-refine as it can not be used with scc and dynamic-refine\n");
+        }
+        if (param->bEnableRdRefine && param->interRefine > 0)
+        {
+            param->bEnableRdRefine = 0;
+            x265_log(param, X265_LOG_WARNING, "Disabling rd-refine as it can not be used with scc and inter-refine\n");
+        }
     }
     CHECK(!!param->bEnableSCC&& param->rdLevel != 6, "Enabling scc extension in x265 requires rdlevel of 6 ");
 #endif

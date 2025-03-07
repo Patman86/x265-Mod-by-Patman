@@ -406,6 +406,41 @@ function PFX(pixel_ssd_s_32x32_neon)
     ret_v0_w0
 endfunc
 
+function PFX(pixel_ssd_s_64x64_neon)
+    add             x1, x1, x1
+    sub             x1, x1, #64
+    sub             x3, x3, #64
+
+    mov             w12, #32
+    movi            v0.16b, #0
+    movi            v1.16b, #0
+.Loop_ssd_ss_64:
+    sub             w12, w12, #1
+.rept 2
+    ld1             {v16.16b-v19.16b}, [x0], #64
+    ld1             {v20.16b-v23.16b}, [x0], x1
+    smlal           v0.4s, v16.4h, v16.4h
+    smlal2          v1.4s, v16.8h, v16.8h
+    smlal           v0.4s, v17.4h, v17.4h
+    smlal2          v1.4s, v17.8h, v17.8h
+    smlal           v0.4s, v18.4h, v18.4h
+    smlal2          v1.4s, v18.8h, v18.8h
+    smlal           v0.4s, v19.4h, v19.4h
+    smlal2          v1.4s, v19.8h, v19.8h
+    smlal           v0.4s, v20.4h, v20.4h
+    smlal2          v1.4s, v20.8h, v20.8h
+    smlal           v0.4s, v21.4h, v21.4h
+    smlal2          v1.4s, v21.8h, v21.8h
+    smlal           v0.4s, v22.4h, v22.4h
+    smlal2          v1.4s, v22.8h, v22.8h
+    smlal           v0.4s, v23.4h, v23.4h
+    smlal2          v1.4s, v23.8h, v23.8h
+.endr
+    cbnz            w12, .Loop_ssd_ss_64
+    add             v0.4s, v0.4s, v1.4s
+    ret_v0_w0
+endfunc
+
 #else // HIGH_BIT_DEPTH
 
 .macro SSE_PP_4x2

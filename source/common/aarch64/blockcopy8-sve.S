@@ -965,7 +965,7 @@ function PFX(cpy2Dto1D_shl_64x64_sve)
     whilelt         p0.h, x9, x8
     b.first         .L_cpy2Dto1D_shl_64x64
     add             x1, x1, x2, lsl #1
-    addvl           x0, x0, #1
+    add             x0, x0, #128
     cbnz            w12, .L_init_cpy2Dto1D_shl_64x64
     ret
 endfunc
@@ -1204,7 +1204,7 @@ function PFX(cpy1Dto2D_shl_64x64_sve)
     inch            x9
     whilelt         p0.h, x9, x8
     b.first         .L_cpy1Dto2D_shl_64x64
-    addvl           x1, x1, #1
+    add             x1, x1, #128
     add             x0, x0, x2, lsl #1
     cbnz            w12, .L_init_cpy1Dto2D_shl_64x64
     ret

@@ -257,10 +257,10 @@ RateControl::RateControl(x265_param& p, Encoder *top)
     m_relativeComplexity = NULL;
 
     // vbv initialization
-    m_param->rc.vbvBufferSize = x265_clip3(0, 2000000, m_param->rc.vbvBufferSize);
-    m_param->rc.vbvMaxBitrate = x265_clip3(0, 2000000, m_param->rc.vbvMaxBitrate);
-    m_param->rc.vbvBufferInit = x265_clip3(0.0, 2000000.0, m_param->rc.vbvBufferInit);
-    m_param->vbvBufferEnd = x265_clip3(0.0, 2000000.0, m_param->vbvBufferEnd);
+    m_param->rc.vbvBufferSize = x265_clip3(0, 8000000, m_param->rc.vbvBufferSize);
+    m_param->rc.vbvMaxBitrate = x265_clip3(0, 8000000, m_param->rc.vbvMaxBitrate);
+    m_param->rc.vbvBufferInit = x265_clip3(0.0, 8000000.0, m_param->rc.vbvBufferInit);
+    m_param->vbvBufferEnd = x265_clip3(0.0, 8000000.0, m_param->vbvBufferEnd);
     m_initVbv = false;
     m_singleFrameVbv = 0;
     m_rateTolerance = 1.0;
@@ -864,8 +864,8 @@ void RateControl::reconfigureRC()
 {
     if (m_isVbv)
     {
-        m_param->rc.vbvBufferSize = x265_clip3(0, 2000000, m_param->rc.vbvBufferSize);
-        m_param->rc.vbvMaxBitrate = x265_clip3(0, 2000000, m_param->rc.vbvMaxBitrate);
+        m_param->rc.vbvBufferSize = x265_clip3(0, 8000000, m_param->rc.vbvBufferSize);
+        m_param->rc.vbvMaxBitrate = x265_clip3(0, 8000000, m_param->rc.vbvMaxBitrate);
         if (m_param->reconfigWindowSize)
             m_param->rc.vbvMaxBitrate = (int)(m_param->rc.vbvMaxBitrate * (double)(m_fps / m_param->reconfigWindowSize));
         if (m_param->rc.vbvMaxBitrate < m_param->rc.bitrate &&

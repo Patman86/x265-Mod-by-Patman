@@ -420,4 +420,18 @@ void Lowres::init(PicYuv *origPic, int poc)
             quarterSampleLowResStrideY,
             widthFullRes / 4, heightFullRes / 4);
     }
+    int cuCount = maxBlocksInRow * maxBlocksInCol;
+    int cuCountFullRes = (origPic->m_param->rc.qgSize > 8) ? cuCount : cuCount << 2;
+    memset(intraCost, 0, sizeof(int32_t) * cuCount);
+    if (!!origPic->m_param->rc.aqMode || !!origPic->m_param->rc.hevcAq || !!origPic->m_param->bAQMotion || !!origPic->m_param->bEnableWeightedPred || !!origPic->m_param->bEnableWeightedBiPred)
+        {
+        memset(qpAqOffset, 0.0, sizeof(double) * cuCountFullRes);
+        memset(invQscaleFactor, 0, sizeof(int) * cuCountFullRes);
+        memset(qpCuTreeOffset, 0.0, sizeof(double) * cuCountFullRes);
+        if (origPic->m_param->rc.qgSize == 8)
+             memset(invQscaleFactor8x8, 0, sizeof(int) * cuCount);
+        memset(edgeInclined, 0, sizeof(int) * cuCountFullRes);
+        }
+     if (origPic->m_param->bAQMotion)
+        memset(qpAqMotionOffset, 0.0, sizeof(double) * cuCountFullRes);
 }
