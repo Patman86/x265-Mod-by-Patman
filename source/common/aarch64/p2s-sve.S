@@ -401,10 +401,12 @@ function PFX(filterPixelToShort_48x64_sve)
     ret
 .vl_gt_16_filterPixelToShort_high_48x64:
     ptrue           p0.h, vl16
+    mov             x4, #16
+    mov             x5, #32
 .rept 64
     ld1h            {z0.h}, p0/z, [x0]
-    ld1h            {z1.h}, p0/z, [x0, #1, mul vl]
-    ld1h            {z2.h}, p0/z, [x0, #2, mul vl]
+    ld1h            {z1.h}, p0/z, [x0, x4, lsl #1]
+    ld1h            {z2.h}, p0/z, [x0, x5, lsl #1]
     add             x0, x0, x1
     lsl             z0.h, p0/m, z0.h, #P2S_SHIFT
     lsl             z1.h, p0/m, z1.h, #P2S_SHIFT
@@ -413,8 +415,8 @@ function PFX(filterPixelToShort_48x64_sve)
     add             z1.h, p0/m, z1.h, z31.h
     add             z2.h, p0/m, z2.h, z31.h
     st1h            {z0.h}, p0, [x2]
-    st1h            {z1.h}, p0, [x2, #1, mul vl]
-    st1h            {z2.h}, p0, [x2, #2, mul vl]
+    st1h            {z1.h}, p0, [x2, x4, lsl #1]
+    st1h            {z2.h}, p0, [x2, x5, lsl #1]
     add             x2, x2, x3
 .endr
     ret
