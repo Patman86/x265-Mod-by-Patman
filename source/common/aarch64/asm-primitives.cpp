@@ -380,6 +380,7 @@ extern "C" {
 
 #include "pixel-prim.h"
 #include "filter-prim.h"
+#include "filter-prim-sve.h"
 #include "dct-prim.h"
 #include "loopfilter-prim.h"
 #include "intrapred-prim.h"
@@ -1066,6 +1067,7 @@ void setupIntrinsicPrimitives(EncoderPrimitives &p, int cpuMask)
 #if defined(HAVE_SVE) && HAVE_SVE_BRIDGE
     if (cpuMask & X265_CPU_SVE)
     {
+        setupFilterPrimitives_sve(p);
         setupSaoPrimitives_sve(p);
         setupDCTPrimitives_sve(p);
     }
