@@ -1553,13 +1553,14 @@ bool PixelHarness::check_planecopy_cp(planecopy_cp_t ref, planecopy_cp_t opt)
     int height = 16 + rand() % 48;
     intptr_t srcStride = 64;
     intptr_t dstStride = width;
+    int shift = X265_DEPTH - 8;
     int j = 0;
 
     for (int i = 0; i < ITERS; i++)
     {
         int index = i % TEST_CASES;
-        checked(opt, uchar_test_buff[index] + j, srcStride, opt_dest, dstStride, width, height, (int)2);
-        ref(uchar_test_buff[index] + j, srcStride, ref_dest, dstStride, width, height, (int)2);
+        checked(opt, uchar_test_buff[index] + j, srcStride, opt_dest, dstStride, width, height, shift);
+        ref(uchar_test_buff[index] + j, srcStride, ref_dest, dstStride, width, height, shift);
 
         if (memcmp(ref_dest, opt_dest, sizeof(ref_dest)))
             return false;
@@ -3646,7 +3647,8 @@ void PixelHarness::measureSpeed(const EncoderPrimitives& ref, const EncoderPrimi
     if (opt.planecopy_cp)
     {
         HEADER0("planecopy_cp");
-        REPORT_SPEEDUP(opt.planecopy_cp, ref.planecopy_cp, uchar_test_buff[0], 64, pbuf1, 64, 64, 64, 2);
+        REPORT_SPEEDUP(opt.planecopy_cp, ref.planecopy_cp, uchar_test_buff[0], 64, pbuf1,
+                       64, 64, 64, X265_DEPTH - 8);
     }
 
     if (opt.propagateCost)

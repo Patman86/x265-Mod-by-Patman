@@ -565,48 +565,6 @@ function PFX(scale2D_64to32_neon)
     ret
 endfunc
 
-// void planecopy_cp_c(const uint8_t* src, intptr_t srcStride, pixel* dst, intptr_t dstStride, int width, int height, int shift)
-function PFX(pixel_planecopy_cp_neon)
-    dup             v2.16b, w6
-    sub             x5, x5, #1
-.Loop_h:
-    mov             x6, x0
-    mov             x12, x2
-    mov             x7, #0
-.Loop_w:
-    ldr             q0, [x6], #16
-    ushl            v0.16b, v0.16b, v2.16b
-    str             q0, [x12], #16
-    add             x7, x7, #16
-    cmp             x7, x4
-    blt             .Loop_w
-
-    add             x0, x0, x1
-    add             x2, x2, x3
-    sub             x5, x5, #1
-    cbnz            x5, .Loop_h
-
-// handle last row
-    mov             x5, x4
-    lsr             x5, x5, #3
-.LoopW8:
-    ldr             d0, [x0], #8
-    ushl            v0.8b, v0.8b, v2.8b
-    str             d0, [x2], #8
-    sub             x4, x4, #8
-    sub             x5, x5, #1
-    cbnz            x5, .LoopW8
-
-    mov             x5, #8
-    sub             x5, x5, x4
-    sub             x0, x0, x5
-    sub             x2, x2, x5
-    ldr             d0, [x0]
-    ushl            v0.8b, v0.8b, v2.8b
-    str             d0, [x2]
-    ret
-endfunc
-
 //******* satd *******
 .macro satd_4x4_neon
     ldr             s0, [x0]

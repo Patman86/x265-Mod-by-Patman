@@ -651,9 +651,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     p.scale1D_128to64[NONALIGNED] = PFX(scale1D_128to64_neon);
     p.scale1D_128to64[ALIGNED] = PFX(scale1D_128to64_neon);
 
-    // planecopy
-    p.planecopy_cp = PFX(pixel_planecopy_cp_neon);
-
     // satd
     ALL_LUMA_PU(satd, pixel_satd, neon);
 

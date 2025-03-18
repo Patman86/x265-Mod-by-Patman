@@ -1087,6 +1087,60 @@ void addAvg_neon(const int16_t *src0, const int16_t *src1, pixel *dst, intptr_t 
     }
 }
 
+void planecopy_cp_neon(const uint8_t *src, intptr_t srcStride, pixel *dst,
+                       intptr_t dstStride, int width, int height, int shift)
+{
+    X265_CHECK(width >= 16, "width length error\n");
+    X265_CHECK(height >= 1, "height length error\n");
+    X265_CHECK(shift == X265_DEPTH - 8, "shift value error\n");
+
+    (void)shift;
+
+    do
+    {
+#if HIGH_BIT_DEPTH
+        for (int w = 0; w < width - 16; w += 16)
+        {
+            uint8x16_t in = vld1q_u8(src + w);
+            uint16x8_t t0 = vshll_n_u8(vget_low_u8(in), X265_DEPTH - 8);
+            uint16x8_t t1 = vshll_n_u8(vget_high_u8(in), X265_DEPTH - 8);
+            vst1q_u16(dst + w + 0, t0);
+            vst1q_u16(dst + w + 8, t1);
+        }
+        // Tail - src must be different from dst for this to work.
+        {
+            uint8x16_t in = vld1q_u8(src + width - 16);
+            uint16x8_t t0 = vshll_n_u8(vget_low_u8(in), X265_DEPTH - 8);
+            uint16x8_t t1 = vshll_n_u8(vget_high_u8(in), X265_DEPTH - 8);
+            vst1q_u16(dst + width - 16, t0);
+            vst1q_u16(dst + width - 8, t1);
+        }
+#else
+        int w;
+        for (w = 0; w < width - 32; w += 32)
+        {
+            uint8x16_t in0 = vld1q_u8(src + w + 0);
+            uint8x16_t in1 = vld1q_u8(src + w + 16);
+            vst1q_u8(dst + w + 0, in0);
+            vst1q_u8(dst + w + 16, in1);
+        }
+        if (w < width - 16)
+        {
+            uint8x16_t in = vld1q_u8(src + w);
+            vst1q_u8(dst + w, in);
+        }
+        // Tail - src must be different from dst for this to work.
+        {
+            uint8x16_t in = vld1q_u8(src + width - 16);
+            vst1q_u8(dst + width - 16, in);
+        }
+#endif
+        dst += dstStride;
+        src += srcStride;
+    }
+    while (--height != 0);
+}
+
 template<int lx, int ly>
 void pixelavg_pp_neon(pixel *dst, intptr_t dstride, const pixel *src0, intptr_t sstride0, const pixel *src1,
                       intptr_t sstride1, int)
@@ -1711,7 +1765,7 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.chroma[X265_CSP_I422].cu[BLOCK_32x32].sa8d = sa8d16<16, 32>;
     p.chroma[X265_CSP_I422].cu[BLOCK_64x64].sa8d = sa8d16<32, 64>;
 
-
+    p.planecopy_cp = planecopy_cp_neon;
 }
 
 
