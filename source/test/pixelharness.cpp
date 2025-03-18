@@ -338,26 +338,33 @@ bool PixelHarness::check_weightp(weightp_pp_t ref, weightp_pp_t opt)
     if (cpuid & X265_CPU_AVX512)
         width = 32 * (rand() % 2 + 1);
     int height = 8;
-    int w0 = rand() % 128;
-    int shift = rand() % 8; // maximum is 7, see setFromWeightAndOffset()
+    int shift = (rand() % 6) + 1;
+    // Make CTZ(w0) >= shift; max of 126.
+    int w0 = (rand() % ((1 << (7 - shift)) - 1) + 1) << shift;
     int round = shift ? (1 << (shift - 1)) : 0;
     int offset = (rand() % 256) - 128;
     intptr_t stride = 64;
     const int correction = (IF_INTERNAL_PREC - X265_DEPTH);
-    for (int i = 0; i < ITERS; i++)
+
+    for (int k = 0; k < 2; k++)
     {
-        int index = i % TEST_CASES;
-        checked(opt, pixel_test_buff[index] + j, opt_dest, stride, width, height, w0, round << correction, shift + correction, offset);
-        ref(pixel_test_buff[index] + j, ref_dest, stride, width, height, w0, round << correction, shift + correction, offset);
+        w0 += k; // 1st: CTZ(w0) >= shift; 2nd: CTZ(w0) < shift
 
-        if (memcmp(ref_dest, opt_dest, 64 * 64 * sizeof(pixel)))
+        for (int i = 0; i < ITERS; i++)
         {
+            int index = i % TEST_CASES;
             checked(opt, pixel_test_buff[index] + j, opt_dest, stride, width, height, w0, round << correction, shift + correction, offset);
-            return false;
-        }
+            ref(pixel_test_buff[index] + j, ref_dest, stride, width, height, w0, round << correction, shift + correction, offset);
 
-        reportfail();
-        j += INCR;
+            if (memcmp(ref_dest, opt_dest, 64 * 64 * sizeof(pixel)))
+            {
+                checked(opt, pixel_test_buff[index] + j, opt_dest, stride, width, height, w0, round << correction, shift + correction, offset);
+                return false;
+            }
+
+            reportfail();
+            j += INCR;
+        }
     }
 
     return true;
@@ -3489,8 +3496,17 @@ void PixelHarness::measureSpeed(const EncoderPrimitives& ref, const EncoderPrimi
 
     if (opt.weight_pp)
     {
-        HEADER0("weight_pp");
-        REPORT_SPEEDUP(opt.weight_pp, ref.weight_pp, pbuf1, pbuf2, 64, 32, 32, 128, 1 << 9, 10, 100);
+        int w0[2] = {64, 127}; // max: 127. 1: CTZ(64) >= shift. 2: CTZ(127) < shift.
+        int shift = 6;
+        int round = 1 << (shift - 1);
+        int offset = 100; // -128 to 127
+        const int correction = IF_INTERNAL_PREC - X265_DEPTH;
+        for (int i = 0; i < 2; i++)
+        {
+            HEADER("weight_pp[w0=%d]", w0[i]);
+            REPORT_SPEEDUP(opt.weight_pp, ref.weight_pp, pbuf1, pbuf2, 64, 32, 32, w0[i],
+                           round << correction, shift + correction, offset);
+        }
     }
 
     if (opt.weight_sp)
