@@ -28,6 +28,8 @@
 #include <arm_neon.h>
 
 #if HIGH_BIT_DEPTH
+#define SHIFT_INTERP_PS (IF_FILTER_PREC - (IF_INTERNAL_PREC - X265_DEPTH))
+
 static const uint16_t dotprod_h_permute_tbl[32] = {
     // clang-format off
     0, 1, 2, 3, 1, 2, 3, 4,
@@ -242,6 +244,64 @@ void inline interp8_hpp_sve(const pixel *src, intptr_t srcStride,
     }
 }
 
+void inline filter8_ps_u16x4(const uint16x8_t *s, int16x4_t &d, int16x8_t filter,
+                             int64x2_t offset)
+{
+    int16x8_t sum01 = vreinterpretq_s16_u16(vaddq_u16(s[0], s[1]));
+    int16x8_t sum23 = vreinterpretq_s16_u16(vaddq_u16(s[2], s[3]));
+
+    int64x2_t sum_lo = x265_sdotq_lane_s16(offset, sum01, filter, 0);
+    int64x2_t sum_hi = x265_sdotq_lane_s16(offset, sum23, filter, 0);
+
+    int32x4_t sum = vcombine_s32(vmovn_s64(sum_lo), vmovn_s64(sum_hi));
+
+    d = vshrn_n_s32(sum, SHIFT_INTERP_PS);
+}
+
+template<int width, int height>
+void inline interp8_hps_sve(const pixel *src, intptr_t srcStride,
+                            int16_t *dst, intptr_t dstStride, int coeffIdx, int isRowExt)
+{
+    const int N_TAPS = 8;
+    int blkheight = height;
+    const int16x8_t filter = vld1q_s16(X265_NS::g_lumaFilter[coeffIdx]);
+    const int64x2_t offset =
+        vdupq_n_s64((unsigned)-IF_INTERNAL_OFFS << SHIFT_INTERP_PS);
+
+    uint16x8_t idx[4];
+
+    idx[0] = vld1q_u16(dotprod_h_permute_tbl + 0);
+    idx[1] = vld1q_u16(dotprod_h_permute_tbl + 8);
+    idx[2] = vld1q_u16(dotprod_h_permute_tbl + 16);
+    idx[3] = vld1q_u16(dotprod_h_permute_tbl + 24);
+
+    if (isRowExt)
+    {
+        src -= (N_TAPS / 2 - 1) * srcStride;
+        blkheight += N_TAPS - 1;
+    }
+
+    src -= N_TAPS / 2 - 1;
+
+    for (int row = 0; row < blkheight; row++)
+    {
+        uint16x8_t s[2];
+        s[0] = vld1q_u16(src);
+        s[1] = vld1q_u16(src + 4);
+
+        uint16x8_t s0[N_TAPS];
+        setup_s_hpp_x4<true>(s0, s[0], s[1], idx);
+
+        int16x4_t d0;
+        filter8_ps_u16x4(s0, d0, filter, offset);
+
+        vst1_s16(dst, d0);
+
+        src += srcStride;
+        dst += dstStride;
+    }
+}
+
 namespace X265_NS {
 // Declaration for use in interp8_horiz_pp_sve().
 template<int N, int width, int height>
@@ -282,6 +342,29 @@ void interp8_horiz_pp_sve(const pixel *src, intptr_t srcStride, pixel *dst,
     }
 }
 
+// Declaration for use in interp8_horiz_ps_sve().
+template<int N, int width, int height>
+void interp_horiz_ps_neon(const pixel *src, intptr_t srcStride, int16_t *dst,
+                          intptr_t dstStride, int coeffIdx, int isRowExt);
+
+template<int width, int height>
+void interp8_horiz_ps_sve(const pixel *src, intptr_t srcStride, int16_t *dst,
+                          intptr_t dstStride, int coeffIdx, int isRowExt)
+{
+    switch (coeffIdx)
+    {
+    case 1:
+        return interp_horiz_ps_neon<8, width, height>(src, srcStride, dst, dstStride,
+                                                      coeffIdx, isRowExt);
+    case 2:
+        return interp8_hps_sve<width, height>(src, srcStride, dst, dstStride,
+                                              coeffIdx, isRowExt);
+    case 3:
+        return interp_horiz_ps_neon<8, width, height>(src, srcStride, dst, dstStride,
+                                                      coeffIdx, isRowExt);
+    }
+}
+
 void setupFilterPrimitives_sve(EncoderPrimitives &p)
 {
     p.pu[LUMA_4x4].luma_hpp    = interp8_horiz_pp_sve<4, 4>;
@@ -306,6 +389,10 @@ void setupFilterPrimitives_sve(EncoderPrimitives &p)
     p.pu[LUMA_64x48].luma_hpp  = interp8_horiz_pp_sve<64, 48>;
     p.pu[LUMA_64x64].luma_hpp  = interp8_horiz_pp_sve<64, 64>;
 #endif // X265_DEPTH == 12
+
+    p.pu[LUMA_4x4].luma_hps   = interp8_horiz_ps_sve<4, 4>;
+    p.pu[LUMA_4x8].luma_hps   = interp8_horiz_ps_sve<4, 8>;
+    p.pu[LUMA_4x16].luma_hps  = interp8_horiz_ps_sve<4, 16>;
 }
 } // namespace X265_NS
 #else // !HIGH_BIT_DEPTH
