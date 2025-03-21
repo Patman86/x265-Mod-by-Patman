@@ -47,12 +47,14 @@
 #endif
 #endif
 
-#if defined(_MSC_VER) && !defined(__INTEL_LLVM_COMPILER)
+#if defined(_MSC_VER) && !defined(__INTEL_LLVM_COMPILER) && !defined(__clang__)
 #define COMPILEDBY "[MSVC " XSTR(_MSC_VER) "]"
 #elif __INTEL_LLVM_COMPILER
 #define COMPILEDBY "[ICC " XSTR(__INTEL_LLVM_COMPILER) "]"
 #elif __INTEL_COMPILER
 #define COMPILEDBY "[ICC " XSTR(__INTEL_COMPILER) "]"
+#elif __clang__
+#define COMPILEDBY  "[Clang " XSTR(__clang_major__) "." XSTR(__clang_minor__) "." XSTR(__clang_patchlevel__) "]"
 #endif
 
 #ifndef COMPILEDBY
