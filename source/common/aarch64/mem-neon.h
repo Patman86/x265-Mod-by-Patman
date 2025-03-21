@@ -1,7 +1,8 @@
 /*****************************************************************************
- * Copyright (C) 2024 MulticoreWare, Inc
+ * Copyright (C) 2024-2025 MulticoreWare, Inc
  *
  * Authors: Hari Limaye <hari.limaye@arm.com>
+ *          Gerda Zsejke More <gerdazsejke.more@arm.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -27,6 +28,22 @@
 #include <arm_neon.h>
 #include <cassert>
 #include <stdint.h>
+
+using namespace X265_NS;
+
+template<int N>
+static void inline store_u8x2_strided_xN(uint8_t *d, intptr_t stride,
+                                         const uint8x8_t *s)
+{
+    X265_CHECK(N % 2 == 0, "N should be divisible by 2");
+    for (int i = 0; i < N / 2; ++i)
+    {
+        vst1_lane_u16((uint16_t *)d, vreinterpret_u16_u8(s[i]), 0);
+        d += stride;
+        vst1_lane_u16((uint16_t *)d, vreinterpret_u16_u8(s[i]), 2);
+        d += stride;
+    }
+}
 
 // Load 4 bytes into the low half of a uint8x8_t, zero the upper half.
 static uint8x8_t inline load_u8x4x1(const uint8_t *s)
@@ -152,6 +169,17 @@ static void inline store_u8xnxm(uint8_t *dst, intptr_t dst_stride,
     }
 }
 
+template<int N, int M>
+static void inline store_u8xnxm_strided(uint8_t *dst, intptr_t dst_stride,
+                                        const uint8x8_t *src)
+{
+    switch (N)
+    {
+    case 2: return store_u8x2_strided_xN<M>(dst, dst_stride, src);
+    case 4: return store_u8x4_strided_xN<M>(dst, dst_stride, src);
+    }
+}
+
 template<int N>
 static void inline store_u8x16xn(uint8_t *dst, intptr_t dst_stride,
                                  const uint8x16_t *src)
@@ -182,6 +210,95 @@ static void inline load_s16x8xn(const int16_t *src, const intptr_t stride,
     {
         dst[i] = vld1q_s16(src);
         src += stride;
+    }
+}
+
+template<int N>
+static void inline load_u16x4xn(const uint16_t *src, const intptr_t stride,
+                                uint16x4_t *dst)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        dst[i] = vld1_u16(src);
+        src += stride;
+    }
+}
+
+template<int N>
+static void inline load_u16x8xn(const uint16_t *src, const intptr_t stride,
+                                uint16x8_t *dst)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        dst[i] = vld1q_u16(src);
+        src += stride;
+    }
+}
+
+template<int N>
+static void inline store_u16x2xn(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x4_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_lane_u32((uint32_t *)dst, vreinterpret_u32_u16(src[i]), 0);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_u16x2xn(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1q_lane_u32((uint32_t *)dst, vreinterpretq_u32_u16(src[i]), 0);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_u16x4xn(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x4_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_u16(dst, src[i]);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_u16x4xn(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_u16(dst, vget_low_u16(src[i]));
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_u16x6xn(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1_u16(dst, vget_low_u16(src[i]));
+        vst1q_lane_u32((uint32_t *)(dst + 4), vreinterpretq_u32_u16(src[i]), 2);
+        dst += dst_stride;
+    }
+}
+
+template<int N>
+static void inline store_u16x8xn(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x8_t *src)
+{
+    for (int i = 0; i < N; ++i)
+    {
+        vst1q_u16(dst, src[i]);
+        dst += dst_stride;
     }
 }
 
@@ -262,6 +379,41 @@ static void inline store_s16xnxm(const int16x8_t *src, int16_t *dst,
     case 4: return store_s16x4xn<M>(dst, dst_stride, src);
     case 6: return store_s16x6xn<M>(dst, dst_stride, src);
     case 8: return store_s16x8xn<M>(dst, dst_stride, src);
+    }
+}
+
+template<int N, int M>
+static void inline store_s16xnxm(const int16x4_t *src, int16_t *dst,
+                                 intptr_t dst_stride)
+{
+    switch (N)
+    {
+    case 2: return store_s16x2xn<M>(dst, dst_stride, src);
+    case 4: return store_s16x4xn<M>(dst, dst_stride, src);
+    }
+}
+
+template<int N, int M>
+static void inline store_u16xnxm(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x8_t *src)
+{
+    switch (N)
+    {
+    case 2: return store_u16x2xn<M>(dst, dst_stride, src);
+    case 4: return store_u16x4xn<M>(dst, dst_stride, src);
+    case 6: return store_u16x6xn<M>(dst, dst_stride, src);
+    case 8: return store_u16x8xn<M>(dst, dst_stride, src);
+    }
+}
+
+template<int N, int M>
+static void inline store_u16xnxm(uint16_t *dst, intptr_t dst_stride,
+                                 const uint16x4_t *src)
+{
+    switch (N)
+    {
+    case 2: return store_u16x2xn<M>(dst, dst_stride, src);
+    case 4: return store_u16x4xn<M>(dst, dst_stride, src);
     }
 }
 

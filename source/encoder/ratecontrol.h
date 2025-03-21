@@ -315,7 +315,6 @@ protected:
     double tuneAbrQScaleFromFeedback(double qScale);
     double tuneQScaleForZone(RateControlEntry *rce, double qScale); // Tune qScale to adhere to zone budget
     double tuneQscaleForSBRC(Frame* curFrame, double q); // Tune qScale to adhere to segment budget
-    double tuneQscaleToUpdatedBitrate(Frame* curFrame, double q); // Tune qScale according to updated bitrate
     void   accumPQpUpdate();
 
     int    getPredictorType(int lowresSliceType, int sliceType);

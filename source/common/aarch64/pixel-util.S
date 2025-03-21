@@ -2213,27 +2213,25 @@ endfunc
 //     const uint16_t* scanCG4x4, // x6
 //     const int trSize)          // x7
 function PFX(scanPosLast_neon)
-    // convert unit of Stride(trSize) to int16_t
+    // Convert unit of trSize stride from elements (int16) to bytes.
     add             x7, x7, x7
 
-    // load scan table and convert to Byte
+    // Load scan table and convert to bytes.
     ldp             q0, q1, [x6]
-    xtn             v0.8b, v0.8h
-    xtn2            v0.16b, v1.8h   // v0 - Zigzag scan table
+    uzp1            v0.16b, v0.16b, v1.16b  // v0 - Zigzag scan table
 
     movrel          x10, g_SPL_and_mask
-    ldr             q28, [x10]      // v28 = mask for pmovmskb
-    movi            v31.16b, #0     // v31 = {0, ..., 0}
-    add             x10, x7, x7     // 2*x7
-    add             x11, x10, x7    // 3*x7
-    add             x9, x4, #1      // CG count
+    ldr             q28, [x10]              // v28 = mask for pmovmskb
+    add             x10, x7, x7             // 2*x7
+    add             x11, x7, x7, lsl #1     // 3*x7
+    add             x9, x4, #1              // CG count
 
 .Loop_spl:
-    // position of current CG
+    // Position of current CG.
     ldrh            w6, [x0], #32
     add             x6, x1, x6, lsl #1
 
-    // loading current CG
+    // Loading current CG and saturate to bytes.
     ldr             d2, [x6]
     ldr             d3, [x6, x7]
     ldr             d4, [x6, x10]
@@ -2243,69 +2241,60 @@ function PFX(scanPosLast_neon)
     sqxtn           v2.8b, v2.8h
     sqxtn2          v2.16b, v4.8h
 
-    // Zigzag
+    // Apply zigzag.
     tbl             v3.16b, {v2.16b}, v0.16b
 
-    // get sign
-    cmhi            v5.16b, v3.16b, v31.16b   // v5 = non-zero
-    cmlt            v3.16b, v3.16b, #0        // v3 = negative
+    // Get zero/sign.
+    cmeq            v5.16b, v3.16b, #0   // v5 = zero
+    cmlt            v3.16b, v3.16b, #0   // v3 = negative
 
-    // val - w13 = pmovmskb(v3)
+    //  val: w13 = pmovmskb(v3)
+    // mask: w15 = pmovmskb(v4)
     and             v3.16b, v3.16b, v28.16b
-    mov             d4, v3.d[1]
-    addv            b23, v3.8b
-    addv            b24, v4.8b
-    mov             v23.b[1], v24.b[0]
-    fmov            w13, s23
+    bic             v4.16b, v28.16b, v5.16b
+    addp            v3.16b, v3.16b, v4.16b
+    addp            v3.16b, v3.16b, v3.16b
+    addp            v3.16b, v3.16b, v3.16b
+    fmov            w13, s3
+    lsr             w15, w13, #16
 
-    // mask - w15 = pmovmskb(v5)
-    and             v5.16b, v5.16b, v28.16b
-    mov             d6, v5.d[1]
-    addv            b25, v5.8b
-    addv            b26, v6.8b
-    mov             v25.b[1], v26.b[0]
-    fmov            w15, s25
+    // coeffNum = addv(v3 != 0) = 16 - addv(v5)
+    addv            b5, v5.16b
+    smov            w6, v5.b[0]
+    add             w6, w6, #16
+    sub             w5, w5, w6
+    strb            w6, [x4], #1
 
     // coeffFlag = reverse_bit(w15) in 16-bit
-    rbit            w12, w15
-    lsr             w12, w12, #16
-    fmov            s30, w12
+    rbit            w12, w13
     strh            w12, [x3], #2
 
-    // accelerate by preparing w13 = w13 & w15
+    // Pack bits from w13 into w14, based on w15 mask.
     and             w13, w13, w15
     mov             x14, xzr
+    cbz             w15, .Lpext_end
 .Loop_spl_1:
-    cbz             w15, .pext_end
     clz             w6, w15
     lsl             w13, w13, w6
     lsl             w15, w15, w6
     extr            w14, w14, w13, #31
-    bfm             w15, wzr, #1, #0
-    b               .Loop_spl_1
-.pext_end:
+    bfc             w15, #31, #1
+    cbnz            w15, .Loop_spl_1
+.Lpext_end:
     strh            w14, [x2], #2
-
-    // compute coeffNum = popcount(coeffFlag)
-    cnt             v30.8b, v30.8b
-    addp            v30.8b, v30.8b, v30.8b
-    fmov            w6, s30
-    sub             x5, x5, x6
-    strb            w6, [x4], #1
 
     cbnz            x5, .Loop_spl
 
-    // count trailing zeros
+    // Count trailing zeros.
     rbit            w13, w12
     clz             w13, w13
     lsr             w12, w12, w13
     strh            w12, [x3, #-2]
 
-    // get last pos
+    // Get last pos.
     sub             x9, x4, x9
-    lsl             x0, x9, #4
     eor             w13, w13, #15
-    add             x0, x0, x13
+    add             x0, x13, x9, lsl #4
     ret
 endfunc
 
