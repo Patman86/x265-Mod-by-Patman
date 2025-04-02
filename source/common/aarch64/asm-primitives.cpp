@@ -895,9 +895,9 @@ void setupSvePrimitives(EncoderPrimitives &p)
 #endif // defined(HAVE_SVE2) || defined(HAVE_SVE)
 
 #if defined(HAVE_SVE2)
-#if !HIGH_BIT_DEPTH
 void setupSve2Primitives(EncoderPrimitives &p)
 {
+#if !HIGH_BIT_DEPTH
     // pixel_avg_pp
     LUMA_PU_MULTIPLE_ARCHS_3(pixelavg_pp[NONALIGNED], pixel_avg_pp, sve2);
     LUMA_PU_MULTIPLE_ARCHS_3(pixelavg_pp[ALIGNED], pixel_avg_pp, sve2);
@@ -967,9 +967,6 @@ void setupSve2Primitives(EncoderPrimitives &p)
     p.scale1D_128to64[NONALIGNED] = PFX(scale1D_128to64_sve2);
     p.scale1D_128to64[ALIGNED] = PFX(scale1D_128to64_sve2);
 
-    // dequant_normal
-    p.dequant_normal  = PFX(dequant_normal_sve2);
-
     // ssim_4x4x2_core
     p.ssim_4x4x2_core = PFX(ssim_4x4x2_core_sve2);
 
@@ -985,12 +982,10 @@ void setupSve2Primitives(EncoderPrimitives &p)
     p.cu[BLOCK_16x16].normFact = PFX(normFact16_sve2);
     p.cu[BLOCK_32x32].normFact = PFX(normFact32_sve2);
     p.cu[BLOCK_64x64].normFact = PFX(normFact64_sve2);
-}
-#else // !HIGH_BIT_DEPTH
-void setupSve2Primitives(EncoderPrimitives &)
-{
-}
 #endif // !HIGH_BIT_DEPTH
+
+    p.dequant_normal = PFX(dequant_normal_sve2);
+}
 #endif // defined(HAVE_SVE2)
 
 #ifdef HAVE_NEON_DOTPROD
