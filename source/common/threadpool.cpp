@@ -36,13 +36,13 @@
 
 #ifdef __GNUC__
 
-#define SLEEPBITMAP_CTZ(id, x)     id = (unsigned long)__builtin_ctzll(x)
+#define SLEEPBITMAP_BSF(id, x)     (id) = ((unsigned long)__builtin_ctzll(x))
 #define SLEEPBITMAP_OR(ptr, mask)  __sync_fetch_and_or(ptr, mask)
 #define SLEEPBITMAP_AND(ptr, mask) __sync_fetch_and_and(ptr, mask)
 
 #elif defined(_MSC_VER)
 
-#define SLEEPBITMAP_CTZ(id, x)     _BitScanForward64(&id, x)
+#define SLEEPBITMAP_BSF(id, x)     _BitScanForward64(&id, x)
 #define SLEEPBITMAP_OR(ptr, mask)  InterlockedOr64((volatile LONG64*)ptr, (LONG)mask)
 #define SLEEPBITMAP_AND(ptr, mask) InterlockedAnd64((volatile LONG64*)ptr, (LONG)mask)
 
@@ -51,7 +51,7 @@
 #else
 
 /* use 32-bit primitives defined in threading.h */
-#define SLEEPBITMAP_CTZ CTZ
+#define SLEEPBITMAP_BSF BSF
 #define SLEEPBITMAP_OR  ATOMIC_OR
 #define SLEEPBITMAP_AND ATOMIC_AND
 
@@ -206,7 +206,7 @@ int ThreadPool::tryAcquireSleepingThread(sleepbitmap_t firstTryBitmap, sleepbitm
     sleepbitmap_t masked = m_sleepBitmap & firstTryBitmap;
     while (masked)
     {
-        SLEEPBITMAP_CTZ(id, masked);
+        SLEEPBITMAP_BSF(id, masked);
 
         sleepbitmap_t bit = (sleepbitmap_t)1 << id;
         if (SLEEPBITMAP_AND(&m_sleepBitmap, ~bit) & bit)
@@ -218,7 +218,7 @@ int ThreadPool::tryAcquireSleepingThread(sleepbitmap_t firstTryBitmap, sleepbitm
     masked = m_sleepBitmap & secondTryBitmap;
     while (masked)
     {
-        SLEEPBITMAP_CTZ(id, masked);
+        SLEEPBITMAP_BSF(id, masked);
 
         sleepbitmap_t bit = (sleepbitmap_t)1 << id;
         if (SLEEPBITMAP_AND(&m_sleepBitmap, ~bit) & bit)

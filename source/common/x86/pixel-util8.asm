@@ -8764,7 +8764,7 @@ cglobal costCoeffNxN, 6,10,5
 ;        {
 ;            {
 ;                unsigned long cidx;
-;                CLZ(cidx, codeNumber + 1);
+;                BSR(cidx, codeNumber + 1);
 ;                length = cidx;
 ;            }
 ;            codeNumber = (length + length);
@@ -8823,7 +8823,7 @@ cglobal costCoeffRemain, 0,7,1
 
     shr         eax, t3b                ; codeNumber = ((uint32_t)codeNumber >> goRiceParam) - COEF_REMAIN_BIN_REDUCTION
 
-    lea         r2d, [rax - 3 + 1]      ; CLZ(cidx, codeNumber + 1);
+    lea         r2d, [rax - 3 + 1]      ; BSR(cidx, codeNumber + 1);
     bsr         r2d, r2d
     add         r2d, r2d                ; codeNumber = (length + length)
 

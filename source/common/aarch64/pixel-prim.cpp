@@ -1199,13 +1199,13 @@ void weight_pp_neon(const pixel *src, pixel *dst, intptr_t stride, int width, in
 
 #else
     // Re-arrange the shift operations.
-    // Then, hoist the right shift out of the loop if CTZ(w0) >= shift - correction.
+    // Then, hoist the right shift out of the loop if BSF(w0) >= shift - correction.
     // Orig: (((src[x] << correction) * w0 + round) >> shift) + offset.
     // New: (src[x] * (w0 >> shift - correction)) + (round >> shift) + offset.
     // (round >> shift) is always zero since round = 1 << (shift - 1).
 
     unsigned long id;
-    CTZ(id, w0);
+    BSF(id, w0);
 
     if ((int)id >= shift - correction)
     {

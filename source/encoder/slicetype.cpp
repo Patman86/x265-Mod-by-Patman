@@ -937,7 +937,7 @@ void LookaheadTLD::weightsAnalyse(Lowres& fenc, Lowres& ref)
     if (mindenom > 0 && !(minscale & 1))
     {
         unsigned long idx;
-        CTZ(idx, minscale);
+        BSF(idx, minscale);
         int shift = X265_MIN((int)idx, mindenom);
         mindenom -= shift;
         minscale >>= shift;

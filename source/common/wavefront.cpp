@@ -102,7 +102,7 @@ void WaveFront::findJob(int threadId)
         uint32_t oldval = m_internalDependencyBitmap[w] & m_externalDependencyBitmap[w];
         while (oldval)
         {
-            CTZ(id, oldval);
+            BSF(id, oldval);
 
             uint32_t bit = 1 << id;
             if (ATOMIC_AND(&m_internalDependencyBitmap[w], ~bit) & bit)

@@ -1904,9 +1904,9 @@ uint32_t findPosFirstLast_neon(const int16_t *coeff, const intptr_t trSize,
     }
 
     unsigned long id_first, id_last;
-    CTZ64(id_first, cmp_4bit);
+    BSF64(id_first, cmp_4bit);
     uint32_t firstNZPosInCG = (uint32_t)id_first >> 2;
-    CLZ64(id_last, cmp_4bit);
+    BSR64(id_last, cmp_4bit);
     uint32_t lastNZPosInCG = (uint32_t)id_last >> 2;
 
     // Add long not needed, we only need LSB.
