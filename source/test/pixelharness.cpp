@@ -998,8 +998,6 @@ bool PixelHarness::check_pixel_add_ps_aligned(pixel_add_ps_t ref, pixel_add_ps_t
 
 bool PixelHarness::check_pixel_var(var_t ref, var_t opt)
 {
-    int j = 0;
-
     intptr_t stride = STRIDE;
 
     for (int i = 0; i < ITERS; i++)
@@ -1011,7 +1009,6 @@ bool PixelHarness::check_pixel_var(var_t ref, var_t opt)
             return false;
 
         reportfail();
-        j += INCR;
     }
 
     return true;
@@ -1350,8 +1347,6 @@ bool PixelHarness::check_saoCuStatsE1_t(saoCuStatsE1_t ref, saoCuStatsE1_t opt)
     int8_t _upBuff1_ref[MAX_CU_SIZE + 2], *upBuff1_ref = _upBuff1_ref + 1;
     int8_t _upBuff1_vec[MAX_CU_SIZE + 2], *upBuff1_vec = _upBuff1_vec + 1;
 
-    int j = 0;
-
     for (int i = 0; i < ITERS; i++)
     {
         // initialize input data to random, the dynamic range wrong but good to verify our asm code
@@ -1377,7 +1372,6 @@ bool PixelHarness::check_saoCuStatsE1_t(saoCuStatsE1_t ref, saoCuStatsE1_t opt)
             return false;
 
         reportfail();
-        j += INCR;
     }
 
     return true;
@@ -1397,7 +1391,6 @@ bool PixelHarness::check_saoCuStatsE2_t(saoCuStatsE2_t ref, saoCuStatsE2_t opt)
     int8_t _upBuff1_vec[MAX_CU_SIZE + 2], *upBuff1_vec = _upBuff1_vec + 1;
     int8_t _upBufft_vec[MAX_CU_SIZE + 2], *upBufft_vec = _upBufft_vec + 1;
 
-    int j = 0;
 
     // NOTE: verify more times since our asm is NOT exact match to C, the output of upBuff* will be DIFFERENT
     for (int i = 0; i < ITERS * 10; i++)
@@ -1428,7 +1421,6 @@ bool PixelHarness::check_saoCuStatsE2_t(saoCuStatsE2_t ref, saoCuStatsE2_t opt)
             return false;
 
         reportfail();
-        j += INCR;
     }
 
     return true;
@@ -1445,8 +1437,6 @@ bool PixelHarness::check_saoCuStatsE3_t(saoCuStatsE3_t ref, saoCuStatsE3_t opt)
 
     int8_t _upBuff1_ref[MAX_CU_SIZE + 2], *upBuff1_ref = _upBuff1_ref + 1;
     int8_t _upBuff1_vec[MAX_CU_SIZE + 2], *upBuff1_vec = _upBuff1_vec + 1;
-
-    int j = 0;
 
     // (const pixel *fenc, const pixel *rec, intptr_t stride, int8_t *upBuff1, int endX, int endY, int32_t *stats, int32_t *count)
     for (int i = 0; i < ITERS; i++)
@@ -1476,7 +1466,6 @@ bool PixelHarness::check_saoCuStatsE3_t(saoCuStatsE3_t ref, saoCuStatsE3_t opt)
             return false;
 
         reportfail();
-        j += INCR;
     }
 
     return true;
@@ -1729,7 +1718,6 @@ bool PixelHarness::check_scanPosLast(scanPosLast_t ref, scanPosLast_t opt)
     uint16_t ref_coeffSign[MLS_GRP_NUM], opt_coeffSign[MLS_GRP_NUM];    // bit mask map for non-zero coeff sign
     uint16_t ref_coeffFlag[MLS_GRP_NUM], opt_coeffFlag[MLS_GRP_NUM];    // bit mask map for non-zero coeff
 
-    int totalCoeffs = 0;
     for (int i = 0; i < 32 * 32; i++)
     {
         ref_src[i] = rand() & SHORT_MAX;
@@ -1741,7 +1729,6 @@ bool PixelHarness::check_scanPosLast(scanPosLast_t ref, scanPosLast_t opt)
         // more negtive
         if ((rand() % 10) < 8)
             ref_src[i] *= -1;
-        totalCoeffs += (ref_src[i] != 0);
     }
 
     // extra test area all of 0x1234
@@ -1865,7 +1852,6 @@ bool PixelHarness::check_costCoeffNxN(costCoeffNxN_t ref, costCoeffNxN_t opt)
     memset(ref_absCoeff, 0xCD, sizeof(ref_absCoeff));
     memset(opt_absCoeff, 0xCD, sizeof(opt_absCoeff));
 
-    int totalCoeffs = 0;
     for (int i = 0; i < 32 * 32; i++)
     {
         ref_src[i] = rand() & SHORT_MAX;
@@ -1877,7 +1863,6 @@ bool PixelHarness::check_costCoeffNxN(costCoeffNxN_t ref, costCoeffNxN_t opt)
         // more negtive
         if ((rand() % 10) < 8)
             ref_src[i] *= -1;
-        totalCoeffs += (ref_src[i] != 0);
     }
 
     // extra test area all of 0x1234
@@ -2230,7 +2215,6 @@ bool PixelHarness::check_pelFilterChroma_V(pelFilterChroma_t ref, pelFilterChrom
 bool PixelHarness::check_integral_initv(integralv_t ref, integralv_t opt)
 {
     intptr_t srcStep = 64;
-    int j = 0;
     uint32_t dst_ref[BUFFSIZE] = { 0 };
     uint32_t dst_opt[BUFFSIZE] = { 0 };
 
@@ -2261,7 +2245,6 @@ bool PixelHarness::check_integral_initv(integralv_t ref, integralv_t opt)
             return false;
 
         reportfail()
-            j += INCR;
     }
     return true;
 }
@@ -2272,7 +2255,6 @@ bool PixelHarness::check_integral_inith(integralh_t ref, integralh_t opt)
      * to check correctness for two cases: stride multiple of 16 and stride not a multiple of 16; fine for High bit depth
      * where data movement in AVX2 is 8 elements at a time */
     intptr_t srcStep[2] = { 56, 64 };
-    int j = 0;
     uint32_t dst_ref[BUFFSIZE] = { 0 };
     uint32_t dst_opt[BUFFSIZE] = { 0 };
 
@@ -2291,7 +2273,6 @@ bool PixelHarness::check_integral_inith(integralh_t ref, integralh_t opt)
                 return false;
 
             reportfail()
-                j += INCR;
         }
     }
     return true;

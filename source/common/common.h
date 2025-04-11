@@ -39,6 +39,7 @@
 #include <stdint.h>
 #include <memory.h>
 #include <assert.h>
+#include <stdlib.h>
 
 #include "x265.h"
 

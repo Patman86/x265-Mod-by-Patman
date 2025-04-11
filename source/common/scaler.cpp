@@ -511,10 +511,7 @@ int ScalerFilterManager::init(int algorithmFlags, VideoDesc *srcVideoDesc, Video
     int  dstHCrPos;
     int  srcVCrPos;
     int  dstVCrPos;
-    int dst_stride = SCALER_ALIGN(dstW * sizeof(int16_t) + 66, 16);
     m_bitDepth = dstVideoDesc->m_inputDepth;
-    if (m_bitDepth == 16)
-        dst_stride <<= 1;
 
     m_algorithmFlags = algorithmFlags;
     lumXInc = (((int64_t)srcW << 16) + (dstW >> 1)) / dstW;

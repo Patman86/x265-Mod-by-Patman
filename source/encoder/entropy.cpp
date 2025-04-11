@@ -1782,7 +1782,7 @@ void Entropy::codePredWeightTable(const Slice& slice)
                 else
 #endif
                     WRITE_FLAG(!!wp[0].wtPresent, "luma_weight_lX_flag");
-                totalSignalledWeightFlags += wp[0].wtPresent;
+                totalSignalledWeightFlags = totalSignalledWeightFlags + wp[0].wtPresent;
             }
 
             if (bChroma)
@@ -1796,7 +1796,7 @@ void Entropy::codePredWeightTable(const Slice& slice)
                     else
 #endif
                         WRITE_FLAG(!!wp[1].wtPresent, "chroma_weight_lX_flag");
-                    totalSignalledWeightFlags += 2 * wp[1].wtPresent;
+                    totalSignalledWeightFlags = totalSignalledWeightFlags + 2 * wp[1].wtPresent;
                 }
             }
 

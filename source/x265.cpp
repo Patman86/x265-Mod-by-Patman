@@ -208,7 +208,7 @@ static bool parseAbrConfig(FILE* abrConfig, CLIOptions cliopt[], uint8_t numEnco
         {
             argv[argc] = strPool;
             strPool += strlen(token) + 1;
-            strPoolSize -= (int)strlen(token) + 1;
+            strPoolSize = strPoolSize - (int)strlen(token) + 1;
             strcpy(argv[argc], token);
             token = strtok(NULL, " ");
             argc++;

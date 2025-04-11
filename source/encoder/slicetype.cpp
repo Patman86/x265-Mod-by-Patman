@@ -1473,7 +1473,6 @@ void LookaheadTLD::computePictureStatistics(Frame *curFrame)
     uint64_t picTotVariance = 0;
     uint32_t variance;
 
-    uint64_t blockXY = 0;
     pixel* src = curFrame->m_fencPic->m_picOrg[0];
 
     for (int blockY = 0; blockY < maxRow; blockY += 8)
@@ -1489,7 +1488,6 @@ void LookaheadTLD::computePictureStatistics(Frame *curFrame)
                 blockOffsetLuma, 0);
 
             rowVariance += variance;
-            blockXY++;
         }
         picTotVariance += (uint16_t)(rowVariance / maxCol);
     }
@@ -1520,7 +1518,6 @@ void LookaheadTLD::computePictureStatistics(Frame *curFrame)
                 blockOffsetChroma, 1);
 
             rowVariance += variance;
-            blockXY++;
         }
         picTotVariance += (uint16_t)(rowVariance / maxColChroma);
     }
@@ -1544,7 +1541,6 @@ void LookaheadTLD::computePictureStatistics(Frame *curFrame)
                 blockOffsetChroma, 2);
 
             rowVariance += variance;
-            blockXY++;
         }
         picTotVariance += (uint16_t)(rowVariance / maxColChroma);
     }

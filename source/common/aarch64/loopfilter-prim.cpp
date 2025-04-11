@@ -279,11 +279,11 @@ void pelFilterLumaStrong_V_neon(pixel *src, intptr_t srcStep, intptr_t offset,
 
     // -1 index means value is zero because TBL instructions
     // zero elements that have out of range indices.
-    const uint8x8_t idx0 = { -1, 0,  1, 2, 3,  4, 5, -1 };
-    const uint8x8_t idx1 = { -1, 1,  2, 3, 4,  5, 6, -1 };
-    const uint8x8_t idx2 = { -1, 2,  3, 4, 5,  6, 7, -1 };
-    const uint8x8_t idx3 = { -1, 3,  4, 5, 6, -1, 3, -1 };
-    const uint8x8_t idx4 = { -1, 4, -1, 1, 2,  3, 4, -1 };
+    const uint8x8_t idx0 = { 255, 0,   1, 2, 3,   4, 5, 255 };
+    const uint8x8_t idx1 = { 255, 1,   2, 3, 4,   5, 6, 255 };
+    const uint8x8_t idx2 = { 255, 2,   3, 4, 5,   6, 7, 255 };
+    const uint8x8_t idx3 = { 255, 3,   4, 5, 6, 255, 3, 255 };
+    const uint8x8_t idx4 = { 255, 4, 255, 1, 2,   3, 4, 255 };
 
     const int16x8_t neg_shift = { 0, -3, -2, -3, -3, -2, -3, 0 };
 
