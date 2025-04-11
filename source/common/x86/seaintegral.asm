@@ -1060,3 +1060,4 @@ cglobal integral32h, 3, 5, 3
 
 .end:
     RET
+SECTION_IBT_SHSTK

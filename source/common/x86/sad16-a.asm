@@ -4368,3 +4368,4 @@ cglobal pixel_sad_x4_64x64, 6,8,15
     PROCESS_SAD_X4_END_AVX512
     RET
 %endif
+SECTION_IBT_SHSTK

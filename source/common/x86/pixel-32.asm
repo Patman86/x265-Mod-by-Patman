@@ -418,4 +418,4 @@ cglobal pixel_ssim_4x4x2_core, 0,5
     jge .loop
     emms
     RET
-
+SECTION_IBT_SHSTK

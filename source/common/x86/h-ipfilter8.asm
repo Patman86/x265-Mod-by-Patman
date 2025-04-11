@@ -6735,3 +6735,4 @@ cglobal interp_4tap_horiz_pp_2x16, 4, 6, 6
     pextrw            [r2 + r3 * 2], xm1,         6
     pextrw            [r2 + r4],     xm1,         7
     RET
+SECTION_IBT_SHSTK
