@@ -2700,3 +2700,4 @@ cglobal interp_8tap_horiz_ps_12x16, 4, 6, 8
     jnz                 .loop0
     RET
 %endif
+SECTION_IBT_SHSTK

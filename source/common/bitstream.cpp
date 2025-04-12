@@ -118,7 +118,7 @@ void SyntaxElementWriter::writeUvlc(uint32_t code)
     X265_CHECK(code, "writing -1 code, will cause infinite loop\n");
 
     unsigned long idx;
-    CLZ(idx, code);
+    BSR(idx, code);
     uint32_t length = (uint32_t)idx * 2 + 1;
 
     // Take care of cases where length > 32

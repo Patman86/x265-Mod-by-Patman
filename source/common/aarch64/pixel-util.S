@@ -565,48 +565,6 @@ function PFX(scale2D_64to32_neon)
     ret
 endfunc
 
-// void planecopy_cp_c(const uint8_t* src, intptr_t srcStride, pixel* dst, intptr_t dstStride, int width, int height, int shift)
-function PFX(pixel_planecopy_cp_neon)
-    dup             v2.16b, w6
-    sub             x5, x5, #1
-.Loop_h:
-    mov             x6, x0
-    mov             x12, x2
-    mov             x7, #0
-.Loop_w:
-    ldr             q0, [x6], #16
-    ushl            v0.16b, v0.16b, v2.16b
-    str             q0, [x12], #16
-    add             x7, x7, #16
-    cmp             x7, x4
-    blt             .Loop_w
-
-    add             x0, x0, x1
-    add             x2, x2, x3
-    sub             x5, x5, #1
-    cbnz            x5, .Loop_h
-
-// handle last row
-    mov             x5, x4
-    lsr             x5, x5, #3
-.LoopW8:
-    ldr             d0, [x0], #8
-    ushl            v0.8b, v0.8b, v2.8b
-    str             d0, [x2], #8
-    sub             x4, x4, #8
-    sub             x5, x5, #1
-    cbnz            x5, .LoopW8
-
-    mov             x5, #8
-    sub             x5, x5, x4
-    sub             x0, x0, x5
-    sub             x2, x2, x5
-    ldr             d0, [x0]
-    ushl            v0.8b, v0.8b, v2.8b
-    str             d0, [x2]
-    ret
-endfunc
-
 //******* satd *******
 .macro satd_4x4_neon
     ldr             s0, [x0]
@@ -1626,7 +1584,16 @@ endfunc
 
 // void dequant_normal_c(const int16_t* quantCoef, int16_t* coef, int num, int scale, int shift)
 function PFX(dequant_normal_neon)
-    lsr             w2, w2, #4              // num / 16
+//  X265_CHECK(num >= 4 * 4, "dequant num %d too small\n", num);
+//  X265_CHECK(num <= 32 * 32, "dequant num %d too large\n", num);
+//  X265_CHECK((num % 16) == 0, "dequant num %d not multiple of 16\n", num);
+#if HIGH_BIT_DEPTH
+    cmp             w3, #32768
+    blt             .dqn_skip
+    lsr             w3, w3, #(BIT_DEPTH - 8)
+    sub             w4, w4, #(BIT_DEPTH - 8)
+.dqn_skip:
+#endif
     neg             w4, w4
     dup             v0.8h, w3
     dup             v1.4s, w4
@@ -1648,7 +1615,7 @@ function PFX(dequant_normal_neon)
     sqxtn           v3.4h, v18.4s
     sqxtn2          v3.8h, v19.4s
 
-    sub             w2, w2, #1
+    sub             w2, w2, #16
     st1             {v2.8h, v3.8h}, [x1], #32
     cbnz            w2, .dqn_loop1
     ret
@@ -2098,108 +2065,6 @@ function PFX(normFact64_neon)
     normFact_1      v27
     cbnz            w12, .Loop_normFact64
     normFact_end
-    ret
-endfunc
-
-// void weight_pp_c(const pixel* src, pixel* dst, intptr_t stride, int width, int height, int w0, int round, int shift, int offset)
-function PFX(weight_pp_neon)
-    sub             x2, x2, x3
-    ldr             w9, [sp]              // offset
-    lsl             w5, w5, #6            // w0 << correction
-
-    // count trailing zeros in w5 and compare against shift right amount.
-    rbit            w10, w5
-    clz             w10, w10
-    cmp             w10, w7
-    b.lt            .unfoldedShift
-
-    // shift right only removes trailing zeros: hoist LSR out of the loop.
-    lsr             w10, w5, w7           // w0 << correction >> shift
-    dup             v25.16b, w10
-    lsr             w6, w6, w7            // round >> shift
-    add             w6, w6, w9            // round >> shift + offset
-    dup             v26.8h, w6
-
-    // Check arithmetic range.
-    mov             w11, #255
-    madd            w11, w11, w10, w6
-    add             w11, w11, w9
-    lsr             w11, w11, #16
-    cbnz            w11, .widenTo32Bit
-
-    // 16-bit arithmetic is enough.
-.LoopHpp:
-    mov             x12, x3
-.LoopWpp:
-    ldr             q0, [x0], #16
-    sub             x12, x12, #16
-    umull           v1.8h, v0.8b, v25.8b  // val *= w0 << correction >> shift
-    umull2          v2.8h, v0.16b, v25.16b
-    add             v1.8h, v1.8h, v26.8h  // val += round >> shift + offset
-    add             v2.8h, v2.8h, v26.8h
-    sqxtun          v0.8b, v1.8h          // val = x265_clip(val)
-    sqxtun2         v0.16b, v2.8h
-    str             q0, [x1], #16
-    cbnz            x12, .LoopWpp
-    add             x1, x1, x2
-    add             x0, x0, x2
-    sub             x4, x4, #1
-    cbnz            x4, .LoopHpp
-    ret
-
-    // 32-bit arithmetic is needed.
-.widenTo32Bit:
-.LoopHpp32:
-    mov             x12, x3
-.LoopWpp32:
-    ldr             d0, [x0], #8
-    sub             x12, x12, #8
-    uxtl            v0.8h, v0.8b
-    umull           v1.4s, v0.4h, v25.4h  // val *= w0 << correction >> shift
-    umull2          v2.4s, v0.8h, v25.8h
-    add             v1.4s, v1.4s, v26.4s  // val += round >> shift + offset
-    add             v2.4s, v2.4s, v26.4s
-    sqxtn           v0.4h, v1.4s          // val = x265_clip(val)
-    sqxtn2          v0.8h, v2.4s
-    sqxtun          v0.8b, v0.8h
-    str             d0, [x1], #8
-    cbnz            x12, .LoopWpp32
-    add             x1, x1, x2
-    add             x0, x0, x2
-    sub             x4, x4, #1
-    cbnz            x4, .LoopHpp32
-    ret
-
-    // The shift right cannot be moved out of the loop.
-.unfoldedShift:
-    dup             v25.8h, w5            // w0 << correction
-    dup             v26.4s, w6            // round
-    neg             w7, w7                // -shift
-    dup             v27.4s, w7
-    dup             v29.4s, w9            // offset
-.LoopHppUS:
-    mov             x12, x3
-.LoopWppUS:
-    ldr             d0, [x0], #8
-    sub             x12, x12, #8
-    uxtl            v0.8h, v0.8b
-    umull           v1.4s, v0.4h, v25.4h  // val *= w0
-    umull2          v2.4s, v0.8h, v25.8h
-    add             v1.4s, v1.4s, v26.4s  // val += round
-    add             v2.4s, v2.4s, v26.4s
-    sshl            v1.4s, v1.4s, v27.4s  // val >>= shift
-    sshl            v2.4s, v2.4s, v27.4s
-    add             v1.4s, v1.4s, v29.4s  // val += offset
-    add             v2.4s, v2.4s, v29.4s
-    sqxtn           v0.4h, v1.4s          // val = x265_clip(val)
-    sqxtn2          v0.8h, v2.4s
-    sqxtun          v0.8b, v0.8h
-    str             d0, [x1], #8
-    cbnz            x12, .LoopWppUS
-    add             x1, x1, x2
-    add             x0, x0, x2
-    sub             x4, x4, #1
-    cbnz            x4, .LoopHppUS
     ret
 endfunc
 

@@ -196,7 +196,7 @@ bool FrameEncoder::init(Encoder *top, int numRows, int numCols)
     // 7.4.7.1 - Ceil( Log2( PicSizeInCtbsY ) ) bits
     {
         unsigned long tmp;
-        CLZ(tmp, (numRows * numCols - 1));
+        BSR(tmp, (numRows * numCols - 1));
         m_sliceAddrBits = (uint16_t)(tmp + 1);
     }
 
@@ -374,7 +374,7 @@ uint32_t getBsLength( int32_t code )
 
     ++ucode;
     unsigned long idx;
-    CLZ( idx, ucode );
+    BSR( idx, ucode );
     uint32_t length = (uint32_t)idx * 2 + 1;
 
     return length;

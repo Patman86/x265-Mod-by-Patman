@@ -733,7 +733,6 @@ void SAO::calcSaoStatsCTU(int addr, int plane)
     const CUData* cu = m_frame->m_encData->getPicCTU(addr);
     const pixel* fenc0 = m_frame->m_fencPic->getPlaneAddr(plane, addr);
     const pixel* rec0  = reconPic->getPlaneAddr(plane, addr);
-    const pixel* fenc;
     const pixel* rec;
     intptr_t stride = plane ? reconPic->m_strideC : reconPic->m_stride;
     uint32_t picWidth  = m_param->sourceWidth;
@@ -863,7 +862,6 @@ void SAO::calcSaoStatsCTU(int addr, int plane)
                     skipR = 5;
                 }
 
-                fenc = fenc0;
                 rec  = rec0;
 
                 startX = !lpelx;
@@ -873,7 +871,6 @@ void SAO::calcSaoStatsCTU(int addr, int plane)
                 endY   = (bpely == picHeight) ? ctuHeight - 1 : ctuHeight - skipB + plane_offset;
                 if (startY)
                 {
-                    fenc += stride;
                     rec += stride;
                 }
 
@@ -888,7 +885,6 @@ void SAO::calcSaoStatsCTU(int addr, int plane)
                     skipB = 4;
                     skipR = 5;
                 }
-                fenc = fenc0;
                 rec  = rec0;
                 startX = !lpelx;
                 endX   = (rpelx == picWidth) ? ctuWidth - 1 : ctuWidth - skipR + plane_offset;
@@ -898,7 +894,6 @@ void SAO::calcSaoStatsCTU(int addr, int plane)
 
                 if (startY)
                 {
-                    fenc += stride;
                     rec += stride;
                 }
 

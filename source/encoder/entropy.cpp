@@ -1782,7 +1782,7 @@ void Entropy::codePredWeightTable(const Slice& slice)
                 else
 #endif
                     WRITE_FLAG(!!wp[0].wtPresent, "luma_weight_lX_flag");
-                totalSignalledWeightFlags += wp[0].wtPresent;
+                totalSignalledWeightFlags = totalSignalledWeightFlags + wp[0].wtPresent;
             }
 
             if (bChroma)
@@ -1796,7 +1796,7 @@ void Entropy::codePredWeightTable(const Slice& slice)
                     else
 #endif
                         WRITE_FLAG(!!wp[1].wtPresent, "chroma_weight_lX_flag");
-                    totalSignalledWeightFlags += 2 * wp[1].wtPresent;
+                    totalSignalledWeightFlags = totalSignalledWeightFlags + 2 * wp[1].wtPresent;
                 }
             }
 
@@ -1893,7 +1893,7 @@ void Entropy::writeCoefRemainExGolomb(uint32_t codeNumber, uint32_t absGoRice)
         codeNumber = (codeNumber >> absGoRice) - COEF_REMAIN_BIN_REDUCTION;
         {
             unsigned long idx;
-            CLZ(idx, codeNumber + 1);
+            BSR(idx, codeNumber + 1);
             length = idx;
             X265_CHECK((codeNumber != 0) || (length == 0), "length check failure\n");
             codeNumber -= (1 << idx) - 1;
@@ -2206,7 +2206,7 @@ uint32_t costCoeffRemain_c0(uint16_t *absCoeff, int numNonZero)
             {
                 {
                     unsigned long cidx;
-                    CLZ(cidx, codeNumber + 1);
+                    BSR(cidx, codeNumber + 1);
                     length = cidx;
                 }
                 X265_CHECK((codeNumber != 0) || (length == 0), "length check failure\n");
@@ -2490,8 +2490,8 @@ void Entropy::codeCoeffNxN(const CUData& cu, const coeff_t* coeff, uint32_t absP
         {
             uint32_t idx;
             X265_CHECK(subCoeffFlag > 0, "subCoeffFlag is zero\n");
-            CLZ(lastNZPosInCG, subCoeffFlag);
-            CTZ(firstNZPosInCG, subCoeffFlag);
+            BSR(lastNZPosInCG, subCoeffFlag);
+            BSF(firstNZPosInCG, subCoeffFlag);
 
             bool signHidden = (lastNZPosInCG - firstNZPosInCG >= SBH_THRESHOLD);
             const uint8_t ctxSet = (((subSet > 0) + bIsLuma) & 2) + !(c1 & 3);
@@ -2887,7 +2887,7 @@ void Entropy::encodeBin(uint32_t binValue, uint8_t &ctxModel)
         // NOTE: lps is non-zero and the maximum of idx is 8 because lps less than 256
         //numBits = g_renormTable[lps >> 3];
         unsigned long idx;
-        CLZ(idx, lps);
+        BSR(idx, lps);
         X265_CHECK(state != 63 || idx == 1, "state failure\n");
 
         numBits = 8 - idx;

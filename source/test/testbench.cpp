@@ -80,13 +80,52 @@ const char* const* chromaPartStr[X265_CSP_COUNT] =
     lumaPartStr
 };
 
+struct test_arch_t
+{
+    char name[13];
+    int flag;
+} testArch[] =
+{
+#if X265_ARCH_X86
+    { "SSE2", X265_CPU_SSE2 },
+    { "SSE3", X265_CPU_SSE3 },
+    { "SSSE3", X265_CPU_SSSE3 },
+    { "SSE4", X265_CPU_SSE4 },
+    { "AVX", X265_CPU_AVX },
+    { "XOP", X265_CPU_XOP },
+    { "AVX2", X265_CPU_AVX2 },
+    { "BMI2", X265_CPU_AVX2 | X265_CPU_BMI1 | X265_CPU_BMI2 },
+    { "AVX512", X265_CPU_AVX512 },
+#else
+    { "ARMv6", X265_CPU_ARMV6 },
+    { "NEON", X265_CPU_NEON },
+    { "Neon_DotProd", X265_CPU_NEON_DOTPROD },
+    { "Neon_I8MM", X265_CPU_NEON_I8MM },
+    { "SVE", X265_CPU_SVE },
+    { "SVE2", X265_CPU_SVE2 },
+    { "FastNeonMRC", X265_CPU_FAST_NEON_MRC },
+#endif
+    { "", 0 },
+};
+
+void do_cpuid_list(int cpuid)
+{
+    printf("x265 detected --cpuid architectures:\n");
+    for (int i = 0; testArch[i].flag; i++)
+    {
+        if ((testArch[i].flag & cpuid) == testArch[i].flag)
+            printf("       %s\n", testArch[i].name);
+    }
+}
+
 void do_help()
 {
     printf("x265 optimized primitive testbench\n\n");
     printf("usage: TestBench [--cpuid CPU] [--testbench BENCH] [--nobench] [--help]\n\n");
-    printf("       CPU is comma separated SIMD arch list, example: SSE4,AVX\n");
+    printf("       CPU is comma separated SIMD architecture list, for example: SSE4,AVX\n");
+    printf("       Use `--cpuid list` to print a list of detected SIMD architectures\n\n");
     printf("       BENCH is one of (pixel,transforms,interp,intrapred)\n\n");
-    printf("       --nobench disables running benchmarks, only run correctness tests\n\n");
+    printf("       `--nobench` disables running benchmarks, only run correctness tests\n\n");
     printf("By default, the test bench will test all benches on detected CPU architectures\n");
     printf("Options and testbench name may be truncated.\n");
 }
@@ -120,6 +159,11 @@ int main(int argc, char *argv[])
         }
         else if (!strncmp(name, "cpuid", strlen(name)))
         {
+            if (!strncmp(value, "list", 5))
+            {
+                do_cpuid_list(cpuid);
+                return 0;
+            }
             int cpu_detect_cpuid = cpuid;
             bool bError = false;
             cpuid = parseCpuName(value, bError, enableavx512);
@@ -173,48 +217,18 @@ int main(int argc, char *argv[])
     setupCPrimitives(cprim);
     setupAliasPrimitives(cprim);
 
-    struct test_arch_t
+    for (int i = 0; testArch[i].flag; i++)
     {
-        char name[13];
-        int flag;
-    } test_arch[] =
-    {
-#if X265_ARCH_X86
-        { "SSE2", X265_CPU_SSE2 },
-        { "SSE3", X265_CPU_SSE3 },
-        { "SSSE3", X265_CPU_SSSE3 },
-        { "SSE4", X265_CPU_SSE4 },
-        { "AVX", X265_CPU_AVX },
-        { "XOP", X265_CPU_XOP },
-        { "AVX2", X265_CPU_AVX2 },
-        { "BMI2", X265_CPU_AVX2 | X265_CPU_BMI1 | X265_CPU_BMI2 },
-        { "AVX512", X265_CPU_AVX512 },
-#else
-        { "ARMv6", X265_CPU_ARMV6 },
-        { "NEON", X265_CPU_NEON },
-        { "SVE2", X265_CPU_SVE2 },
-        { "SVE", X265_CPU_SVE },
-        { "Neon_DotProd", X265_CPU_NEON_DOTPROD },
-        { "Neon_I8MM", X265_CPU_NEON_I8MM },
-        { "FastNeonMRC", X265_CPU_FAST_NEON_MRC },
-#endif
-        { "", 0 },
-    };
-
-    for (int i = 0; test_arch[i].flag; i++)
-    {
-        if ((test_arch[i].flag & cpuid) == test_arch[i].flag)
-        {
-            printf("Testing primitives: %s\n", test_arch[i].name);
-            fflush(stdout);
-        }
-        else
+        if ((testArch[i].flag & cpuid) != testArch[i].flag)
             continue;
+
+        printf("Testing primitives: %s\n", testArch[i].name);
+        fflush(stdout);
 
 #if defined(X265_ARCH_X86) || defined(X265_ARCH_ARM64)
         EncoderPrimitives vecprim;
         memset(&vecprim, 0, sizeof(vecprim));
-        setupIntrinsicPrimitives(vecprim, test_arch[i].flag);
+        setupIntrinsicPrimitives(vecprim, testArch[i].flag);
         setupAliasPrimitives(vecprim);
         for (size_t h = 0; h < sizeof(harness) / sizeof(TestHarness*); h++)
         {
@@ -232,7 +246,7 @@ int main(int argc, char *argv[])
         EncoderPrimitives asmprim;
         memset(&asmprim, 0, sizeof(asmprim));
 
-        setupAssemblyPrimitives(asmprim, test_arch[i].flag);
+        setupAssemblyPrimitives(asmprim, testArch[i].flag);
         setupAliasPrimitives(asmprim);
         memcpy(&primitives, &asmprim, sizeof(EncoderPrimitives));
         for (size_t h = 0; h < sizeof(harness) / sizeof(TestHarness*); h++)

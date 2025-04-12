@@ -651,9 +651,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     p.scale1D_128to64[NONALIGNED] = PFX(scale1D_128to64_neon);
     p.scale1D_128to64[ALIGNED] = PFX(scale1D_128to64_neon);
 
-    // planecopy
-    p.planecopy_cp = PFX(pixel_planecopy_cp_neon);
-
     // satd
     ALL_LUMA_PU(satd, pixel_satd, neon);
 
@@ -714,7 +711,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
 
     // dequant_scaling
     p.dequant_scaling = PFX(dequant_scaling_neon);
-    p.dequant_normal  = PFX(dequant_normal_neon);
 
     // ssim_4x4x2_core
     p.ssim_4x4x2_core = PFX(ssim_4x4x2_core_neon);
@@ -735,7 +731,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     // psy_cost_pp
     p.cu[BLOCK_4x4].psy_cost_pp = PFX(psyCost_4x4_neon);
 
-    p.weight_pp = PFX(weight_pp_neon);
 #if !defined(__APPLE__)
     p.scanPosLast = PFX(scanPosLast_neon);
 #endif
@@ -743,6 +738,7 @@ void setupNeonPrimitives(EncoderPrimitives &p)
 #endif
 
     // quant
+    p.dequant_normal = PFX(dequant_normal_neon);
     p.quant = PFX(quant_neon);
     p.nquant = PFX(nquant_neon);
 }
@@ -899,9 +895,9 @@ void setupSvePrimitives(EncoderPrimitives &p)
 #endif // defined(HAVE_SVE2) || defined(HAVE_SVE)
 
 #if defined(HAVE_SVE2)
-#if !HIGH_BIT_DEPTH
 void setupSve2Primitives(EncoderPrimitives &p)
 {
+#if !HIGH_BIT_DEPTH
     // pixel_avg_pp
     LUMA_PU_MULTIPLE_ARCHS_3(pixelavg_pp[NONALIGNED], pixel_avg_pp, sve2);
     LUMA_PU_MULTIPLE_ARCHS_3(pixelavg_pp[ALIGNED], pixel_avg_pp, sve2);
@@ -971,9 +967,6 @@ void setupSve2Primitives(EncoderPrimitives &p)
     p.scale1D_128to64[NONALIGNED] = PFX(scale1D_128to64_sve2);
     p.scale1D_128to64[ALIGNED] = PFX(scale1D_128to64_sve2);
 
-    // dequant_normal
-    p.dequant_normal  = PFX(dequant_normal_sve2);
-
     // ssim_4x4x2_core
     p.ssim_4x4x2_core = PFX(ssim_4x4x2_core_sve2);
 
@@ -989,12 +982,10 @@ void setupSve2Primitives(EncoderPrimitives &p)
     p.cu[BLOCK_16x16].normFact = PFX(normFact16_sve2);
     p.cu[BLOCK_32x32].normFact = PFX(normFact32_sve2);
     p.cu[BLOCK_64x64].normFact = PFX(normFact64_sve2);
-}
-#else // !HIGH_BIT_DEPTH
-void setupSve2Primitives(EncoderPrimitives &)
-{
-}
 #endif // !HIGH_BIT_DEPTH
+
+    p.dequant_normal = PFX(dequant_normal_sve2);
+}
 #endif // defined(HAVE_SVE2)
 
 #ifdef HAVE_NEON_DOTPROD

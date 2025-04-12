@@ -162,8 +162,6 @@ FUNCDEF_PU_MULT_16(void, sad_x3, neon_dotprod, const pixel*, const pixel*, const
 FUNCDEF_PU_MULT_16(void, sad_x4, neon_dotprod, const pixel*, const pixel*, const pixel*, const pixel*, const pixel*, intptr_t, int32_t*);
 FUNCDEF_PU(sse_t, pixel_sse_pp, neon_dotprod, const pixel*, intptr_t, const pixel*, intptr_t);
 
-void PFX(pixel_planecopy_cp_neon(const uint8_t* src, intptr_t srcStride, pixel* dst, intptr_t dstStride, int width, int height, int shift));
-
 uint64_t PFX(pixel_var_8x8_neon(const pixel* pix, intptr_t stride));
 uint64_t PFX(pixel_var_16x16_neon(const pixel* pix, intptr_t stride));
 uint64_t PFX(pixel_var_32x32_neon(const pixel* pix, intptr_t stride));
@@ -228,7 +226,6 @@ void PFX(ssim_4x4x2_core_neon(const pixel* pix1, intptr_t stride1, const pixel* 
 
 int PFX(psyCost_4x4_neon)(const pixel* source, intptr_t sstride, const pixel* recon, intptr_t rstride);
 int PFX(psyCost_8x8_neon)(const pixel* source, intptr_t sstride, const pixel* recon, intptr_t rstride);
-void PFX(weight_pp_neon)(const pixel* src, pixel* dst, intptr_t stride, int width, int height, int w0, int round, int shift, int offset);
 void PFX(weight_sp_neon)(const int16_t* src, pixel* dst, intptr_t srcStride, intptr_t dstStride, int width, int height, int w0, int round, int shift, int offset);
 int PFX(scanPosLast_neon)(const uint16_t *scan, const coeff_t *coeff, uint16_t *coeffSign, uint16_t *coeffFlag, uint8_t *coeffNum, int numSig, const uint16_t* scanCG4x4, const int trSize);
 uint32_t PFX(costCoeffNxN_neon)(const uint16_t *scan, const coeff_t *coeff, intptr_t trSize, uint16_t *absCoeff, const uint8_t *tabSigCtx, uint32_t scanFlagMask, uint8_t *baseCtx, int offset, int scanPosSigOff, int subPosBase);

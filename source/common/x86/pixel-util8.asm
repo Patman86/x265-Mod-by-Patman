@@ -8485,7 +8485,7 @@ cglobal costCoeffNxN, 6,11,6
     ; r5 - scanFlagMask
     ; r6 - sum
 
-%if UNIX64
+%if FORMAT_ELF
     mov         r0, [private_prefix %+ _entropyStateBits wrt ..gotpc]
 %else
     lea         r0, [private_prefix %+ _entropyStateBits]
@@ -8670,7 +8670,7 @@ cglobal costCoeffNxN, 6,10,5
     ; r6 - sum
     ; {r3,r4} - ctxSig[15-0]
     ; r8m - (numNonZero != 0) || (subPosBase == 0)
-%if UNIX64
+%if FORMAT_ELF
     mov             r0, [private_prefix %+ _entropyStateBits wrt ..gotpc]
 %else
     lea             r0, [private_prefix %+ _entropyStateBits]
@@ -8764,7 +8764,7 @@ cglobal costCoeffNxN, 6,10,5
 ;        {
 ;            {
 ;                unsigned long cidx;
-;                CLZ(cidx, codeNumber + 1);
+;                BSR(cidx, codeNumber + 1);
 ;                length = cidx;
 ;            }
 ;            codeNumber = (length + length);
@@ -8823,7 +8823,7 @@ cglobal costCoeffRemain, 0,7,1
 
     shr         eax, t3b                ; codeNumber = ((uint32_t)codeNumber >> goRiceParam) - COEF_REMAIN_BIN_REDUCTION
 
-    lea         r2d, [rax - 3 + 1]      ; CLZ(cidx, codeNumber + 1);
+    lea         r2d, [rax - 3 + 1]      ; BSR(cidx, codeNumber + 1);
     bsr         r2d, r2d
     add         r2d, r2d                ; codeNumber = (length + length)
 
@@ -8914,7 +8914,7 @@ cglobal costC1C2Flag, 4,12,2
     or          r11d, 0x100                     ; default value setting to 8
     bsf         r11d, r11d
 
-%if UNIX64
+%if FORMAT_ELF
     mov             r5, [private_prefix %+ _entropyStateBits wrt ..gotpc]
 %else
     lea             r5, [private_prefix %+ _entropyStateBits]
@@ -8991,3 +8991,4 @@ cglobal costC1C2Flag, 4,12,2
     or          eax, r4d
     RET
 %endif ; ARCH_X86_64
+SECTION_IBT_SHSTK

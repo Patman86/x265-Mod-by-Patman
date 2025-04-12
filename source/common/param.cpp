@@ -910,12 +910,16 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
     bool bValueWasNull = !value;
     bool bExtraParams = false;
     char nameBuf[64];
+#ifdef SVT_HEVC
     static int count;
+#endif
 
     if (!name)
         return X265_PARAM_BAD_NAME;
 
+#ifdef SVT_HEVC
     count++;
+#endif
     // skip -- prefix if provided
     if (name[0] == '-' && name[1] == '-')
         name += 2;

@@ -53,6 +53,11 @@ YUVInput::YUVInput(InputFileInfo& info, bool alpha, int format)
     threadActive = false;
     ifs = NULL;
 
+    if (colorSpace < 0 || colorSpace >= X265_CSP_MAX)
+    {
+        x265_log(NULL, X265_LOG_ERROR, "Invalid color space: %d\n", colorSpace);
+        return;
+    }
     uint32_t pixelbytes = depth > 8 ? 2 : 1;
     framesize = 0;
     for (int i = 0; i < x265_cli_csps[colorSpace].planes + alphaAvailable; i++)

@@ -64,15 +64,6 @@ LevelSpec levels[] =
     { MAX_UINT, MAX_UINT64, MAX_UINT, MAX_UINT, MAX_UINT, MAX_UINT, 1, Level::LEVEL8_5, "8.5", 85 },
 };
 
-static inline int _confirm(x265_param* param, bool bflag, const char* message)
-{
-    if (!bflag)
-        return 0;
-
-    x265_log(param, X265_LOG_ERROR, "%s\n", message);
-    return 1;
-}
-
 /* determine minimum decoder level required to decode the described video */
 void determineLevel(const x265_param &param, VPS& vps)
 {

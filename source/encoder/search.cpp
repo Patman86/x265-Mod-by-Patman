@@ -276,7 +276,6 @@ void Search::codeCoeffQTChroma(const CUData& cu, uint32_t tuDepth, uint32_t absP
         return;
     }
 
-    uint32_t tuDepthC = tuDepth;
     uint32_t log2TrSizeC = log2TrSize - m_hChromaShift;
 
     if (log2TrSizeC < 2)
@@ -285,7 +284,6 @@ void Search::codeCoeffQTChroma(const CUData& cu, uint32_t tuDepth, uint32_t absP
         if (absPartIdx & 3)
             return;
         log2TrSizeC = 2;
-        tuDepthC--;
     }
 
     uint32_t qtLayer = log2TrSize - 2;
@@ -5717,12 +5715,10 @@ void Search::saveResidualQTData(CUData& cu, ShortYuv& resiYuv, uint32_t absPartI
 
     uint32_t log2TrSizeC = log2TrSize - m_hChromaShift;
     uint32_t codeChroma = (m_csp != X265_CSP_I400 && m_frame->m_fencPic->m_picCsp != X265_CSP_I400) ? 1 : 0;
-    uint32_t tuDepthC = tuDepth;
     if (log2TrSizeC < 2)
     {
         X265_CHECK(log2TrSize == 2 && m_csp != X265_CSP_I444 && tuDepth, "invalid tuDepth\n");
         log2TrSizeC = 2;
-        tuDepthC--;
         codeChroma &= !(absPartIdx & 3);
     }
 

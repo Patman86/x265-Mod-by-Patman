@@ -1862,6 +1862,59 @@ void idct32_neon(const int16_t *src, int16_t *dst, intptr_t dstStride)
     partialButterflyInverse32_neon<shift_pass2>(coef, dst, dstStride);
 }
 
+uint32_t findPosFirstLast_neon(const int16_t *coeff, const intptr_t trSize,
+                               const uint16_t scanTbl[16])
+{
+    X265_CHECK(SCAN_SET_SIZE == 16, "SCAN_SET_SIZE must be 16\n");
+    X265_CHECK(MLS_CG_SIZE == 4, "MLS_CG_SIZE must be 4\n");
+    X265_CHECK(scanTbl[2] == 1 || scanTbl[2] == 2 || scanTbl[2] == 8,
+               "scanTbl is invalid\n");
+
+    int16x4_t c0 = vld1_s16(&coeff[0 * trSize]);
+    int16x4_t c1 = vld1_s16(&coeff[1 * trSize]);
+    int16x4_t c2 = vld1_s16(&coeff[2 * trSize]);
+    int16x4_t c3 = vld1_s16(&coeff[3 * trSize]);
+    int16x8_t coeff01 = vcombine_s16(c0, c1);
+    int16x8_t coeff23 = vcombine_s16(c2, c3);
+
+    // Set cmp bits if coeff[x] != 0.
+    uint16x8_t cmp01 = vtstq_s16(coeff01, coeff01);
+    uint16x8_t cmp23 = vtstq_s16(coeff23, coeff23);
+    uint8x16_t cmp_8bit = vcombine_u8(vmovn_u16(cmp01), vmovn_u16(cmp23));
+
+    if (scanTbl[2] != 2) // Skip if SCAN_HOR.
+    {
+        // Load scanTbl.
+        uint16x8_t t0 = vld1q_u16(scanTbl + 0);
+        uint16x8_t t1 = vld1q_u16(scanTbl + 8);
+        uint8x16_t scan_tbl = vcombine_u8(vmovn_u16(t0), vmovn_u16(t1));
+
+        cmp_8bit = vqtbl1q_u8(cmp_8bit, scan_tbl);
+    }
+
+    // Convert the 8x16 cmp_8bit into 4x16 cmp_4bit.
+    uint64_t cmp_4bit = vget_lane_u64(
+        vreinterpret_u64_u8(vshrn_n_u16(vreinterpretq_u16_u8(cmp_8bit), 4)), 0);
+
+    // NOTE: If coeff block are all zeros, the lastNZPosInCG is undefined and
+    // firstNZPosInCG is 16.
+    if (cmp_4bit == 0)
+    {
+        return (uint32_t)-1 << 8 | SCAN_SET_SIZE;
+    }
+
+    unsigned long id_first, id_last;
+    BSF64(id_first, cmp_4bit);
+    uint32_t firstNZPosInCG = (uint32_t)id_first >> 2;
+    BSR64(id_last, cmp_4bit);
+    uint32_t lastNZPosInCG = (uint32_t)id_last >> 2;
+
+    // Add long not needed, we only need LSB.
+    uint32_t absSumSign = (uint32_t)vaddvq_s16(vaddq_s16(coeff01, coeff23));
+
+    return (absSumSign << 31) | (lastNZPosInCG << 8) | firstNZPosInCG;
+}
+
 void setupDCTPrimitives_neon(EncoderPrimitives &p)
 {
     p.cu[BLOCK_4x4].nonPsyRdoQuant   = nonPsyRdoQuant_neon<2>;
@@ -1901,7 +1954,7 @@ void setupDCTPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_32x32].psyRdoQuant_2p = psyRdoQuant_neon<5>;
 
     p.scanPosLast  = scanPosLast_opt;
-
+    p.findPosFirstLast = findPosFirstLast_neon;
 }
 
 };

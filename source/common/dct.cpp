@@ -30,7 +30,7 @@
 #include "common.h"
 #include "primitives.h"
 #include "contexts.h"   // costCoeffNxN_c
-#include "threading.h"  // CLZ
+#include "threading.h"  // BSR
 
 using namespace X265_NS;
 
@@ -911,7 +911,7 @@ static uint32_t costCoeffRemain_c(uint16_t *absCoeff, int numNonZero, int idx)
             {
                 {
                     unsigned long cidx;
-                    CLZ(cidx, codeNumber + 1);
+                    BSR(cidx, codeNumber + 1);
                     length = cidx;
                 }
                 X265_CHECK((codeNumber != 0) || (length == 0), "length check failure\n");

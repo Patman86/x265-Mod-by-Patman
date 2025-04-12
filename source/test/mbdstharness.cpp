@@ -524,7 +524,7 @@ bool MBDstHarness::testCorrectness(const EncoderPrimitives& ref, const EncoderPr
     {
         if (!check_dequant_primitive(ref.dequant_normal, opt.dequant_normal))
         {
-            printf("dequant: Failed!\n");
+            printf("dequant_normal: Failed!\n");
             return false;
         }
     }
@@ -655,8 +655,10 @@ void MBDstHarness::measureSpeed(const EncoderPrimitives& ref, const EncoderPrimi
 
     if (opt.dequant_normal)
     {
+        int scale = 72 << X265_DEPTH;
+        int shift = X265_DEPTH - 4;
         printf("dequant_normal\t");
-        REPORT_SPEEDUP(opt.dequant_normal, ref.dequant_normal, short_test_buff[0], mshortbuf2, 32 * 32, 70, 1);
+        REPORT_SPEEDUP(opt.dequant_normal, ref.dequant_normal, short_test_buff[0], mshortbuf2, 32 * 32, scale, shift);
     }
 
     if (opt.dequant_scaling)

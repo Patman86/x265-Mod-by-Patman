@@ -1087,6 +1087,187 @@ void addAvg_neon(const int16_t *src0, const int16_t *src1, pixel *dst, intptr_t 
     }
 }
 
+void planecopy_cp_neon(const uint8_t *src, intptr_t srcStride, pixel *dst,
+                       intptr_t dstStride, int width, int height, int shift)
+{
+    X265_CHECK(width >= 16, "width length error\n");
+    X265_CHECK(height >= 1, "height length error\n");
+    X265_CHECK(shift == X265_DEPTH - 8, "shift value error\n");
+
+    (void)shift;
+
+    do
+    {
+#if HIGH_BIT_DEPTH
+        for (int w = 0; w < width - 16; w += 16)
+        {
+            uint8x16_t in = vld1q_u8(src + w);
+            uint16x8_t t0 = vshll_n_u8(vget_low_u8(in), X265_DEPTH - 8);
+            uint16x8_t t1 = vshll_n_u8(vget_high_u8(in), X265_DEPTH - 8);
+            vst1q_u16(dst + w + 0, t0);
+            vst1q_u16(dst + w + 8, t1);
+        }
+        // Tail - src must be different from dst for this to work.
+        {
+            uint8x16_t in = vld1q_u8(src + width - 16);
+            uint16x8_t t0 = vshll_n_u8(vget_low_u8(in), X265_DEPTH - 8);
+            uint16x8_t t1 = vshll_n_u8(vget_high_u8(in), X265_DEPTH - 8);
+            vst1q_u16(dst + width - 16, t0);
+            vst1q_u16(dst + width - 8, t1);
+        }
+#else
+        int w;
+        for (w = 0; w < width - 32; w += 32)
+        {
+            uint8x16_t in0 = vld1q_u8(src + w + 0);
+            uint8x16_t in1 = vld1q_u8(src + w + 16);
+            vst1q_u8(dst + w + 0, in0);
+            vst1q_u8(dst + w + 16, in1);
+        }
+        if (w < width - 16)
+        {
+            uint8x16_t in = vld1q_u8(src + w);
+            vst1q_u8(dst + w, in);
+        }
+        // Tail - src must be different from dst for this to work.
+        {
+            uint8x16_t in = vld1q_u8(src + width - 16);
+            vst1q_u8(dst + width - 16, in);
+        }
+#endif
+        dst += dstStride;
+        src += srcStride;
+    }
+    while (--height != 0);
+}
+
+void weight_pp_neon(const pixel *src, pixel *dst, intptr_t stride, int width, int height,
+                    int w0, int round, int shift, int offset)
+{
+    const int correction = IF_INTERNAL_PREC - X265_DEPTH;
+
+    X265_CHECK(height >= 1, "height length error\n");
+    X265_CHECK(width >= 16, "width length error\n");
+    X265_CHECK(!(width & 15), "width alignment error\n");
+    X265_CHECK(w0 >= 0, "w0 should be min 0\n");
+    X265_CHECK(w0 < 128, "w0 should be max 127\n");
+    X265_CHECK(shift >= correction, "shift must include factor correction\n");
+    X265_CHECK((round & ((1 << correction) - 1)) == 0,
+               "round must include factor correction\n");
+
+    (void)round;
+
+#if HIGH_BIT_DEPTH
+    int32x4_t corrected_shift = vdupq_n_s32(correction - shift);
+
+    do
+    {
+        int w = 0;
+        do
+        {
+            int16x8_t s0 = vreinterpretq_s16_u16(vld1q_u16(src + w + 0));
+            int16x8_t s1 = vreinterpretq_s16_u16(vld1q_u16(src + w + 8));
+            int32x4_t weighted_s0_lo = vmull_n_s16(vget_low_s16(s0), w0);
+            int32x4_t weighted_s0_hi = vmull_n_s16(vget_high_s16(s0), w0);
+            int32x4_t weighted_s1_lo = vmull_n_s16(vget_low_s16(s1), w0);
+            int32x4_t weighted_s1_hi = vmull_n_s16(vget_high_s16(s1), w0);
+            weighted_s0_lo = vrshlq_s32(weighted_s0_lo, corrected_shift);
+            weighted_s0_hi = vrshlq_s32(weighted_s0_hi, corrected_shift);
+            weighted_s1_lo = vrshlq_s32(weighted_s1_lo, corrected_shift);
+            weighted_s1_hi = vrshlq_s32(weighted_s1_hi, corrected_shift);
+            weighted_s0_lo = vaddq_s32(weighted_s0_lo, vdupq_n_s32(offset));
+            weighted_s0_hi = vaddq_s32(weighted_s0_hi, vdupq_n_s32(offset));
+            weighted_s1_lo = vaddq_s32(weighted_s1_lo, vdupq_n_s32(offset));
+            weighted_s1_hi = vaddq_s32(weighted_s1_hi, vdupq_n_s32(offset));
+            uint16x4_t t0_lo = vqmovun_s32(weighted_s0_lo);
+            uint16x4_t t0_hi = vqmovun_s32(weighted_s0_hi);
+            uint16x4_t t1_lo = vqmovun_s32(weighted_s1_lo);
+            uint16x4_t t1_hi = vqmovun_s32(weighted_s1_hi);
+            uint16x8_t d0 = vminq_u16(vcombine_u16(t0_lo, t0_hi), vdupq_n_u16(PIXEL_MAX));
+            uint16x8_t d1 = vminq_u16(vcombine_u16(t1_lo, t1_hi), vdupq_n_u16(PIXEL_MAX));
+
+            vst1q_u16(dst + w + 0, d0);
+            vst1q_u16(dst + w + 8, d1);
+            w += 16;
+        }
+        while (w != width);
+
+        src += stride;
+        dst += stride;
+    }
+    while (--height != 0);
+
+#else
+    // Re-arrange the shift operations.
+    // Then, hoist the right shift out of the loop if BSF(w0) >= shift - correction.
+    // Orig: (((src[x] << correction) * w0 + round) >> shift) + offset.
+    // New: (src[x] * (w0 >> shift - correction)) + (round >> shift) + offset.
+    // (round >> shift) is always zero since round = 1 << (shift - 1).
+
+    unsigned long id;
+    BSF(id, w0);
+
+    if ((int)id >= shift - correction)
+    {
+        w0 >>= shift - correction;
+
+        do
+        {
+            int w = 0;
+            do
+            {
+                uint8x16_t s = vld1q_u8(src + w);
+                int16x8_t weighted_s0 = vreinterpretq_s16_u16(
+                    vmlal_u8(vdupq_n_u16(offset), vget_low_u8(s), vdup_n_u8(w0)));
+                int16x8_t weighted_s1 = vreinterpretq_s16_u16(
+                    vmlal_u8(vdupq_n_u16(offset), vget_high_u8(s), vdup_n_u8(w0)));
+                uint8x8_t d0 = vqmovun_s16(weighted_s0);
+                uint8x8_t d1 = vqmovun_s16(weighted_s1);
+
+                vst1q_u8(dst + w, vcombine_u8(d0, d1));
+                w += 16;
+            }
+            while (w != width);
+
+            src += stride;
+            dst += stride;
+        }
+        while (--height != 0);
+    }
+    else // Keep rounding shifts within the loop.
+    {
+        int16x8_t corrected_shift = vdupq_n_s16(correction - shift);
+
+        do
+        {
+            int w = 0;
+            do
+            {
+                uint8x16_t s = vld1q_u8(src + w);
+                int16x8_t weighted_s0 =
+                    vreinterpretq_s16_u16(vmull_u8(vget_low_u8(s), vdup_n_u8(w0)));
+                int16x8_t weighted_s1 =
+                    vreinterpretq_s16_u16(vmull_u8(vget_high_u8(s), vdup_n_u8(w0)));
+                weighted_s0 = vrshlq_s16(weighted_s0, corrected_shift);
+                weighted_s1 = vrshlq_s16(weighted_s1, corrected_shift);
+                weighted_s0 = vaddq_s16(weighted_s0, vdupq_n_s16(offset));
+                weighted_s1 = vaddq_s16(weighted_s1, vdupq_n_s16(offset));
+                uint8x8_t d0 = vqmovun_s16(weighted_s0);
+                uint8x8_t d1 = vqmovun_s16(weighted_s1);
+
+                vst1q_u8(dst + w, vcombine_u8(d0, d1));
+                w += 16;
+            }
+            while (w != width);
+
+            src += stride;
+            dst += stride;
+        }
+        while (--height != 0);
+    }
+#endif
+}
+
 template<int lx, int ly>
 void pixelavg_pp_neon(pixel *dst, intptr_t dstride, const pixel *src0, intptr_t sstride0, const pixel *src1,
                       intptr_t sstride1, int)
@@ -1711,7 +1892,9 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.chroma[X265_CSP_I422].cu[BLOCK_32x32].sa8d = sa8d16<16, 32>;
     p.chroma[X265_CSP_I422].cu[BLOCK_64x64].sa8d = sa8d16<32, 64>;
 
+    p.weight_pp = weight_pp_neon;
 
+    p.planecopy_cp = planecopy_cp_neon;
 }
 
 

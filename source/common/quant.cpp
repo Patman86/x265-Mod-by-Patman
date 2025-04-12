@@ -80,7 +80,7 @@ inline int getICRate(uint32_t absLevel, int32_t diffLevel, const int* greaterOne
 
             // NOTE: mapping to x86 hardware instruction BSR
             unsigned long size;
-            CLZ(size, absLevel);
+            BSR(size, absLevel);
             int egs = size * 2 + 1;
 
             rate += egs << 15;
@@ -164,7 +164,7 @@ inline uint32_t getICRateCost(uint32_t absLevel, int32_t diffLevel, const int* g
             if (symbol)
             {
                 unsigned long idx;
-                CLZ(idx, symbol + 1);
+                BSR(idx, symbol + 1);
                 length = idx;
             }
 
@@ -293,10 +293,10 @@ uint32_t Quant::signBitHidingHDQ(int16_t* coeff, int32_t* deltaU, uint32_t numSi
         int firstNZPosInCG0 = n;
 #endif
 
-        CLZ(tmp, coeffFlag[cg]);
+        BSR(tmp, coeffFlag[cg]);
         const int firstNZPosInCG = (15 ^ tmp);
 
-        CTZ(tmp, coeffFlag[cg]);
+        BSF(tmp, coeffFlag[cg]);
         const int lastNZPosInCG = (15 ^ tmp);
 
         X265_CHECK(firstNZPosInCG0 == firstNZPosInCG, "firstNZPosInCG0 check failure\n");

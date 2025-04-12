@@ -5,7 +5,7 @@
 #include "common.h"
 #include "primitives.h"
 #include "contexts.h"   // costCoeffNxN_c
-#include "threading.h"  // CLZ
+#include "threading.h"  // BSR
 #include <arm_neon.h>
 
 namespace X265_NS

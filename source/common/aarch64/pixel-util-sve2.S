@@ -869,7 +869,16 @@ endfunc
 
 // void dequant_normal_c(const int16_t* quantCoef, int16_t* coef, int num, int scale, int shift)
 function PFX(dequant_normal_sve2)
-    lsr             w2, w2, #4              // num / 16
+//  X265_CHECK(num >= 4 * 4, "dequant num %d too small\n", num);
+//  X265_CHECK(num <= 32 * 32, "dequant num %d too large\n", num);
+//  X265_CHECK((num % 16) == 0, "dequant num %d not multiple of 16\n", num);
+#if HIGH_BIT_DEPTH
+    cmp             w3, #32768
+    blt             .dqn_skip
+    lsr             w3, w3, #(BIT_DEPTH - 8)
+    sub             w4, w4, #(BIT_DEPTH - 8)
+.dqn_skip:
+#endif
     neg             w4, w4
     mov             z0.h, w3
     mov             z1.s, w4
@@ -893,7 +902,7 @@ function PFX(dequant_normal_sve2)
     sqxtn           v3.4h, v18.4s
     sqxtn2          v3.8h, v19.4s
 
-    sub             w2, w2, #1
+    sub             w2, w2, #16
     st1             {v2.8h, v3.8h}, [x1], #32
     cbnz            w2, .dqn_loop1_sve2
     ret
@@ -910,8 +919,8 @@ function PFX(dequant_normal_sve2)
 
     sqxtnb          z2.h, z16.s
     sqxtnt          z2.h, z17.s
-    
-    sub             w2, w2, #1
+
+    sub             w2, w2, #16
     st1h            {z2.h}, p0, [x1]
     add             x1, x1, #32
     cbnz            w2, .gt_16_dqn_loop1_sve2

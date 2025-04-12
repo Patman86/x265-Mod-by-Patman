@@ -3703,3 +3703,4 @@ cglobal pixel_ssd_s_aligned_32, 2,4,5
 %endif
     RET
 %endif
+SECTION_IBT_SHSTK

@@ -22546,3 +22546,4 @@ cglobal intra_filter_4x4, 2,4,4
     mov             [r1 +  8], r2b              ; topLast
     mov             [r1 + 16], r3b              ; LeftLast
     RET
+SECTION_IBT_SHSTK
