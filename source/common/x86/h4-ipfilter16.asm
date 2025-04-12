@@ -2632,4 +2632,3 @@ cglobal interp_4tap_horiz_ps_6x%1, 4, 7, 6
 
     IPFILTER_CHROMA_PS_6xN_AVX2 8
     IPFILTER_CHROMA_PS_6xN_AVX2 16
-SECTION_IBT_SHSTK

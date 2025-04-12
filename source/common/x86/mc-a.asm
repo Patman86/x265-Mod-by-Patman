@@ -7410,4 +7410,3 @@ cglobal prefetch_ref, 3,3
     prefetcht0  [r0+r1*2]
     prefetcht0  [r0+r2]
     RET
-SECTION_IBT_SHSTK

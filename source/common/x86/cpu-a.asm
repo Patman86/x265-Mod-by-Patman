@@ -201,4 +201,3 @@ cglobal safe_intel_cpu_indicator_init
     pop r1
     pop r0
     ret
-SECTION_IBT_SHSTK

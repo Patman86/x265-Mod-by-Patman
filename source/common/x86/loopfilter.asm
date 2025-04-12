@@ -4213,4 +4213,3 @@ cglobal pelFilterChroma_V, 6,6,5
 %endif
     RET
 %endif ; ARCH_X86_64
-SECTION_IBT_SHSTK

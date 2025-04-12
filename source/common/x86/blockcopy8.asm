@@ -6925,4 +6925,3 @@ cglobal cpy1Dto2D_shr_32, 3, 4, 6
     dec                 r3d
     jnz                 .loop
     RET
-SECTION_IBT_SHSTK

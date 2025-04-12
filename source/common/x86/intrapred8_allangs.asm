@@ -24121,4 +24121,3 @@ cglobal all_angs_pred_4x4, 4, 4, 8
     movd        [r0 + 524],     m7              ;byte[5, 6, 7, 8]
 
 RET
-SECTION_IBT_SHSTK
