@@ -65,6 +65,9 @@
         %define UNIX64 1
     %endif
 %endif
+%ifndef ENABLE_CET
+%define ENABLE_CET 0
+%endif
 
 %define FORMAT_ELF 0
 %ifidn __OUTPUT_FORMAT__,elf
