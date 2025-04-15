@@ -8991,3 +8991,4 @@ cglobal costC1C2Flag, 4,12,2
     or          eax, r4d
     RET
 %endif ; ARCH_X86_64
+SECTION_IBT_SHSTK

@@ -93,7 +93,30 @@
         SECTION .rodata align=%1
     %endif
 %endmacro
-
+%macro SECTION_IBT_SHSTK 0
+  %if ENABLE_CET
+    %ifidn __OUTPUT_FORMAT__,win32
+    %elif WIN64
+    %else
+         SECTION .note.gnu.property note
+         align 8
+         dd    .x1 - .x0      ; data size for "GNU\0"
+         dd    .x4 - .x1      ; Elf_Prop size
+         dd    5              ; ELF::NT_GNU_PROPERTY_TYPE_0
+    .x0:
+         db    "GNU", 0
+    .x1:
+         align 8
+         dd    0xc0000002     ; ELF::GNU_PROPERTY_X86_FEATURE_1_AND
+         dd    .x3 - .x2      ; data size
+    .x2:
+         dd    0x3            ; ELF::GNU_PROPERTY_X86_FEATURE_1_SHSTK | ELF::GNU_PROPERTY_X86_FEATURE_1_IBT
+    .x3:
+         align 8
+    .x4:
+    %endif
+  %endif
+%endmacro
 %if WIN64
     %define PIC
 %elif ARCH_X86_64 == 0
@@ -740,6 +763,13 @@ BRANCH_INSTR jz, je, jnz, jne, jl, jle, jnl, jnle, jg, jge, jng, jnge, ja, jae, 
     %assign stack_size 0        ; amount of stack space that can be freely used inside a function
     %assign stack_size_padded 0 ; total amount of allocated stack space, including space for callee-saved xmm registers on WIN64 and alignment padding
     %assign xmm_regs_used 0     ; number of XMM registers requested, used for dealing with callee-saved registers on WIN64 and vzeroupper
+    %if ENABLE_CET
+      %if ARCH_X86_64
+        endbr64
+      %else
+        endbr32
+      %endif
+    %endif
     %ifnidn %3, ""
         PROLOGUE %3
     %endif

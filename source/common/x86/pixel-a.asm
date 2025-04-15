@@ -16581,3 +16581,4 @@ cglobal normFact64, 4, 5, 6
 %endif
     movq           [r3],        xm3
     RET
+SECTION_IBT_SHSTK

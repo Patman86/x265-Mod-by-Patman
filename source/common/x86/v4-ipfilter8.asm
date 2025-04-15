@@ -12797,3 +12797,4 @@ cglobal interp_4tap_vert_ss_%1x%2, 5, 6, 7
     FILTER_VER_CHROMA_SS_W8_H2 8, 12
     FILTER_VER_CHROMA_SS_W8_H2 8, 64
 
+SECTION_IBT_SHSTK

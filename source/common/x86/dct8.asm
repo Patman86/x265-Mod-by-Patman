@@ -7639,3 +7639,4 @@ cglobal psyRdoQuant_1p32, 7, 9, 16
     RET
 
 %endif
+SECTION_IBT_SHSTK

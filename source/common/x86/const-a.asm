@@ -157,3 +157,4 @@ const trans8_shuf,          times  1 dd   0,   4,   1,   5,   2,   6,   3,   7
 ;; 64-bit constants
 
 const pq_1,                 times 1 dq 1
+SECTION_IBT_SHSTK
