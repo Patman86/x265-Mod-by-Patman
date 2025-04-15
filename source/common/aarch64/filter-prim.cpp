@@ -4703,6 +4703,276 @@ void inline interp8_vert_sp_neon(const int16_t *src, intptr_t srcStride, pixel *
     }
 }
 
+template<int coeffIdx, int coeffIdy, int width, int height>
+void interp8_hv_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst, intptr_t dstStride)
+{
+    const int N_TAPS = 8;
+    const uint16x8_t h_filter =
+        vreinterpretq_u16_s16(vabsq_s16(vld1q_s16(X265_NS::g_lumaFilter[coeffIdx])));
+    const int16x8_t v_filter = vld1q_s16(X265_NS::g_lumaFilter[coeffIdy]);
+    const uint32x4_t h_offset =
+        vdupq_n_u32((unsigned)-IF_INTERNAL_OFFS << SHIFT_INTERP_PS);
+    int shift = IF_FILTER_PREC + IF_INTERNAL_PREC - X265_DEPTH;
+    const int32x4_t v_offset = vdupq_n_s32((1 << (shift - 1)) +
+                                           (IF_INTERNAL_OFFS << IF_FILTER_PREC));
+    const uint16x8_t maxVal = vdupq_n_u16((1 << X265_DEPTH) - 1);
+
+    src -= (N_TAPS / 2 - 1) * srcStride + (N_TAPS / 2 - 1);
+
+    for (int col = 0; col + 8 <= width; col += 8)
+    {
+        const pixel *s = src;
+        pixel *d = dst;
+
+        uint16x8_t h_s[N_TAPS];
+        int16x8_t v_s[16];
+
+        load_u16x8xn<8>(s + 0 * srcStride, 1, h_s);
+        filter8_ps_u16x8<coeffIdx>(h_s, v_s[0], h_offset, h_filter);
+
+        load_u16x8xn<8>(s + 1 * srcStride, 1, h_s);
+        filter8_ps_u16x8<coeffIdx>(h_s, v_s[1], h_offset, h_filter);
+
+        load_u16x8xn<8>(s + 2 * srcStride, 1, h_s);
+        filter8_ps_u16x8<coeffIdx>(h_s, v_s[2], h_offset, h_filter);
+
+        load_u16x8xn<8>(s + 3 * srcStride, 1, h_s);
+        filter8_ps_u16x8<coeffIdx>(h_s, v_s[3], h_offset, h_filter);
+
+        load_u16x8xn<8>(s + 4 * srcStride, 1, h_s);
+        filter8_ps_u16x8<coeffIdx>(h_s, v_s[4], h_offset, h_filter);
+
+        load_u16x8xn<8>(s + 5 * srcStride, 1, h_s);
+        filter8_ps_u16x8<coeffIdx>(h_s, v_s[5], h_offset, h_filter);
+
+        load_u16x8xn<8>(s + 6 * srcStride, 1, h_s);
+        filter8_ps_u16x8<coeffIdx>(h_s, v_s[6], h_offset, h_filter);
+
+        s += 7 * srcStride;
+
+        int row = 0;
+        if (coeffIdy == 1)
+        {
+            for (; row + 8 <= height; row += 8)
+            {
+                uint16x8_t res[8];
+
+                load_u16x8xn<8>(s + 0 * srcStride, 1, h_s);
+                filter8_ps_u16x8<coeffIdx>(h_s, v_s[7], h_offset, h_filter);
+                filter8_sp_s16x8<coeffIdy>(v_s + 0, res[0], v_offset, v_filter, maxVal);
+
+                load_u16x8xn<8>(s + 1 * srcStride, 1, h_s);
+                filter8_ps_u16x8<coeffIdx>(h_s, v_s[8], h_offset, h_filter);
+                filter8_sp_s16x8<coeffIdy>(v_s + 1, res[1], v_offset, v_filter, maxVal);
+                v_s[0] = v_s[8];
+
+                load_u16x8xn<8>(s + 2 * srcStride, 1, h_s);
+                filter8_ps_u16x8<coeffIdx>(h_s, v_s[9], h_offset, h_filter);
+                filter8_sp_s16x8<coeffIdy>(v_s + 2, res[2], v_offset, v_filter, maxVal);
+                v_s[1] = v_s[9];
+
+                load_u16x8xn<8>(s + 3 * srcStride, 1, h_s);
+                filter8_ps_u16x8<coeffIdx>(h_s, v_s[10], h_offset, h_filter);
+                filter8_sp_s16x8<coeffIdy>(v_s + 3, res[3], v_offset, v_filter, maxVal);
+                v_s[2] = v_s[10];
+
+                load_u16x8xn<8>(s + 4 * srcStride, 1, h_s);
+                filter8_ps_u16x8<coeffIdx>(h_s, v_s[11], h_offset, h_filter);
+                filter8_sp_s16x8<coeffIdy>(v_s + 4, res[4], v_offset, v_filter, maxVal);
+                v_s[3] = v_s[11];
+
+                load_u16x8xn<8>(s + 5 * srcStride, 1, h_s);
+                filter8_ps_u16x8<coeffIdx>(h_s, v_s[12], h_offset, h_filter);
+                filter8_sp_s16x8<coeffIdy>(v_s + 5, res[5], v_offset, v_filter, maxVal);
+                v_s[4] = v_s[12];
+
+                load_u16x8xn<8>(s + 6 * srcStride, 1, h_s);
+                filter8_ps_u16x8<coeffIdx>(h_s, v_s[13], h_offset, h_filter);
+                filter8_sp_s16x8<coeffIdy>(v_s + 6, res[6], v_offset, v_filter, maxVal);
+                v_s[5] = v_s[13];
+
+                load_u16x8xn<8>(s + 7 * srcStride, 1, h_s);
+                filter8_ps_u16x8<coeffIdx>(h_s, v_s[14], h_offset, h_filter);
+                filter8_sp_s16x8<coeffIdy>(v_s + 7, res[7], v_offset, v_filter, maxVal);
+                v_s[6] = v_s[14];
+
+                store_u16xnxm<8, 8>(d, dstStride, res);
+
+                s += 8 * srcStride;
+                d += 8 * dstStride;
+            }
+        }
+
+        for (; row < height; row += 4)
+        {
+            uint16x8_t res[4];
+
+            load_u16x8xn<8>(s + 0 * srcStride, 1, h_s);
+            filter8_ps_u16x8<coeffIdx>(h_s, v_s[7], h_offset, h_filter);
+            filter8_sp_s16x8<coeffIdy>(v_s + 0, res[0], v_offset, v_filter, maxVal);
+            v_s[0] = v_s[4];
+
+            load_u16x8xn<8>(s + 1 * srcStride, 1, h_s);
+            filter8_ps_u16x8<coeffIdx>(h_s, v_s[8], h_offset, h_filter);
+            filter8_sp_s16x8<coeffIdy>(v_s + 1, res[1], v_offset, v_filter, maxVal);
+            v_s[1] = v_s[5];
+
+            load_u16x8xn<8>(s + 2 * srcStride, 1, h_s);
+            filter8_ps_u16x8<coeffIdx>(h_s, v_s[9], h_offset, h_filter);
+            filter8_sp_s16x8<coeffIdy>(v_s + 2, res[2], v_offset, v_filter, maxVal);
+            v_s[2] = v_s[6];
+
+            load_u16x8xn<8>(s + 3 * srcStride, 1, h_s);
+            filter8_ps_u16x8<coeffIdx>(h_s, v_s[10], h_offset, h_filter);
+            filter8_sp_s16x8<coeffIdy>(v_s + 3, res[3], v_offset, v_filter, maxVal);
+            v_s[3] = v_s[7];
+
+            store_u16xnxm<8, 4>(d, dstStride, res);
+
+            v_s[4] = v_s[8];
+            v_s[5] = v_s[9];
+            v_s[6] = v_s[10];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+
+        src += 8;
+        dst += 8;
+    }
+
+    if (width % 8 != 0)
+    {
+        uint16x4_t h_s0[N_TAPS], h_s1[N_TAPS];
+        int16x4_t v_s[16];
+
+        load_u16x4xn<8>(src + 0 * srcStride, 1, h_s0);
+        filter8_ps_u16x4<coeffIdx>(h_s0, v_s[0], h_offset, h_filter);
+
+        load_u16x4xn<8>(src + 1 * srcStride, 1, h_s1);
+        load_u16x4xn<8>(src + 2 * srcStride, 1, h_s0);
+
+        filter8_ps_u16x4<coeffIdx>(h_s1, v_s[1], h_offset, h_filter);
+        filter8_ps_u16x4<coeffIdx>(h_s0, v_s[2], h_offset, h_filter);
+
+        load_u16x4xn<8>(src + 3 * srcStride, 1, h_s1);
+        load_u16x4xn<8>(src + 4 * srcStride, 1, h_s0);
+
+        filter8_ps_u16x4<coeffIdx>(h_s1, v_s[3], h_offset, h_filter);
+        filter8_ps_u16x4<coeffIdx>(h_s0, v_s[4], h_offset, h_filter);
+
+        load_u16x4xn<8>(src + 5 * srcStride, 1, h_s1);
+        load_u16x4xn<8>(src + 6 * srcStride, 1, h_s0);
+
+        filter8_ps_u16x4<coeffIdx>(h_s1, v_s[5], h_offset, h_filter);
+        filter8_ps_u16x4<coeffIdx>(h_s0, v_s[6], h_offset, h_filter);
+
+        src += 7 * srcStride;
+
+        int row = 0;
+        for (; row + 8 <= height; row += 8)
+        {
+            uint16x4_t res[8];
+
+            load_u16x4xn<8>(src + 0 * srcStride, 1, h_s1);
+            load_u16x4xn<8>(src + 1 * srcStride, 1, h_s0);
+
+            filter8_ps_u16x4<coeffIdx>(h_s1, v_s[7], h_offset, h_filter);
+            filter8_sp_s16x4<coeffIdy>(v_s + 0, res[0], v_offset, v_filter,
+                                       vget_low_u16(maxVal));
+
+            filter8_ps_u16x4<coeffIdx>(h_s0, v_s[8], h_offset, h_filter);
+            filter8_sp_s16x4<coeffIdy>(v_s + 1, res[1], v_offset, v_filter,
+                                       vget_low_u16(maxVal));
+            v_s[0] = v_s[8];
+
+            load_u16x4xn<8>(src + 2 * srcStride, 1, h_s1);
+            load_u16x4xn<8>(src + 3 * srcStride, 1, h_s0);
+
+            filter8_ps_u16x4<coeffIdx>(h_s1, v_s[9], h_offset, h_filter);
+            filter8_sp_s16x4<coeffIdy>(v_s + 2, res[2], v_offset, v_filter,
+                                       vget_low_u16(maxVal));
+            v_s[1] = v_s[9];
+
+            filter8_ps_u16x4<coeffIdx>(h_s0, v_s[10], h_offset, h_filter);
+            filter8_sp_s16x4<coeffIdy>(v_s + 3, res[3], v_offset, v_filter,
+                                       vget_low_u16(maxVal));
+            v_s[2] = v_s[10];
+
+            load_u16x4xn<8>(src + 4 * srcStride, 1, h_s1);
+            load_u16x4xn<8>(src + 5 * srcStride, 1, h_s0);
+
+            filter8_ps_u16x4<coeffIdx>(h_s1, v_s[11], h_offset, h_filter);
+            filter8_sp_s16x4<coeffIdy>(v_s + 4, res[4], v_offset, v_filter,
+                                       vget_low_u16(maxVal));
+            v_s[3] = v_s[11];
+
+            filter8_ps_u16x4<coeffIdx>(h_s0, v_s[12], h_offset, h_filter);
+            filter8_sp_s16x4<coeffIdy>(v_s + 5, res[5], v_offset, v_filter,
+                                       vget_low_u16(maxVal));
+            v_s[4] = v_s[12];
+
+            load_u16x4xn<8>(src + 6 * srcStride, 1, h_s1);
+            load_u16x4xn<8>(src + 7 * srcStride, 1, h_s0);
+
+            filter8_ps_u16x4<coeffIdx>(h_s1, v_s[13], h_offset, h_filter);
+            filter8_sp_s16x4<coeffIdy>(v_s + 6, res[6], v_offset, v_filter,
+                                       vget_low_u16(maxVal));
+            v_s[5] = v_s[13];
+
+            filter8_ps_u16x4<coeffIdx>(h_s0, v_s[14], h_offset, h_filter);
+            filter8_sp_s16x4<coeffIdy>(v_s + 7, res[7], v_offset, v_filter,
+                                       vget_low_u16(maxVal));
+            v_s[6] = v_s[14];
+
+            store_u16xnxm<4, 8>(dst, dstStride, res);
+
+            src += 8 * srcStride;
+            dst += 8 * dstStride;
+        }
+
+        for (; row < height; row += 4)
+        {
+            uint16x4_t res[4];
+
+            load_u16x4xn<8>(src + 0 * srcStride, 1, h_s1);
+            load_u16x4xn<8>(src + 1 * srcStride, 1, h_s0);
+
+            filter8_ps_u16x4<coeffIdx>(h_s1, v_s[7], h_offset, h_filter);
+            filter8_sp_s16x4<coeffIdy>(v_s + 0, res[0], v_offset, v_filter,
+                                       vget_low_u16(maxVal));
+            v_s[0] = v_s[4];
+
+            filter8_ps_u16x4<coeffIdx>(h_s0, v_s[8], h_offset, h_filter);
+            filter8_sp_s16x4<coeffIdy>(v_s + 1, res[1], v_offset, v_filter,
+                                       vget_low_u16(maxVal));
+            v_s[1] = v_s[5];
+
+            load_u16x4xn<8>(src + 2 * srcStride, 1, h_s1);
+            load_u16x4xn<8>(src + 3 * srcStride, 1, h_s0);
+
+            filter8_ps_u16x4<coeffIdx>(h_s1, v_s[9], h_offset, h_filter);
+            filter8_sp_s16x4<coeffIdy>(v_s + 2, res[2], v_offset, v_filter,
+                                       vget_low_u16(maxVal));
+            v_s[2] = v_s[6];
+
+            filter8_ps_u16x4<coeffIdx>(h_s0, v_s[10], h_offset, h_filter);
+            filter8_sp_s16x4<coeffIdy>(v_s + 3, res[3], v_offset, v_filter,
+                                       vget_low_u16(maxVal));
+            v_s[3] = v_s[7];
+
+            store_u16xnxm<4, 4>(dst, dstStride, res);
+
+            v_s[4] = v_s[8];
+            v_s[5] = v_s[9];
+            v_s[6] = v_s[10];
+
+            src += 4 * srcStride;
+            dst += 4 * dstStride;
+        }
+    }
+}
+
 #endif // !HIGH_BIT_DEPTH
 }
 
@@ -4921,11 +5191,72 @@ template<int N, int width, int height>
 void interp_hv_pp_neon(const pixel *src, intptr_t srcStride, pixel *dst,
                        intptr_t dstStride, int idxX, int idxY)
 {
+// Use the merged hv paths with Clang only as performance with GCC is worse than the
+// existing approach of doing horizontal and vertical interpolation separately.
+#ifdef __clang__
+    switch (idxX)
+    {
+    case 1:
+    {
+        switch (idxY)
+        {
+        case 1:
+            return interp8_hv_pp_neon<1, 1, width, height>(src, srcStride, dst,
+                                                           dstStride);
+        case 2:
+            return interp8_hv_pp_neon<1, 2, width, height>(src, srcStride, dst,
+                                                           dstStride);
+        case 3:
+            return interp8_hv_pp_neon<1, 3, width, height>(src, srcStride, dst,
+                                                           dstStride);
+        }
+
+        break;
+    }
+    case 2:
+    {
+        switch (idxY)
+        {
+        case 1:
+            return interp8_hv_pp_neon<2, 1, width, height>(src, srcStride, dst,
+                                                           dstStride);
+        case 2:
+            return interp8_hv_pp_neon<2, 2, width, height>(src, srcStride, dst,
+                                                           dstStride);
+        case 3:
+            return interp8_hv_pp_neon<2, 3, width, height>(src, srcStride, dst,
+                                                           dstStride);
+        }
+
+        break;
+    }
+    case 3:
+    {
+        switch (idxY)
+        {
+        case 1:
+            return interp8_hv_pp_neon<3, 1, width, height>(src, srcStride, dst,
+                                                           dstStride);
+        case 2:
+            return interp8_hv_pp_neon<3, 2, width, height>(src, srcStride, dst,
+                                                           dstStride);
+        case 3:
+            return interp8_hv_pp_neon<3, 3, width, height>(src, srcStride, dst,
+                                                           dstStride);
+        }
+
+        break;
+    }
+    }
+
+#else // __clang__
+
     ALIGN_VAR_32(int16_t, immed[width * (height + N - 1)]);
 
     interp_horiz_ps_neon<N, width, height>(src, srcStride, immed, width, idxX, 1);
     interp_vert_sp_neon<N, width, height>(immed + (N / 2 - 1) * width, width, dst,
                                           dstStride, idxY);
+#endif // __clang__
 }
 
 #else // HIGH_BIT_DEPTH
