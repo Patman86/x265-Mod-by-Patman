@@ -37,16 +37,17 @@ static const uint8_t dotprod_permute_tbl[48] = {
 };
 
 static const uint8_t matmul_permute_tbl[2][32] = {
-    // Permute for luma filter 3.
+    // Permute for luma filter 1.
     { 0,  1,  2,  3,  4,  5,  6,  7,  2,  3,  4,  5,  6,  7,  8,  9,
       4,  5,  6,  7,  8,  9, 10, 11,  6,  7,  8,  9, 10, 11, 12, 13 },
-    // Permute for luma filter 1.
+    // Permute for luma filter 2 and 3.
     { 1,  2,  3,  4,  5,  6,  7,  8,  3,  4,  5,  6,  7,  8,  9, 10,
       5,  6,  7,  8,  9, 10, 11, 12,  7,  8,  9, 10, 11, 12, 13, 14 }
 };
 
-static const int8_t matmul_luma_filter[2][16] = {
+static const int8_t matmul_luma_filter[3][16] = {
     { -1, 4, -10, 58, 17, -5, 1, 0, 0, -1, 4, -10, 58, 17, -5, 1 },
+    { 4, -11, 40, 40, -11, 4, -1, 0, 0, 4, -11, 40, 40, -11, 4, -1 },
     { 1, -5, 17, 58, -10, 4, -1, 0, 0, 1, -5, 17, 58, -10, 4, -1 }
 };
 
@@ -59,28 +60,6 @@ static const uint8_t dot_prod_merge_block_tbl[48] = {
     3, 16, 17, 18, 7, 20, 21, 22, 11, 24, 25, 26, 15, 28, 29, 30
 };
 
-uint8x8_t inline filter8_8_pp(uint8x16_t samples, const int8x8_t filter,
-                              const uint8x16x3_t tbl)
-{
-    // Permute input samples for dot product.
-    // { 0,  1,  2,  3,  1,  2,  3,  4,  2,  3,  4,  5,  3,  4,  5,  6 }
-    uint8x16_t perm_s0 = vqtbl1q_u8(samples, tbl.val[0]);
-    // { 4,  5,  6,  7,  5,  6,  7,  8,  6,  7,  8,  9,  7,  8,  9, 10 }
-    uint8x16_t perm_s1 = vqtbl1q_u8(samples, tbl.val[1]);
-    // { 8,  9, 10, 11,  9, 10, 11, 12, 10, 11, 12, 13, 11, 12, 13, 14 }
-    uint8x16_t perm_S2 = vqtbl1q_u8(samples, tbl.val[2]);
-
-    int32x4_t dotprod_lo = vusdotq_lane_s32(vdupq_n_s32(0), perm_s0, filter, 0);
-    dotprod_lo = vusdotq_lane_s32(dotprod_lo, perm_s1, filter, 1);
-    int32x4_t dotprod_hi = vusdotq_lane_s32(vdupq_n_s32(0), perm_s1, filter, 0);
-    dotprod_hi = vusdotq_lane_s32(dotprod_hi, perm_S2, filter, 1);
-
-    // Narrow and combine.
-    int16x8_t dotprod = vcombine_s16(vmovn_s32(dotprod_lo),
-                                     vmovn_s32(dotprod_hi));
-    return vqrshrun_n_s16(dotprod, IF_FILTER_PREC);
-}
-
 void inline init_sample_permute(uint8x8_t *samples, const uint8x16x3_t tbl,
                                 uint8x16_t *d)
 {
@@ -92,31 +71,7 @@ void inline init_sample_permute(uint8x8_t *samples, const uint8x16x3_t tbl,
     d[3] = vqtbl1q_u8(vcombine_u8(samples[3], vdup_n_u8(0)), tbl.val[0]);
 }
 
-uint8x8_t inline filter8_8_pp_reuse(uint8x16_t samples, const int8x8_t filter,
-                                    const uint8x16x3_t tbl, uint8x16_t &perm_s0)
-{
-    // Permute input samples for dot product.
-    // { 0,  1,  2,  3,  1,  2,  3,  4,  2,  3,  4,  5,  3,  4,  5,  6 }
-    // Already in perm_s0.
-    // { 4,  5,  6,  7,  5,  6,  7,  8,  6,  7,  8,  9,  7,  8,  9, 10 }
-    uint8x16_t perm_s1 = vqtbl1q_u8(samples, tbl.val[1]);
-    // { 8,  9, 10, 11,  9, 10, 11, 12, 10, 11, 12, 13, 11, 12, 13, 14 }
-    uint8x16_t perm_s2 = vqtbl1q_u8(samples, tbl.val[2]);
-
-    int32x4_t dotprod_lo = vusdotq_lane_s32(vdupq_n_s32(0), perm_s0, filter, 0);
-    dotprod_lo = vusdotq_lane_s32(dotprod_lo, perm_s1, filter, 1);
-    int32x4_t dotprod_hi = vusdotq_lane_s32(vdupq_n_s32(0), perm_s1, filter, 0);
-    dotprod_hi = vusdotq_lane_s32(dotprod_hi, perm_s2, filter, 1);
-
-    // Save for re-use in next iteration.
-    perm_s0 = perm_s2;
-
-    // Narrow and combine.
-    int16x8_t dotprod = vcombine_s16(vmovn_s32(dotprod_lo),
-                                     vmovn_s32(dotprod_hi));
-    return vqrshrun_n_s16(dotprod, IF_FILTER_PREC);
-}
-
+template<bool coeff2>
 uint8x8_t inline filter8_8_pp_matmul(uint8x16_t samples, const int8x16_t filter,
                                      const uint8x16x2_t tbl)
 {
@@ -129,6 +84,15 @@ uint8x8_t inline filter8_8_pp_matmul(uint8x16_t samples, const int8x16_t filter,
 
     // Narrow and combine.
     int16x8_t matmul = vcombine_s16(vmovn_s32(matmul_lo), vmovn_s32(matmul_hi));
+
+    if (coeff2)
+    {
+        // Substract the source elements corresponding to filter tap value -1,
+        // which weren't included in the initial matrix multiplication.
+        matmul = vreinterpretq_s16_u16(vsubw_u8(vreinterpretq_u16_s16(matmul),
+                                                vget_low_u8(samples)));
+    }
+
     return vqrshrun_n_s16(matmul, IF_FILTER_PREC);
 }
 
@@ -334,97 +298,15 @@ uint8x8_t inline filter8_8_pp_partial(const uint8x16_t s0, const uint8x16_t s1,
 } // Unnamed namespace.
 
 namespace X265_NS {
-template<int width, int height>
-void inline interp8_horiz_pp_dotprod(const uint8_t *src, intptr_t srcStride,
-                                     uint8_t *dst, intptr_t dstStride,
-                                     int coeffIdx)
+template<bool coeff2, int width, int height>
+void inline interp8_horiz_pp_matmul(const uint8_t *src, intptr_t srcStride, uint8_t *dst,
+                                    intptr_t dstStride, int coeffIdx)
 {
     const int N_TAPS = 8;
+    const uint8x16x2_t tbl = vld1q_u8_x2(matmul_permute_tbl[coeffIdx >> 1]);
+    const int8x16_t filter = vld1q_s8(matmul_luma_filter[coeffIdx - 1]);
+
     src -= N_TAPS / 2 - 1;
-
-    const uint8x16x3_t tbl = vld1q_u8_x3(dotprod_permute_tbl);
-    const int8x8_t filter = vmovn_s16(vld1q_s16(g_lumaFilter[coeffIdx]));
-
-    for (int row = 0; row < height; row += 4)
-    {
-        int col = 0;
-        if (width >= 32)
-        {
-            // Peel first sample permute to enable passing between iterations.
-            uint8x8_t s0[4];
-            load_u8x8xn<4>(src, srcStride, s0);
-            uint8x16_t ps0[4];
-            init_sample_permute(s0, tbl, ps0);
-
-            for (; (col + 16) <= width; col += 16)
-            {
-                uint8x16_t s_lo[4], s_hi[4];
-                load_u8x16xn<4>(src + col + 0, srcStride, s_lo);
-                load_u8x16xn<4>(src + col + 8, srcStride, s_hi);
-
-                uint8x8_t d_lo[4];
-                d_lo[0] = filter8_8_pp_reuse(s_lo[0], filter, tbl, ps0[0]);
-                d_lo[1] = filter8_8_pp_reuse(s_lo[1], filter, tbl, ps0[1]);
-                d_lo[2] = filter8_8_pp_reuse(s_lo[2], filter, tbl, ps0[2]);
-                d_lo[3] = filter8_8_pp_reuse(s_lo[3], filter, tbl, ps0[3]);
-
-                uint8x8_t d_hi[4];
-                d_hi[0] = filter8_8_pp_reuse(s_hi[0], filter, tbl, ps0[0]);
-                d_hi[1] = filter8_8_pp_reuse(s_hi[1], filter, tbl, ps0[1]);
-                d_hi[2] = filter8_8_pp_reuse(s_hi[2], filter, tbl, ps0[2]);
-                d_hi[3] = filter8_8_pp_reuse(s_hi[3], filter, tbl, ps0[3]);
-
-                store_u8x8xn<4>(dst + col + 0, dstStride, d_lo);
-                store_u8x8xn<4>(dst + col + 8, dstStride, d_hi);
-            }
-        }
-        else
-        {
-            for (; col + 8 <= width; col += 8)
-            {
-                uint8x16_t s[4];
-                load_u8x16xn<4>(src + col, srcStride, s);
-
-                uint8x8_t d[4];
-                d[0] = filter8_8_pp(s[0], filter, tbl);
-                d[1] = filter8_8_pp(s[1], filter, tbl);
-                d[2] = filter8_8_pp(s[2], filter, tbl);
-                d[3] = filter8_8_pp(s[3], filter, tbl);
-
-                store_u8x8xn<4>(dst + col, dstStride, d);
-            }
-        }
-        for (; col < width; col += 4)
-        {
-            uint8x16_t s[4];
-            load_u8x16xn<4>(src + col, srcStride, s);
-
-            uint8x8_t d[4];
-            d[0] = filter8_8_pp(s[0], filter, tbl);
-            d[1] = filter8_8_pp(s[1], filter, tbl);
-            d[2] = filter8_8_pp(s[2], filter, tbl);
-            d[3] = filter8_8_pp(s[3], filter, tbl);
-
-            store_u8x4xn<4>(dst + col, dstStride, d);
-        }
-
-        src += 4 * srcStride;
-        dst += 4 * dstStride;
-    }
-}
-
-template<int coeffIdx, int width, int height>
-void inline interp8_horiz_pp_matmul(const uint8_t *src, intptr_t srcStride,
-                                    uint8_t *dst, intptr_t dstStride)
-{
-    const int N_TAPS = 8;
-    src -= N_TAPS / 2 - 1;
-
-    // coeffIdx is 1 or 3 for g_lumaFilter index.
-    // Select filter and permute table from the first or second array indices.
-    const int index = coeffIdx >> 1;
-    const uint8x16x2_t tbl = vld1q_u8_x2(matmul_permute_tbl[index]);
-    const int8x16_t filter = vld1q_s8(matmul_luma_filter[index]);
 
     for (int row = 0; row < height; row += 4)
     {
@@ -438,16 +320,16 @@ void inline interp8_horiz_pp_matmul(const uint8_t *src, intptr_t srcStride,
                 load_u8x16xn<4>(src + col + 8, srcStride, s_hi);
 
                 uint8x8_t d_lo[4];
-                d_lo[0] = filter8_8_pp_matmul(s_lo[0], filter, tbl);
-                d_lo[1] = filter8_8_pp_matmul(s_lo[1], filter, tbl);
-                d_lo[2] = filter8_8_pp_matmul(s_lo[2], filter, tbl);
-                d_lo[3] = filter8_8_pp_matmul(s_lo[3], filter, tbl);
+                d_lo[0] = filter8_8_pp_matmul<coeff2>(s_lo[0], filter, tbl);
+                d_lo[1] = filter8_8_pp_matmul<coeff2>(s_lo[1], filter, tbl);
+                d_lo[2] = filter8_8_pp_matmul<coeff2>(s_lo[2], filter, tbl);
+                d_lo[3] = filter8_8_pp_matmul<coeff2>(s_lo[3], filter, tbl);
 
                 uint8x8_t d_hi[4];
-                d_hi[0] = filter8_8_pp_matmul(s_hi[0], filter, tbl);
-                d_hi[1] = filter8_8_pp_matmul(s_hi[1], filter, tbl);
-                d_hi[2] = filter8_8_pp_matmul(s_hi[2], filter, tbl);
-                d_hi[3] = filter8_8_pp_matmul(s_hi[3], filter, tbl);
+                d_hi[0] = filter8_8_pp_matmul<coeff2>(s_hi[0], filter, tbl);
+                d_hi[1] = filter8_8_pp_matmul<coeff2>(s_hi[1], filter, tbl);
+                d_hi[2] = filter8_8_pp_matmul<coeff2>(s_hi[2], filter, tbl);
+                d_hi[3] = filter8_8_pp_matmul<coeff2>(s_hi[3], filter, tbl);
 
                 store_u8x8xn<4>(dst + col + 0, dstStride, d_lo);
                 store_u8x8xn<4>(dst + col + 8, dstStride, d_hi);
@@ -461,10 +343,10 @@ void inline interp8_horiz_pp_matmul(const uint8_t *src, intptr_t srcStride,
                 load_u8x16xn<4>(src + col, srcStride, s);
 
                 uint8x8_t d[4];
-                d[0] = filter8_8_pp_matmul(s[0], filter, tbl);
-                d[1] = filter8_8_pp_matmul(s[1], filter, tbl);
-                d[2] = filter8_8_pp_matmul(s[2], filter, tbl);
-                d[3] = filter8_8_pp_matmul(s[3], filter, tbl);
+                d[0] = filter8_8_pp_matmul<coeff2>(s[0], filter, tbl);
+                d[1] = filter8_8_pp_matmul<coeff2>(s[1], filter, tbl);
+                d[2] = filter8_8_pp_matmul<coeff2>(s[2], filter, tbl);
+                d[3] = filter8_8_pp_matmul<coeff2>(s[3], filter, tbl);
 
                 store_u8x8xn<4>(dst + col, dstStride, d);
             }
@@ -475,10 +357,10 @@ void inline interp8_horiz_pp_matmul(const uint8_t *src, intptr_t srcStride,
             load_u8x16xn<4>(src + col, srcStride, s);
 
             uint8x8_t d[4];
-            d[0] = filter8_8_pp_matmul(s[0], filter, tbl);
-            d[1] = filter8_8_pp_matmul(s[1], filter, tbl);
-            d[2] = filter8_8_pp_matmul(s[2], filter, tbl);
-            d[3] = filter8_8_pp_matmul(s[3], filter, tbl);
+            d[0] = filter8_8_pp_matmul<coeff2>(s[0], filter, tbl);
+            d[1] = filter8_8_pp_matmul<coeff2>(s[1], filter, tbl);
+            d[2] = filter8_8_pp_matmul<coeff2>(s[2], filter, tbl);
+            d[3] = filter8_8_pp_matmul<coeff2>(s[3], filter, tbl);
 
             store_u8x4xn<4>(dst + col, dstStride, d);
         }
@@ -494,15 +376,12 @@ void interp8_horiz_pp_i8mm(const uint8_t *src, intptr_t srcStride, uint8_t *dst,
 {
     switch (coeffIdx)
     {
-    case 1:
-        return interp8_horiz_pp_matmul<1, width, height>(src, srcStride, dst,
-                                                         dstStride);
     case 2:
-        return interp8_horiz_pp_dotprod<width, height>(src, srcStride, dst,
-                                                       dstStride, coeffIdx);
-    case 3:
-        return interp8_horiz_pp_matmul<3, width, height>(src, srcStride, dst,
-                                                         dstStride);
+        return interp8_horiz_pp_matmul<true, width, height>(src, srcStride, dst,
+                                                            dstStride, coeffIdx);
+    default:
+        return interp8_horiz_pp_matmul<false, width, height>(src, srcStride, dst,
+                                                             dstStride, coeffIdx);
     }
 }
 
@@ -643,11 +522,8 @@ void inline interp8_horiz_ps_matmul(const uint8_t *src, intptr_t srcStride,
         blkheight += N_TAPS - 1;
     }
 
-    // coeffIdx is 1 or 3 for g_lumaFilter index.
-    // Select filter and permute table from the first or second array indices.
-    const int index = coeffIdx >> 1;
-    const uint8x16x2_t tbl = vld1q_u8_x2(matmul_permute_tbl[index]);
-    const int8x16_t filter = vld1q_s8(matmul_luma_filter[index]);
+    const uint8x16x2_t tbl = vld1q_u8_x2(matmul_permute_tbl[coeffIdx >> 1]);
+    const int8x16_t filter = vld1q_s8(matmul_luma_filter[coeffIdx - 1]);
 
     const int16x8_t c = vdupq_n_s16(offset);
 
