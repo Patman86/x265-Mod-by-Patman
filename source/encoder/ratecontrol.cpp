@@ -511,7 +511,7 @@ bool RateControl::init(const SPS& sps)
     {
         /* If the user hasn't defined the stat filename, use the default value */
         const char *fileName = m_param->rc.statFileName;
-        if (!fileName)
+        if (!strlen(fileName))
             fileName = s_defaultStatFileName;
         /* Load stat file and init 2pass algo */
         if (m_param->rc.bStatRead)
@@ -3526,7 +3526,7 @@ void RateControl::terminate()
 void RateControl::destroy()
 {
     const char *fileName = m_param->rc.statFileName;
-    if (!fileName)
+    if (!strlen(fileName))
         fileName = s_defaultStatFileName;
 
     if (m_statFileOut)

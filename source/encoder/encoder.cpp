@@ -254,7 +254,7 @@ void Encoder::create()
         p->bEnableWavefront = 0;
     }
 
-    bool allowPools = !p->numaPools || strcmp(p->numaPools, "none");
+    bool allowPools = !strlen(p->numaPools) || strcmp(p->numaPools, "none");
 
     // Trim the thread pool if --wpp, --pme, and --pmode are disabled
     if (!p->bEnableWavefront && !p->bDistributeModeAnalysis && !p->bDistributeMotionEstimation && !p->lookaheadSlices)
@@ -335,7 +335,7 @@ void Encoder::create()
         m_aborted = true;
         return;
     }
-    else if (!m_param->scalingLists || !strcmp(m_param->scalingLists, "off"))
+    else if (!strlen(m_param->scalingLists) || !strcmp(m_param->scalingLists, "off"))
         m_scalingList.m_bEnabled = false;
     else if (!strcmp(m_param->scalingLists, "default"))
         m_scalingList.setDefaultScalingList();
@@ -474,7 +474,7 @@ void Encoder::create()
         m_aborted = true;
 
     initRefIdx();
-    if (m_param->analysisSave && m_param->bUseAnalysisFile)
+    if (strlen(m_param->analysisSave) && m_param->bUseAnalysisFile)
     {
         char* temp = strcatFilename(m_param->analysisSave, ".temp");
         if (!temp)
@@ -494,7 +494,7 @@ void Encoder::create()
     if (m_param->analysisMultiPassRefine || m_param->analysisMultiPassDistortion)
     {
         const char* name = m_param->analysisReuseFileName;
-        if (!name)
+        if (!strlen(name))
             name = defaultAnalysisFileName;
         if (m_param->rc.bStatWrite)
         {
@@ -546,7 +546,7 @@ void Encoder::create()
 
     m_nalList.m_annexB = !!m_param->bAnnexB;
 
-    if (m_param->naluFile)
+    if (strlen(m_param->naluFile))
     {
         m_naluFile = x265_fopen(m_param->naluFile, "r");
         if (!m_naluFile)
@@ -942,17 +942,6 @@ void Encoder::destroy()
 
     X265_FREE(m_offsetEmergency);
 
-    if (m_latestParam != NULL && m_latestParam != m_param)
-    {
-        if (m_latestParam->scalingLists != m_param->scalingLists)
-            free((char*)m_latestParam->scalingLists);
-
-        PARAM_NS::x265_param_free(m_latestParam);
-    }
-
-    if (m_zoneParam != NULL && m_zoneParam != m_param)
-        PARAM_NS::x265_param_free(m_zoneParam);
-
     if (m_analysisFileIn)
         fclose(m_analysisFileIn);
 
@@ -960,8 +949,8 @@ void Encoder::destroy()
     {
         int bError = 1;
         fclose(m_analysisFileOut);
-        const char* name = m_param->analysisSave ? m_param->analysisSave : m_param->analysisReuseFileName;
-        if (!name)
+        const char* name = strlen(m_param->analysisSave) ? m_param->analysisSave : m_param->analysisReuseFileName;
+        if (!strlen(name))
             name = defaultAnalysisFileName;
         char* temp = strcatFilename(name, ".temp");
         if (temp)
@@ -990,20 +979,6 @@ void Encoder::destroy()
     {
         if (m_param->csvfpt)
             fclose(m_param->csvfpt);
-        /* release string arguments that were strdup'd */
-        free((char*)m_param->rc.lambdaFileName);
-        free((char*)m_param->rc.statFileName);
-        free((char*)m_param->rc.sharedMemName);
-        free((char*)m_param->analysisReuseFileName);
-        free((char*)m_param->scalingLists);
-        free((char*)m_param->csvfn);
-        free((char*)m_param->numaPools);
-        free((char*)m_param->masteringDisplayColorVolume);
-        free((char*)m_param->toneMapFile);
-        free((char*)m_param->analysisSave);
-        free((char*)m_param->analysisLoad);
-        free((char*)m_param->videoSignalTypePreset);
-        PARAM_NS::x265_param_free(m_param);
     }
 
     // Need not check anymore since all pointer is alias to base[]
@@ -1454,7 +1429,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
     if (*m_exportedPic)
     {
-        if (!m_param->bUseAnalysisFile && m_param->analysisSave)
+        if (!m_param->bUseAnalysisFile && strlen(m_param->analysisSave))
             x265_free_analysis_data(m_param, &m_exportedPic[0]->m_analysisData);
 
         for (int i = 0; i < m_param->numLayers; i++)
@@ -1753,7 +1728,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
         /* In analysisSave mode, x265_analysis_data is allocated in inputPic and inFrame points to this */
         /* Load analysis data before lookahead->addPicture, since sliceType has been decided */
-        if (m_param->analysisLoad)
+        if (strlen(m_param->analysisLoad))
         {
             /* reads analysis data for the frame and allocates memory based on slicetype */
             static int paramBytes = CONF_OFFSET_BYTES;
@@ -1945,7 +1920,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 x265_frame_stats* frameData = NULL;
 
                 /* Free up inputPic->analysisData since it has already been used */
-                if ((m_param->analysisLoad && !m_param->analysisSave) || ((m_param->bAnalysisType == AVC_INFO) && slice->m_sliceType != I_SLICE))
+                if ((strlen(m_param->analysisLoad) && !strlen(m_param->analysisSave)) || ((m_param->bAnalysisType == AVC_INFO) && slice->m_sliceType != I_SLICE))
                     x265_free_analysis_data(m_param, &outFrame->m_analysisData);
                 if (pic_out)
                 {
@@ -1973,7 +1948,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                     }
 
                     /* Dump analysis data from pic_out to file in save mode and free */
-                    if (m_param->analysisSave)
+                    if (strlen(m_param->analysisSave))
                     {
                         pic_out[sLayer].analysisData.poc = pic_out[sLayer].poc;
                         pic_out[sLayer].analysisData.sliceType = pic_out[sLayer].sliceType;
@@ -2093,7 +2068,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
                 if ((m_outputCount + 1) >= m_param->chunkStart)
                     finishFrameStats(outFrame, curEncoder, frameData, m_pocLast, sLayer);
-                if (m_param->analysisSave)
+                if (strlen(m_param->analysisSave))
                 {
                     pic_out[sLayer].analysisData.frameBits = frameData->bits;
                     if (!slice->isIntra())
@@ -2317,7 +2292,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                 int baseViewType = frameEnc[0]->m_lowres.sliceType;
                 frameEnc[layer]->m_encData->m_slice->m_origSliceType = IS_X265_TYPE_B(baseViewType) ? B_SLICE : (baseViewType == X265_TYPE_P) ? P_SLICE : I_SLICE;
             }
-            if (m_param->analysisLoad && m_param->bDisableLookahead)
+            if (strlen(m_param->analysisLoad) && m_param->bDisableLookahead)
             {
                 frameEnc[0]->m_dts = frameEnc[0]->m_analysisData.lookahead.dts;
                 frameEnc[0]->m_reorderedPts = frameEnc[0]->m_analysisData.lookahead.reorderedPts;
@@ -2392,7 +2367,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
             curEncoder->m_rce.encodeOrder = frameEnc[0]->m_encodeOrder = m_encodedFrameNum++;
 
-            if (!m_param->analysisLoad || !m_param->bDisableLookahead)
+            if (!strlen(m_param->analysisLoad) || !m_param->bDisableLookahead)
             {
                 if (m_bframeDelay)
                 {
@@ -2407,7 +2382,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             }
 
             /* Allocate analysis data before encode in save mode. This is allocated in frameEnc[0] */
-            if (m_param->analysisSave && !m_param->analysisLoad)
+            if (strlen(m_param->analysisSave) && !strlen(m_param->analysisLoad))
             {
                 x265_analysis_data* analysis = &frameEnc[0]->m_analysisData;
                 memset(analysis, 0, sizeof(x265_analysis_data));
@@ -2572,8 +2547,8 @@ int Encoder::reconfigureParam(x265_param* encParam, x265_param* param)
         encParam->bEnableRectInter = param->bEnableRectInter;
         encParam->maxNumMergeCand = param->maxNumMergeCand;
         encParam->bIntraInBFrames = param->bIntraInBFrames;
-        if (param->scalingLists && !encParam->scalingLists)
-            encParam->scalingLists = strdup(param->scalingLists);
+        if (strlen(param->scalingLists) && !strlen(encParam->scalingLists))
+            snprintf(encParam->scalingLists, X265_MAX_STRING_SIZE, "%s", param->scalingLists);
 
         encParam->rc.aqMode = param->rc.aqMode;
         encParam->rc.aqStrength = param->rc.aqStrength;
@@ -3400,7 +3375,7 @@ void Encoder::getStreamHeaders(NALList& list, Entropy& sbacCoder, Bitstream& bs)
             cllsei.writeSEImessages(bs, m_sps, NAL_UNIT_PREFIX_SEI, list, m_param->bSingleSeiNal);
         }
 
-        if (m_param->masteringDisplayColorVolume)
+        if (strlen(m_param->masteringDisplayColorVolume))
         {
             SEIMasteringDisplayColorVolume mdsei;
             if (mdsei.parse(m_param->masteringDisplayColorVolume))
@@ -3744,8 +3719,8 @@ void Encoder::configureZone(x265_param *p, x265_param *zone)
         p->bEnableRectInter = zone->bEnableRectInter;
         p->maxNumMergeCand = zone->maxNumMergeCand;
         p->bIntraInBFrames = zone->bIntraInBFrames;
-        if (zone->scalingLists)
-            p->scalingLists = strdup(zone->scalingLists);
+        if (strlen(zone->scalingLists))
+            snprintf(p->scalingLists, X265_MAX_STRING_SIZE, "%s", zone->scalingLists);
 
         p->rc.aqMode = zone->rc.aqMode;
         p->rc.aqStrength = zone->rc.aqStrength;
@@ -3842,15 +3817,15 @@ void Encoder::configureVideoSignalTypePreset(x265_param* p)
             p->bEmitHDR10SEI = 1;
             if (!strcmp(colorVolume, "P3D65x1000n0005"))
             {
-                p->masteringDisplayColorVolume = strdup("G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,5)");
+                snprintf(p->masteringDisplayColorVolume, X265_MAX_STRING_SIZE, "G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,5)");
             }
             else if (!strcmp(colorVolume, "P3D65x4000n005"))
             {
-                p->masteringDisplayColorVolume = strdup("G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(40000000,50)");
+                snprintf(p->masteringDisplayColorVolume, X265_MAX_STRING_SIZE, "G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(40000000,50)");
             }
             else if (!strcmp(colorVolume, "BT2100x108n0005"))
             {
-                p->masteringDisplayColorVolume = strdup("G(8500,39850)B(6550,2300)R(34000,146000)WP(15635,16450)L(10000000,1)");
+                snprintf(p->masteringDisplayColorVolume, X265_MAX_STRING_SIZE, "G(8500,39850)B(6550,2300)R(34000,146000)WP(15635,16450)L(10000000,1)");
             }
             else
             {
@@ -4066,37 +4041,37 @@ void Encoder::configure(x265_param *p)
         p->rc.rfConstantMin = 0;
     }
 
-    if (p->analysisSaveReuseLevel && !p->analysisSave)
+    if (p->analysisSaveReuseLevel && !strlen(p->analysisSave))
     {
         x265_log(p, X265_LOG_WARNING, "analysis-save-reuse-level can be set only when analysis-save is enabled."
             " Resetting analysis-save-reuse-level to 0.\n");
         p->analysisSaveReuseLevel = 0;
     }
 
-    if (p->analysisLoadReuseLevel && !p->analysisLoad)
+    if (p->analysisLoadReuseLevel && !strlen(p->analysisLoad))
     {
         x265_log(p, X265_LOG_WARNING, "analysis-load-reuse-level can be set only when analysis-load is enabled."
             " Resetting analysis-load-reuse-level to 0.\n");
         p->analysisLoadReuseLevel = 0;
     }
 
-    if (p->analysisSave && !p->analysisSaveReuseLevel)
+    if (strlen(p->analysisSave) && !p->analysisSaveReuseLevel)
         p->analysisSaveReuseLevel = 5;
 
-    if (p->analysisLoad && !p->analysisLoadReuseLevel)
+    if (strlen(p->analysisLoad) && !p->analysisLoadReuseLevel)
         p->analysisLoadReuseLevel = 5;
 
-    if ((p->analysisLoad || p->analysisSave) && (p->bDistributeModeAnalysis || p->bDistributeMotionEstimation))
+    if ((strlen(p->analysisLoad) || strlen(p->analysisSave)) && (p->bDistributeModeAnalysis || p->bDistributeMotionEstimation))
     {
         x265_log(p, X265_LOG_WARNING, "Analysis load/save options incompatible with pmode/pme, Disabling pmode/pme\n");
         p->bDistributeMotionEstimation = p->bDistributeModeAnalysis = 0;
     }
 
-    if ((p->analysisLoad || p->analysisSave) && (p->analysisMultiPassRefine || p->analysisMultiPassDistortion))
+    if ((strlen(p->analysisLoad) || strlen(p->analysisSave)) && (p->analysisMultiPassRefine || p->analysisMultiPassDistortion))
     {
         x265_log(p, X265_LOG_WARNING, "Cannot use Analysis load/save option and multi-pass-opt-analysis/multi-pass-opt-distortion together,"
             "Disabling Analysis load/save and multi-pass-opt-analysis/multi-pass-opt-distortion\n");
-        p->analysisSave = p->analysisLoad = NULL;
+        p->analysisSave[0] = p->analysisLoad[0] = 0;
         p->analysisMultiPassRefine = p->analysisMultiPassDistortion = 0;
     }
     if (p->scaleFactor)
@@ -4149,12 +4124,12 @@ void Encoder::configure(x265_param *p)
 
     if (p->ctuDistortionRefine == CTU_DISTORTION_INTERNAL)
     {
-        if (!p->analysisLoad && !p->analysisSave)
+        if (!strlen(p->analysisLoad) && !strlen(p->analysisSave))
         {
             x265_log(p, X265_LOG_WARNING, "refine-ctu-distortion 1 requires analysis save/load. Disabling refine-ctu-distortion\n");
             p->ctuDistortionRefine = 0;
         }
-        if (p->scaleFactor && p->analysisLoad)
+        if (p->scaleFactor && strlen(p->analysisLoad))
         {
             x265_log(p, X265_LOG_WARNING, "refine-ctu-distortion 1 cannot be enabled along with multi resolution analysis refinement. Disabling refine-ctu-distortion\n");
             p->ctuDistortionRefine = 0;
@@ -4276,7 +4251,7 @@ void Encoder::configure(x265_param *p)
     p->bEnableTSkipFast &= p->bEnableTransformSkip;
     p->bLimitSAO &= p->bEnableSAO;
 
-    if (m_param->bUseAnalysisFile && m_param->analysisLoad && (p->confWinRightOffset || p->confWinBottomOffset))
+    if (m_param->bUseAnalysisFile && strlen(m_param->analysisLoad) && (p->confWinRightOffset || p->confWinBottomOffset))
         x265_log(p, X265_LOG_WARNING, "It is recommended not to set conformance window offset in file based analysis-load."
                                       " Offsets are shared in the analysis file already.\n");
     /* initialize the conformance window */
@@ -4287,7 +4262,7 @@ void Encoder::configure(x265_param *p)
     m_conformanceWindow.leftOffset = 0;
 
     uint32_t padsize = 0;
-    if (m_param->analysisLoad && m_param->bUseAnalysisFile)
+    if (strlen(m_param->analysisLoad) && m_param->bUseAnalysisFile)
     {
         m_analysisFileIn = x265_fopen(m_param->analysisLoad, "rb");
         if (!m_analysisFileIn)
@@ -4418,19 +4393,19 @@ void Encoder::configure(x265_param *p)
         m_param->bEnableFrameDuplication = 0;
     }
 #ifdef ENABLE_HDR10_PLUS
-    if (m_param->bDhdr10opt && m_param->toneMapFile == NULL)
+    if (m_param->bDhdr10opt && strlen(m_param->toneMapFile) == 0)
     {
         x265_log(p, X265_LOG_WARNING, "Disabling dhdr10-opt. dhdr10-info must be enabled.\n");
         m_param->bDhdr10opt = 0;
     }
 
-    if (m_param->toneMapFile)
+    if (strlen(m_param->toneMapFile))
     {
         if (!x265_fopen(p->toneMapFile, "r"))
         {
             x265_log(p, X265_LOG_ERROR, "Unable to open tone-map file.\n");
             m_bToneMap = 0;
-            m_param->toneMapFile = NULL;
+            m_param->toneMapFile[0] = 0;
             m_aborted = true;
         }
         else
@@ -4439,11 +4414,11 @@ void Encoder::configure(x265_param *p)
     else
         m_bToneMap = 0;
 #else
-    if (m_param->toneMapFile)
+    if (strlen(m_param->toneMapFile))
     {
         x265_log(p, X265_LOG_WARNING, "--dhdr10-info disabled. Enable HDR10_PLUS in cmake.\n");
         m_bToneMap = 0;
-        m_param->toneMapFile = NULL;
+        m_param->toneMapFile[0] = 0;
     }
     else if (m_param->bDhdr10opt)
     {
@@ -4607,10 +4582,10 @@ void Encoder::configure(x265_param *p)
         }
     }
 
-    if (p->videoSignalTypePreset)     // Default disabled.
+    if (strlen(p->videoSignalTypePreset))     // Default disabled.
         configureVideoSignalTypePreset(p);
 
-    if (m_param->toneMapFile || p->bHDR10Opt || p->bEmitHDR10SEI)
+    if (strlen(m_param->toneMapFile) || p->bHDR10Opt || p->bEmitHDR10SEI)
     {
         if (!p->bRepeatHeaders && p->bAnnexB)
         {
@@ -6243,6 +6218,8 @@ void Encoder::readUserSeiFile(x265_sei_payload& seiMsg, int curPoc)
             x265_log(m_param, X265_LOG_WARNING, "SEI message for frame %d is not inserted. Will support only PREFIX SEI messages.\n", poc);
             break;
         }
+        if (base64Decode)
+            free(base64Decode);
     }
 }
 

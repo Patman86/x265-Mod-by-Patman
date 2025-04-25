@@ -140,7 +140,7 @@ void general_log(const x265_param* param, const char* caller, int level, const c
     va_end(arg);
     if (!(param && level > param->logLevel))
         fputs(buffer, stderr);
-    if (param && param->logfn && level <= param->logfLevel) {
+    if (param && strlen(param->logfn) && level <= param->logfLevel) {
         FILE* fp = fopen(param->logfn, "ab");
         if (fp) {
             fputs(buffer, fp);
