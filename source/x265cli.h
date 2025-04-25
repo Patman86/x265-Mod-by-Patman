@@ -445,8 +445,8 @@ static const struct option long_options[] =
         /* ABR ladder settings */
         bool isAbrLadderConfig;
         bool enableScaler;
-        char     encName[X265_MAX_STRING_SIZE];
-        char     reuseName[X265_MAX_STRING_SIZE];
+        char*    encName;
+        char*    reuseName;
         uint32_t encId;
         int      refId;
         uint32_t loadLevel;
@@ -482,8 +482,8 @@ static const struct option long_options[] =
             bDither = false;
             isAbrLadderConfig = false;
             enableScaler = false;
-            encName[0] = 0;
-            reuseName[0] = 0;
+            encName = NULL;
+            reuseName = NULL;
             encId = 0;
             refId = -1;
             loadLevel = 0;

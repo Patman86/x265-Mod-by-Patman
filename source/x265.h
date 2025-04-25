@@ -36,8 +36,6 @@ extern "C" {
 #pragma warning(disable: 4201) // non-standard extension used (nameless struct/union)
 #endif
 
-#define X265_MAX_STRING_SIZE    (256)
-
 /* x265_encoder:
  *      opaque handler for encoder */
 typedef struct x265_encoder x265_encoder;
@@ -1147,7 +1145,7 @@ typedef struct x265_param
      *
      * Frame encoders are distributed between the available thread pools, and
      * the encoder will never generate more thread pools than frameNumThreads */
-    char numaPools[X265_MAX_STRING_SIZE];
+    const char* numaPools;
 
     /* Enable wavefront parallel processing, greatly increases parallelism for
      * less than 1% compression efficiency loss. Requires a thread pool, enabled
@@ -1184,7 +1182,7 @@ typedef struct x265_param
     int       logLevel;
 
     /* filename of general log */
-    char      logfn[X265_MAX_STRING_SIZE];
+    char*     logfn;
 
     /* level of general log */
     int       logfLevel;
@@ -1197,7 +1195,7 @@ typedef struct x265_param
      * per-slice statistics to this log file in encode order. Otherwise the
      * encoder will emit per-stream statistics into the log file when
      * x265_encoder_log is called (presumably at the end of the encode) */
-    char      csvfn[X265_MAX_STRING_SIZE];
+    const char* csvfn;
 
     /*== Internal Picture Specification ==*/
 
@@ -1477,7 +1475,7 @@ typedef struct x265_param
      * - all other strings indicate a filename containing custom scaling lists
      *   in the HM format. The encode will fail if the file is not parsed
      *   correctly. Custom lists must be signaled in the SPS. */
-    char scalingLists[X265_MAX_STRING_SIZE];
+    const char *scalingLists;
 
     /*== Intra Coding Tools ==*/
 
@@ -1662,7 +1660,7 @@ typedef struct x265_param
     int       analysisReuseMode;
 
     /* Filename for multi-pass-opt-analysis/distortion. Default name is "x265_analysis.dat" */
-    char      analysisReuseFileName[X265_MAX_STRING_SIZE];
+    const char* analysisReuseFileName;
 
     /*== Rate Control ==*/
 
@@ -1782,7 +1780,7 @@ typedef struct x265_param
 
         /* Filename of the 2pass output/input stats file, if unspecified the
          * encoder will default to using x265_2pass.log */
-        char statFileName[X265_MAX_STRING_SIZE];
+        const char* statFileName;
 
         /* temporally blur quants */
         double    qblur;
@@ -1806,7 +1804,7 @@ typedef struct x265_param
          * are separated by comma, space or newline. Text after a hash (#) is
          * ignored. The lambda tables are process-global, so these new lambda
          * values will affect all encoders in the same process */
-        char lambdaFileName[X265_MAX_STRING_SIZE];
+        const char* lambdaFileName;
 
         /* Enable stricter conditions to check bitrate deviations in CBR mode. May compromise
          * quality to maintain bitrate adherence */
@@ -1846,7 +1844,7 @@ typedef struct x265_param
         int       dataShareMode;
 
         /* Unique shared memory name. Required if the shared memory mode enabled. NULL by default */
-        char sharedMemName[X265_MAX_STRING_SIZE];
+        const char* sharedMemName;
 
     } rc;
 
@@ -1951,7 +1949,7 @@ typedef struct x265_param
      * are unsigned 16bit integers and %u are unsigned 32bit integers. The SEI
      * includes X,Y display primaries for RGB channels, white point X,Y and
      * max,min luminance values. */
-    char masteringDisplayColorVolume[X265_MAX_STRING_SIZE];
+    const char* masteringDisplayColorVolume;
 
     /* Maximum Content light level(MaxCLL), specified as integer that indicates the
      * maximum pixel intensity level in units of 1 candela per square metre of the
@@ -2040,7 +2038,7 @@ typedef struct x265_param
     int       bLimitSAO;
 
     /* File containing the tone mapping information */
-    char      toneMapFile[X265_MAX_STRING_SIZE];
+    const char*     toneMapFile;
 
     /* Insert tone mapping information only for IDR frames and when the 
      * tone mapping information changes. */
@@ -2116,11 +2114,11 @@ typedef struct x265_param
     int       gopLookahead;
 
     /*Write per-frame analysis information into analysis buffers. Default disabled. */
-    char analysisSave[X265_MAX_STRING_SIZE];
+    const char* analysisSave;
 
     /* Read analysis information into analysis buffer and use this analysis information
      * to reduce the amount of work the encoder must perform. Default disabled. */
-    char analysisLoad[X265_MAX_STRING_SIZE];
+    const char* analysisLoad;
 
     /*Number of RADL pictures allowed in front of IDR*/
     int radl;
@@ -2152,7 +2150,7 @@ typedef struct x265_param
     * Default 0 (disabled). */
     int       chunkEnd;
     /* File containing base64 encoded SEI messages in POC order */
-    char      naluFile[X265_MAX_STRING_SIZE];
+    const char*    naluFile;
 
     /* Generate bitstreams confirming to the specified dolby vision profile,
      * note that 0x7C01 makes RPU appear to be an unspecified NAL type in
@@ -2313,7 +2311,7 @@ typedef struct x265_param
     * precedence than individual VUI parameters. If any individual VUI option is specified
     * together with this, which changes the values set corresponding to the system-id
     * or color-volume, it will be discarded. */
-    char     videoSignalTypePreset[X265_MAX_STRING_SIZE];
+    const char* videoSignalTypePreset;
 
     /* Flag indicating whether the encoder should emit an End of Bitstream
      * NAL at the end of bitstream. Default false */

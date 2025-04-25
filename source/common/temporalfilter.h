@@ -159,7 +159,7 @@ namespace X265_NS {
     {
     public:
         TemporalFilter();
-        ~TemporalFilter();
+        ~TemporalFilter() {}
 
         void init(const x265_param* param);
 

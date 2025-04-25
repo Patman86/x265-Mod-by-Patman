@@ -348,7 +348,7 @@ void FrameEncoder::threadMain()
             while (!m_frame[0]->m_ctuInfo)
                 m_frame[0]->m_copied.wait();
         }
-        if ((m_param->bAnalysisType == AVC_INFO) && !strlen(m_param->analysisSave) && !strlen(m_param->analysisLoad) && !(IS_X265_TYPE_I(m_frame[0]->m_lowres.sliceType)))
+        if ((m_param->bAnalysisType == AVC_INFO) && !m_param->analysisSave && !m_param->analysisLoad && !(IS_X265_TYPE_I(m_frame[0]->m_lowres.sliceType)))
         {
             while (((m_frame[0]->m_analysisData.interData == NULL && m_frame[0]->m_analysisData.intraData == NULL) || (uint32_t)m_frame[0]->m_poc != m_frame[0]->m_analysisData.poc))
                 m_frame[0]->m_copyMVType.wait();
@@ -535,7 +535,7 @@ void FrameEncoder::compressFrame(int layer)
         m_cuStats.countWeightAnalyze++;
         ScopedElapsedTime time(m_cuStats.weightAnalyzeTime);
 #endif
-        if (strlen(m_param->analysisLoad))
+        if (m_param->analysisLoad)
         {
             for (int list = 0; list < slice->isInterB() + 1; list++) 
             {
@@ -560,7 +560,7 @@ void FrameEncoder::compressFrame(int layer)
     else
         slice->disableWeights();
 
-    if (strlen(m_param->analysisSave) && (bUseWeightP || bUseWeightB))
+    if (m_param->analysisSave && (bUseWeightP || bUseWeightB))
         reuseWP = (WeightParam*)m_frame[layer]->m_analysisData.wt;
     // Generate motion references
     int numPredDir = slice->isInterP() ? 1 : slice->isInterB() ? 2 : 0;
@@ -574,7 +574,7 @@ void FrameEncoder::compressFrame(int layer)
             slice->m_refReconPicList[l][ref] = slice->m_refFrameList[l][ref]->m_reconPic[0];
             m_mref[l][ref].init(slice->m_refReconPicList[l][ref], w, *m_param);
         }
-        if (strlen(m_param->analysisSave) && (bUseWeightP || bUseWeightB))
+        if (m_param->analysisSave && (bUseWeightP || bUseWeightB))
         {
             for (int i = 0; i < (m_param->internalCsp != X265_CSP_I400 ? 3 : 1); i++)
                 *(reuseWP++) = slice->m_weightPredTable[l][0][i];
@@ -1636,7 +1636,7 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
             /* TODO: use defines from slicetype.h for lowres block size */
             uint32_t block_y = (ctu->m_cuPelY >> m_param->maxLog2CUSize) * noOfBlocks;
             uint32_t block_x = (ctu->m_cuPelX >> m_param->maxLog2CUSize) * noOfBlocks;
-            if (!strlen(m_param->analysisLoad) || !m_param->bDisableLookahead)
+            if (!m_param->analysisLoad || !m_param->bDisableLookahead)
             {
                 cuStat.vbvCost = 0;
                 cuStat.intraVbvCost = 0;

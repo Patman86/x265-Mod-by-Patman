@@ -207,14 +207,14 @@ x265_encoder *x265_encoder_open(x265_param *p)
         }
     }
 
-    x265_copy_params(zoneParam, param);
+    memcpy(zoneParam, param, sizeof(x265_param));
     for (int i = 0; i < param->rc.zonefileCount; i++)
     {
         encoder->configureZone(zoneParam, param->rc.zones[i].zoneParam);
     }
 
     /* Try to open CSV file handle */
-    if (strlen(encoder->m_param->csvfn))
+    if (encoder->m_param->csvfn)
     {
         encoder->m_param->csvfpt = x265_csvlog_open(encoder->m_param);
         if (!encoder->m_param->csvfpt)
@@ -312,7 +312,7 @@ int x265_encoder_reconfig(x265_encoder* enc, x265_param* param_in)
         return -1;
     x265_param save;
     Encoder* encoder = static_cast<Encoder*>(enc);
-    if (strlen(encoder->m_param->csvfn) && param_in->csvfpt != NULL)
+    if (encoder->m_param->csvfn == NULL && param_in->csvfpt != NULL)
          encoder->m_param->csvfpt = param_in->csvfpt;
     if (encoder->m_latestParam->forceFlush != param_in->forceFlush)
         return encoder->reconfigureParam(encoder->m_latestParam, param_in);
@@ -330,20 +330,18 @@ int x265_encoder_reconfig(x265_encoder* enc, x265_param* param_in)
     {
         /* reconfigure failed, recover saved param set */
         x265_copy_params(encoder->m_latestParam, &save);
-        x265_zone_free(&save);
         ret = -1;
     }
     else
     {
         encoder->configure(encoder->m_latestParam);
-        if (strlen(encoder->m_latestParam->scalingLists) && strcmp(encoder->m_latestParam->scalingLists, encoder->m_param->scalingLists))
+        if (encoder->m_latestParam->scalingLists && encoder->m_latestParam->scalingLists != encoder->m_param->scalingLists)
         {
             if (encoder->m_param->bRepeatHeaders)
             {
                 if (encoder->m_scalingList.parseScalingList(encoder->m_latestParam->scalingLists))
                 {
                     x265_copy_params(encoder->m_latestParam, &save);
-                    x265_zone_free(&save);
                     return -1;
                 }
                 encoder->m_scalingList.setupQuantMatrices(encoder->m_param->internalCsp);
@@ -352,7 +350,6 @@ int x265_encoder_reconfig(x265_encoder* enc, x265_param* param_in)
             {
                 x265_log(encoder->m_param, X265_LOG_ERROR, "Repeat headers is turned OFF, cannot reconfigure scalinglists\n");
                 x265_copy_params(encoder->m_latestParam, &save);
-                x265_zone_free(&save);
                 return -1;
             }
         }
@@ -379,7 +376,6 @@ int x265_encoder_reconfig(x265_encoder* enc, x265_param* param_in)
     /* Zones support modifying num of Refs. Requires determining level at each zone start*/
     if (encoder->m_param->rc.zonefileCount)
         determineLevel(*encoder->m_latestParam, encoder->m_vps);
-    x265_zone_free(&save);
     return ret;
 }
 
@@ -1015,7 +1011,7 @@ void x265_picture_init(x265_param *param, x265_picture *pic)
     pic->picStruct = 0;
     pic->vbvEndFlag = 0;
 
-    if ((strlen(param->analysisSave) || strlen(param->analysisLoad)) || (param->bAnalysisType == AVC_INFO))
+    if ((param->analysisSave || param->analysisLoad) || (param->bAnalysisType == AVC_INFO))
     {
         uint32_t widthInCU = (param->sourceWidth + param->maxCUSize - 1) >> param->maxLog2CUSize;
         uint32_t heightInCU = (param->sourceHeight + param->maxCUSize - 1) >> param->maxLog2CUSize;
@@ -1047,8 +1043,6 @@ void x265_zone_free(x265_param *param)
     {
         for (int i = 0; i < param->rc.zonefileCount; i++)
             x265_free(param->rc.zones[i].zoneParam);
-        param->rc.zonefileCount = 0;
-        param->rc.zoneCount = 0;
         x265_free(param->rc.zones);
     }
 }

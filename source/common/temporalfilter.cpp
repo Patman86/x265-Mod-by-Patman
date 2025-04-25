@@ -151,12 +151,6 @@ TemporalFilter::TemporalFilter()
     m_sigmaZeroPoint = 10.0;
 }
 
-TemporalFilter::~TemporalFilter()
-{
-    if (m_metld)
-        delete m_metld;
-}
-
 void TemporalFilter::init(const x265_param* param)
 {
     m_param = param;

@@ -612,6 +612,7 @@ namespace X265_NS {
             showHelp(globalParam);
         }
 
+        globalParam->rc.zones[zonefileCount].zoneParam = api->param_alloc();
         if (!globalParam->rc.zones[zonefileCount].zoneParam)
         {
             x265_log(NULL, X265_LOG_ERROR, "param alloc failed\n");
@@ -1201,8 +1202,7 @@ namespace X265_NS {
         }
 
         rewind(zoneFile);
-        char **args = (char**)alloca(256 * sizeof(char *));
-        param->rc.zones = x265_zone_alloc(param->rc.zonefileCount, 1);;
+        param->rc.zones = X265_MALLOC(x265_zone, param->rc.zonefileCount);
         for (int i = 0; i < param->rc.zonefileCount; i++)
         {
             param->rc.zones[i].startFrame = -1;
@@ -1218,6 +1218,7 @@ namespace X265_NS {
                 start++;
                 param->rc.zones[i].startFrame = atoi(argLine);
                 int argCount = 0;
+                char **args = (char**)malloc(256 * sizeof(char *));
                 // Adding a dummy string to avoid file parsing error
                 args[argCount++] = (char *)"x265";
                 char* token = strtok(start, " ");
@@ -1423,7 +1424,6 @@ namespace X265_NS {
         rewind(multiViewConfig);
         int linenum = 0;
         int numInput = 0;
-        char** args = (char**)malloc(256 * sizeof(char*));
         while (fgets(line, sizeof(line), multiViewConfig))
         {
             if (*line == '#' || (strcmp(line, "\r\n") == 0))
@@ -1435,6 +1435,7 @@ namespace X265_NS {
             char* start = strchr(argLine, '-');
             int argCount = 0;
             char flag[] = "true";
+            char** args = (char**)malloc(256 * sizeof(char*));
             //Adding a dummy string to avoid file parsing error
             args[argCount++] = (char*)"x265";
             char* token = strtok(start, " ");
@@ -1536,7 +1537,6 @@ namespace X265_NS {
             {
                 if (api)
                     api->param_free(param);
-                free(args);
                 exit(1);
             }
             linenum++;
@@ -1546,7 +1546,6 @@ namespace X265_NS {
             x265_log(NULL, X265_LOG_WARNING, "Number of Input files does not match with the given format <%d>\n", param->format);
             if (api)
                 api->param_free(param);
-            free(args);
             exit(1);
         }
         free(args);
