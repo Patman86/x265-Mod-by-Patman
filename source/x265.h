@@ -36,7 +36,7 @@ extern "C" {
 #pragma warning(disable: 4201) // non-standard extension used (nameless struct/union)
 #endif
 
-#define X265_MAX_STRING_SIZE    (256)
+#define X265_MAX_STRING_SIZE    (1024)
 
 /* x265_encoder:
  *      opaque handler for encoder */

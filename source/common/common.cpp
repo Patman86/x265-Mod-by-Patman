@@ -204,7 +204,7 @@ void general_log_file(const x265_param* param, const char* caller, int level, co
 
 FILE* x265_fopen(const char* fileName, const char* mode)
 {
-    wchar_t buf_utf16[MAX_PATH * 2], mode_utf16[16];
+    wchar_t buf_utf16[MAX_PATH * 4], mode_utf16[16];
 
     if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, fileName, -1, buf_utf16, sizeof(buf_utf16)/sizeof(wchar_t)) &&
         MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, mode, -1, mode_utf16, sizeof(mode_utf16)/sizeof(wchar_t)))
@@ -216,7 +216,7 @@ FILE* x265_fopen(const char* fileName, const char* mode)
 
 int x265_unlink(const char* fileName)
 {
-    wchar_t buf_utf16[MAX_PATH * 2];
+    wchar_t buf_utf16[MAX_PATH * 4];
 
     if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, fileName, -1, buf_utf16, sizeof(buf_utf16)/sizeof(wchar_t)))
         return _wunlink(buf_utf16);
@@ -226,7 +226,7 @@ int x265_unlink(const char* fileName)
 
 int x265_rename(const char* oldName, const char* newName)
 {
-    wchar_t old_utf16[MAX_PATH * 2], new_utf16[MAX_PATH * 2];
+    wchar_t old_utf16[MAX_PATH * 4], new_utf16[MAX_PATH * 4];
 
     if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, oldName, -1, old_utf16, sizeof(old_utf16)/sizeof(wchar_t)) &&
         MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, newName, -1, new_utf16, sizeof(new_utf16)/sizeof(wchar_t)))
