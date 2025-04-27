@@ -73,13 +73,13 @@ function PFX(pixel_avg_pp_12x16_neon)
     sub             x3, x3, #4
     sub             x5, x5, #4
 .rept 16
-    ld1             {v0.s}[0], [x2], #4
+    ldr             s0, [x2], #4
     ld1             {v1.8b}, [x2], x3
-    ld1             {v2.s}[0], [x4], #4
+    ldr             s2, [x4], #4
     ld1             {v3.8b}, [x4], x5
     urhadd          v4.8b, v0.8b, v2.8b
     urhadd          v5.8b, v1.8b, v3.8b
-    st1             {v4.s}[0], [x0], #4
+    str             s4, [x0], #4
     st1             {v5.8b}, [x0], x1
 .endr
     ret
