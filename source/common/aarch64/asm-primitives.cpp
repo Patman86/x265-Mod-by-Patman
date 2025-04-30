@@ -652,64 +652,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     p.scale1D_128to64[NONALIGNED] = PFX(scale1D_128to64_neon);
     p.scale1D_128to64[ALIGNED] = PFX(scale1D_128to64_neon);
 
-    // satd
-    ALL_LUMA_PU(satd, pixel_satd, neon);
-
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_4x4].satd   = PFX(pixel_satd_4x4_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x8].satd   = PFX(pixel_satd_8x8_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x16].satd = PFX(pixel_satd_16x16_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x32].satd = PFX(pixel_satd_32x32_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x4].satd   = PFX(pixel_satd_8x4_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_4x8].satd   = PFX(pixel_satd_4x8_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x8].satd  = PFX(pixel_satd_16x8_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x16].satd  = PFX(pixel_satd_8x16_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x16].satd = PFX(pixel_satd_32x16_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x32].satd = PFX(pixel_satd_16x32_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x12].satd = PFX(pixel_satd_16x12_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_12x16].satd = PFX(pixel_satd_12x16_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x4].satd  = PFX(pixel_satd_16x4_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_4x16].satd  = PFX(pixel_satd_4x16_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x24].satd = PFX(pixel_satd_32x24_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_24x32].satd = PFX(pixel_satd_24x32_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x8].satd  = PFX(pixel_satd_32x8_neon);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x32].satd  = PFX(pixel_satd_8x32_neon);
-
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x8].satd   = PFX(pixel_satd_4x8_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x16].satd  = PFX(pixel_satd_8x16_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x32].satd = PFX(pixel_satd_16x32_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x64].satd = PFX(pixel_satd_32x64_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x4].satd   = PFX(pixel_satd_4x4_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x8].satd   = PFX(pixel_satd_8x8_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x16].satd  = PFX(pixel_satd_4x16_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x16].satd = PFX(pixel_satd_16x16_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x32].satd  = PFX(pixel_satd_8x32_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x32].satd = PFX(pixel_satd_32x32_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x64].satd = PFX(pixel_satd_16x64_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x12].satd  = PFX(pixel_satd_8x12_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x4].satd   = PFX(pixel_satd_8x4_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x24].satd = PFX(pixel_satd_16x24_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_12x32].satd = PFX(pixel_satd_12x32_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x8].satd  = PFX(pixel_satd_16x8_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x32].satd  = PFX(pixel_satd_4x32_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x48].satd = PFX(pixel_satd_32x48_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_24x64].satd = PFX(pixel_satd_24x64_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x16].satd = PFX(pixel_satd_32x16_neon);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x64].satd  = PFX(pixel_satd_8x64_neon);
-
-    // sa8d
-    p.cu[BLOCK_4x4].sa8d   = PFX(pixel_satd_4x4_neon);
-    p.cu[BLOCK_8x8].sa8d   = PFX(pixel_sa8d_8x8_neon);
-    p.cu[BLOCK_16x16].sa8d = PFX(pixel_sa8d_16x16_neon);
-    p.cu[BLOCK_32x32].sa8d = PFX(pixel_sa8d_32x32_neon);
-    p.cu[BLOCK_64x64].sa8d = PFX(pixel_sa8d_64x64_neon);
-    p.chroma[X265_CSP_I420].cu[BLOCK_8x8].sa8d = PFX(pixel_satd_4x4_neon);
-    p.chroma[X265_CSP_I420].cu[BLOCK_16x16].sa8d = PFX(pixel_sa8d_16x16_neon);
-    p.chroma[X265_CSP_I420].cu[BLOCK_32x32].sa8d = PFX(pixel_sa8d_32x32_neon);
-    p.chroma[X265_CSP_I420].cu[BLOCK_64x64].sa8d = PFX(pixel_sa8d_64x64_neon);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sa8d = PFX(pixel_sa8d_8x16_neon);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].sa8d = PFX(pixel_sa8d_16x32_neon);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].sa8d = PFX(pixel_sa8d_32x64_neon);
-
     // dequant_scaling
     p.dequant_scaling = PFX(dequant_scaling_neon);
 
@@ -857,24 +799,6 @@ void setupSvePrimitives(EncoderPrimitives &p)
 
 #if !HIGH_BIT_DEPTH
     p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sub_ps  = PFX(pixel_sub_ps_8x16_sve);
-
-    // satd
-    p.pu[LUMA_4x4].satd   = PFX(pixel_satd_4x4_sve);
-    p.pu[LUMA_32x32].satd = PFX(pixel_satd_32x32_sve);
-    p.pu[LUMA_8x4].satd   = PFX(pixel_satd_8x4_sve);
-    p.pu[LUMA_32x16].satd = PFX(pixel_satd_32x16_sve);
-    p.pu[LUMA_64x48].satd = PFX(pixel_satd_64x48_sve);
-
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_4x4].satd   = PFX(pixel_satd_4x4_sve);
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x4].satd   = PFX(pixel_satd_8x4_sve);
-
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x4].satd   = PFX(pixel_satd_4x4_sve);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x12].satd  = PFX(pixel_satd_8x12_sve);
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x4].satd   = PFX(pixel_satd_8x4_sve);
-
-    // sa8d
-    p.cu[BLOCK_4x4].sa8d   = PFX(pixel_satd_4x4_sve);
-    p.chroma[X265_CSP_I420].cu[BLOCK_8x8].sa8d = PFX(pixel_satd_4x4_sve);
 #else // HIGH_BIT_DEPTH
     // sse_pp
     p.cu[BLOCK_4x4].sse_pp   = PFX(pixel_sse_pp_4x4_sve);
