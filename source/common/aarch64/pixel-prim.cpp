@@ -1812,10 +1812,8 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
 #if !(HIGH_BIT_DEPTH)
     p.cu[BLOCK_8x8].var   = pixel_var_neon<8>;
     p.cu[BLOCK_16x16].var = pixel_var_neon<16>;
-#if defined(__APPLE__)
-    p.cu[BLOCK_32x32].var   = pixel_var_neon<32>;
+    p.cu[BLOCK_32x32].var = pixel_var_neon<32>;
     p.cu[BLOCK_64x64].var = pixel_var_neon<64>;
-#endif // defined(__APPLE__)
 #endif // !(HIGH_BIT_DEPTH)
 
     p.cu[BLOCK_16x16].blockfill_s[NONALIGNED] = blockfill_s_neon<16>; 
@@ -1832,11 +1830,8 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_8x8].calcresidual[ALIGNED]       = getResidual_neon<8>;
     p.cu[BLOCK_16x16].calcresidual[NONALIGNED]  = getResidual_neon<16>;
     p.cu[BLOCK_16x16].calcresidual[ALIGNED]     = getResidual_neon<16>;
-
-#if defined(__APPLE__)
     p.cu[BLOCK_32x32].calcresidual[NONALIGNED]  = getResidual_neon<32>;
     p.cu[BLOCK_32x32].calcresidual[ALIGNED]     = getResidual_neon<32>;
-#endif // defined(__APPLE__)
 
     p.cu[BLOCK_4x4].sa8d   = satd4_neon<4, 4>;
     p.cu[BLOCK_8x8].sa8d   = sa8d8_neon<8, 8>;

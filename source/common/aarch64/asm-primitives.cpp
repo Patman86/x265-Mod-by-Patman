@@ -671,9 +671,8 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_32x32].normFact = PFX(normFact32_neon);
     p.cu[BLOCK_64x64].normFact = PFX(normFact64_neon);
 
-#if !defined(__APPLE__)
     p.scanPosLast = PFX(scanPosLast_neon);
-#endif
+
     p.costCoeffNxN = PFX(costCoeffNxN_neon);
 #endif
 
