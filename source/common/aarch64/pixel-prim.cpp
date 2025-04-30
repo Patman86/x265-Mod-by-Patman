@@ -1393,11 +1393,131 @@ void getResidual_neon(const pixel *fenc, const pixel *pred, int16_t *residual, i
     }
 }
 
+#if HIGH_BIT_DEPTH
+static inline int calc_energy_8x8(const uint16_t *source, intptr_t sstride)
+{
+    uint16x8_t s[8];
+    load_u16x8xn<8>(source, sstride, s);
+
+    int16x8_t in[8], temp[8];
+
+    in[0] = vreinterpretq_s16_u16(vaddq_u16(s[0], s[1]));
+    in[1] = vreinterpretq_s16_u16(vaddq_u16(s[2], s[3]));
+    in[2] = vreinterpretq_s16_u16(vaddq_u16(s[4], s[5]));
+    in[3] = vreinterpretq_s16_u16(vaddq_u16(s[6], s[7]));
+    in[4] = vreinterpretq_s16_u16(vsubq_u16(s[0], s[1]));
+    in[5] = vreinterpretq_s16_u16(vsubq_u16(s[2], s[3]));
+    in[6] = vreinterpretq_s16_u16(vsubq_u16(s[4], s[5]));
+    in[7] = vreinterpretq_s16_u16(vsubq_u16(s[6], s[7]));
+
+    hadamard_4_v(in, temp);
+    hadamard_4_v(in + 4, temp + 4);
+
+    // The first line after the vertical hadamard transform contains the sum of coefficients.
+    int sum = vaddlvq_s16(temp[0]) >> 2;
+
+#if X265_DEPTH == 10
+    uint16x8_t sa8_out[4];
+
+    hadamard_8_h(temp, sa8_out);
+
+    uint32x4_t res = vpaddlq_u16(sa8_out[0]);
+    res = vpadalq_u16(res, sa8_out[1]);
+    res = vpadalq_u16(res, sa8_out[2]);
+    res = vpadalq_u16(res, sa8_out[3]);
+#else // X265_DEPTH == 12
+    uint32x4_t sa8_out[4];
+
+    hadamard_8_h(temp, sa8_out);
+
+    sa8_out[0] = vaddq_u32(sa8_out[0], sa8_out[1]);
+    sa8_out[2] = vaddq_u32(sa8_out[2], sa8_out[3]);
+    uint32x4_t res = vaddq_u32(sa8_out[0], sa8_out[2]);
+#endif // X265_DEPTH == 10
+
+    int sa8 = (vaddvq_u32(res) + 1) >> 1;
+
+    return sa8 - sum;
+}
+
+#else // !HIGH_BIT_DEPTH
+static inline int calc_energy_8x8(const uint8_t *source, intptr_t sstride)
+{
+    uint8x8_t s[8];
+    load_u8x8xn<8>(source, sstride, s);
+
+    int16x8_t in[8], temp[8];
+
+    in[0] = vreinterpretq_s16_u16(vaddl_u8(s[0], s[1]));
+    in[1] = vreinterpretq_s16_u16(vaddl_u8(s[2], s[3]));
+    in[2] = vreinterpretq_s16_u16(vaddl_u8(s[4], s[5]));
+    in[3] = vreinterpretq_s16_u16(vaddl_u8(s[6], s[7]));
+    in[4] = vreinterpretq_s16_u16(vsubl_u8(s[0], s[1]));
+    in[5] = vreinterpretq_s16_u16(vsubl_u8(s[2], s[3]));
+    in[6] = vreinterpretq_s16_u16(vsubl_u8(s[4], s[5]));
+    in[7] = vreinterpretq_s16_u16(vsubl_u8(s[6], s[7]));
+
+    hadamard_4_v(in, temp);
+    hadamard_4_v(in + 4, temp + 4);
+
+    // The first line after the vertical hadamard transform contains the sum of coefficients.
+    int sum = vaddvq_s16(temp[0]) >> 2;
+
+    uint16x8_t sa8_out[4];
+    hadamard_8_h(temp, sa8_out);
+
+    uint16x8_t res = vaddq_u16(sa8_out[0], sa8_out[1]);
+    res = vaddq_u16(res, sa8_out[2]);
+    res = vaddq_u16(res, sa8_out[3]);
+
+    int sa8 = (vaddlvq_u16(res) + 1) >> 1;
+
+    return sa8 - sum;
+}
+
+#endif // HIGH_BIT_DEPTH
+
+static inline int calc_energy_4x4(const pixel *source, intptr_t sstride)
+{
+#if HIGH_BIT_DEPTH
+    uint16x4_t s[4];
+    load_u16x4xn<4>(source, sstride, s);
+
+    uint16x8_t s01 = vcombine_u16(s[0], s[1]);
+    uint16x8_t s23 = vcombine_u16(s[2], s[3]);
+
+    int16x8_t s01_23 = vreinterpretq_s16_u16(vaddq_u16(s01, s23));
+    int16x8_t d01_23 = vreinterpretq_s16_u16(vsubq_u16(s01, s23));
+#else
+    uint8x8_t s[2];
+    s[0] = load_u8x4x2(source + 0 * sstride, sstride);
+    s[1] = load_u8x4x2(source + 2 * sstride, sstride);
+
+    int16x8_t s01_23 = vreinterpretq_s16_u16(vaddl_u8(s[0], s[1]));
+    int16x8_t d01_23 = vreinterpretq_s16_u16(vsubl_u8(s[0], s[1]));
+#endif
+
+    // The first line after the vertical hadamard transform contains the sum of coefficients.
+    int sum = vaddvq_u16(vreinterpretq_u16_s16(s01_23)) >> 2;
+
+    int16x8_t t0, t1;
+
+    transpose_s16_s64x2(&t0, &t1, s01_23, d01_23);
+    sumsubq_s16(&s01_23, &d01_23, t0, t1);
+
+    transpose_s16_s16x2(&t0, &t1, s01_23, d01_23);
+    sumsubq_s16(&s01_23, &d01_23, t0, t1);
+
+    transpose_s16_s32x2(&t0, &t1, s01_23, d01_23);
+
+    int sat = vaddvq_u16(max_abs_s16(t0, t1));
+
+    return sat - sum;
+}
+
 template<int size>
 int psyCost_pp_neon(const pixel *source, intptr_t sstride, const pixel *recon, intptr_t rstride)
 {
-    static pixel zeroBuf[8] /* = { 0 } */;
-
     if (size)
     {
         int dim = 1 << (size + 2);
@@ -1406,11 +1526,8 @@ int psyCost_pp_neon(const pixel *source, intptr_t sstride, const pixel *recon, i
         {
             for (int j = 0; j < dim; j += 8)
             {
-                /* AC energy, measured by sa8d (AC + DC) minus SAD (DC) */
-                int sourceEnergy = pixel_sa8d_8x8_neon(source + i * sstride + j, sstride, zeroBuf, 0) -
-                                   (sad_pp_neon<8, 8>(source + i * sstride + j, sstride, zeroBuf, 0) >> 2);
-                int reconEnergy =  pixel_sa8d_8x8_neon(recon + i * rstride + j, rstride, zeroBuf, 0) -
-                                   (sad_pp_neon<8, 8>(recon + i * rstride + j, rstride, zeroBuf, 0) >> 2);
+                int sourceEnergy = calc_energy_8x8(source + i * sstride + j, sstride);
+                int reconEnergy = calc_energy_8x8(recon + i * rstride + j, rstride);
 
                 totEnergy += abs(sourceEnergy - reconEnergy);
             }
@@ -1419,11 +1536,9 @@ int psyCost_pp_neon(const pixel *source, intptr_t sstride, const pixel *recon, i
     }
     else
     {
-        /* 4x4 is too small for sa8d */
-        int sourceEnergy = pixel_satd_4x4_neon(source, sstride, zeroBuf, 0) - (sad_pp_neon<4, 4>(source, sstride, zeroBuf,
-                           0) >> 2);
-        int reconEnergy = pixel_satd_4x4_neon(recon, rstride, zeroBuf, 0) - (sad_pp_neon<4, 4>(recon, rstride, zeroBuf,
-                          0) >> 2);
+        int sourceEnergy = calc_energy_4x4(source, sstride);
+        int reconEnergy = calc_energy_4x4(recon, rstride);
+
         return abs(sourceEnergy - reconEnergy);
     }
 }
