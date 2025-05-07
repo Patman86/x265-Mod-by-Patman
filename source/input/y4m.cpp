@@ -109,7 +109,11 @@ Y4MInput::Y4MInput(InputFileInfo& info, bool alpha, int format)
     info.frameCount = -1;
     size_t estFrameSize = framesize + sizeof(header) + 1; /* assume basic FRAME\n headers */
     /* try to estimate frame count, if this is not stdin */
+#if _WIN32
+    if (ifs != stdin && strncasecmp(info.filename, "\\\\.\\pipe\\", 9))
+#else
     if (ifs != stdin)
+#endif
     {
         int64_t cur = ftello(ifs);
         if (cur >= 0)
@@ -123,7 +127,11 @@ Y4MInput::Y4MInput(InputFileInfo& info, bool alpha, int format)
     }
     if (info.skipFrames)
     {
+#if _WIN32
+        if (ifs != stdin && strncasecmp(info.filename, "\\\\.\\pipe\\", 9))
+#else
         if (ifs != stdin)
+#endif
             fseeko(ifs, (int64_t)estFrameSize * info.skipFrames, SEEK_CUR);
         else
             for (int i = 0; i < info.skipFrames; i++)
