@@ -10,7 +10,7 @@ add_library(dynamicHDR10 OBJECT
     hdr10plus.h
     api.cpp )
 
-cmake_minimum_required (VERSION 2.8.11)
+cmake_minimum_required (VERSION 2.8.11...3.26)
 project(dynamicHDR10)
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
