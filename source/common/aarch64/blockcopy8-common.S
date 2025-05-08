@@ -46,9 +46,3 @@
     sri             v1.8h, v1.8h, #1
     neg             v0.8h, v0.8h
 .endm
-
-const xtn_xtn2_table, align=4
-.byte    0, 2, 4, 6, 8, 10, 12, 14
-.byte    16, 18, 20, 22, 24, 26, 28, 30
-endconst
-

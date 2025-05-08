@@ -404,23 +404,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     ALL_CHROMA_444_PU(p2s[NONALIGNED], filterPixelToShort, neon);
     ALL_LUMA_PU(convert_p2s[NONALIGNED], filterPixelToShort, neon);
 
-    // Blockcopy_sp
-    p.cu[BLOCK_4x4].copy_sp   = PFX(blockcopy_sp_4x4_neon);
-    p.cu[BLOCK_8x8].copy_sp   = PFX(blockcopy_sp_8x8_neon);
-    p.cu[BLOCK_16x16].copy_sp = PFX(blockcopy_sp_16x16_neon);
-    p.cu[BLOCK_32x32].copy_sp = PFX(blockcopy_sp_32x32_neon);
-    p.cu[BLOCK_64x64].copy_sp = PFX(blockcopy_sp_64x64_neon);
-
-    // chroma blockcopy_sp
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_4x4].copy_sp   = PFX(blockcopy_sp_4x4_neon);
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_8x8].copy_sp   = PFX(blockcopy_sp_8x8_neon);
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_16x16].copy_sp = PFX(blockcopy_sp_16x16_neon);
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_32x32].copy_sp = PFX(blockcopy_sp_32x32_neon);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_4x8].copy_sp   = PFX(blockcopy_sp_4x8_neon);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].copy_sp  = PFX(blockcopy_sp_8x16_neon);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].copy_sp = PFX(blockcopy_sp_16x32_neon);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].copy_sp = PFX(blockcopy_sp_32x64_neon);
-
     // Block_fill
     ALL_LUMA_TU(blockfill_s[ALIGNED], blockfill_s, neon);
     ALL_LUMA_TU(blockfill_s[NONALIGNED], blockfill_s, neon);
@@ -638,22 +621,6 @@ void setupSvePrimitives(EncoderPrimitives &p)
     CHROMA_422_PU_SVE_FILTER_PIXEL_TO_SHORT(p2s[NONALIGNED]);
     CHROMA_444_PU_SVE_FILTER_PIXEL_TO_SHORT(p2s[NONALIGNED]);
     LUMA_PU_SVE_FILTER_PIXEL_TO_SHORT(convert_p2s[NONALIGNED]);
-
-    // Blockcopy_sp
-    p.cu[BLOCK_4x4].copy_sp   = PFX(blockcopy_sp_4x4_sve);
-    p.cu[BLOCK_8x8].copy_sp   = PFX(blockcopy_sp_8x8_sve);
-    p.cu[BLOCK_16x16].copy_sp = PFX(blockcopy_sp_16x16_sve);
-    p.cu[BLOCK_32x32].copy_sp = PFX(blockcopy_sp_32x32_sve);
-
-    // chroma blockcopy_sp
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_4x4].copy_sp   = PFX(blockcopy_sp_4x4_sve);
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_8x8].copy_sp   = PFX(blockcopy_sp_8x8_sve);
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_16x16].copy_sp = PFX(blockcopy_sp_16x16_sve);
-    p.chroma[X265_CSP_I420].cu[BLOCK_420_32x32].copy_sp = PFX(blockcopy_sp_32x32_sve);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_4x8].copy_sp   = PFX(blockcopy_sp_4x8_sve);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].copy_sp  = PFX(blockcopy_sp_8x16_sve);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].copy_sp = PFX(blockcopy_sp_16x32_sve);
-    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].copy_sp = PFX(blockcopy_sp_32x64_sve);
 
     // Block_fill
     LUMA_TU_CAN_USE_SVE(blockfill_s[ALIGNED], blockfill_s);
