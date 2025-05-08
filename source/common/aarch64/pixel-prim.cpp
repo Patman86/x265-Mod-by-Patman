@@ -916,31 +916,42 @@ int sad_pp_neon(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intp
 }
 
 
-template<int bx, int by>
-void blockcopy_ps_neon(int16_t *a, intptr_t stridea, const pixel *b, intptr_t strideb)
+#if !HIGH_BIT_DEPTH
+template<int width, int height>
+void blockcopy_ps_neon(int16_t *dst, intptr_t dst_stride, const pixel *src,
+                       intptr_t src_stride)
 {
-    for (int y = 0; y < by; y++)
+    for (int h = 0; h < height; h++)
     {
-        int x = 0;
-        for (; (x + 8) <= bx; x += 8)
+        int w = 0;
+        for (; w + 16 <= width; w += 16)
         {
-#if HIGH_BIT_DEPTH
-            vst1q_s16(a + x, vreinterpretq_s16_u16(vld1q_u16(b + x)));
-#else
-            int16x8_t in = vreinterpretq_s16_u16(vmovl_u8(vld1_u8(b + x)));
-            vst1q_s16(a + x, in);
-#endif
+            uint8x16_t s = vld1q_u8(src + w);
+            uint8x16x2_t t = vzipq_u8(s, vdupq_n_u8(0));
+            int16x8x2_t s_s16;
+            s_s16.val[0] = vreinterpretq_s16_u8(t.val[0]);
+            s_s16.val[1] = vreinterpretq_s16_u8(t.val[1]);
+            vst1q_s16_x2(dst + w, s_s16);
         }
-        for (; x < bx; x++)
+        if (width & 8)
         {
-            a[x] = (int16_t)b[x];
+            uint8x8_t s = vld1_u8(src + w);
+            uint16x8_t s_u16 = vmovl_u8(s);
+            vst1q_s16(dst + w, vreinterpretq_s16_u16(s_u16));
+            w += 8;
+        }
+        if (width & 4)
+        {
+            uint8x8_t s = load_u8x4x1(src + w);
+            uint16x4_t s_u16 = vget_low_u16(vmovl_u8(s));
+            vst1_s16(dst + w, vreinterpret_s16_u16(s_u16));
         }
 
-        a += stridea;
-        b += strideb;
+        dst += dst_stride;
+        src += src_stride;
     }
 }
-
+#endif // !HIGH_BIT_DEPTH
 
 template<int width, int height>
 void blockcopy_pp_neon(pixel *dst, intptr_t dst_stride, const pixel *src,
@@ -1758,6 +1769,18 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[ALIGNED] = pixelavg_pp_neon<W, H>;
 #endif // !(HIGH_BIT_DEPTH)
 
+#if HIGH_BIT_DEPTH
+#define LUMA_CU(W, H) \
+    p.cu[BLOCK_ ## W ## x ## H].sub_ps        = pixel_sub_ps_neon<W, H>; \
+    p.cu[BLOCK_ ## W ## x ## H].add_ps[NONALIGNED]    = pixel_add_ps_neon<W, H>; \
+    p.cu[BLOCK_ ## W ## x ## H].add_ps[ALIGNED] = pixel_add_ps_neon<W, H>; \
+    p.cu[BLOCK_ ## W ## x ## H].copy_pp       = blockcopy_pp_neon<W, H>; \
+    p.cu[BLOCK_ ## W ## x ## H].cpy2Dto1D_shl = cpy2Dto1D_shl_neon<W>; \
+    p.cu[BLOCK_ ## W ## x ## H].cpy1Dto2D_shl[NONALIGNED] = cpy1Dto2D_shl_neon<W>; \
+    p.cu[BLOCK_ ## W ## x ## H].cpy1Dto2D_shl[ALIGNED] = cpy1Dto2D_shl_neon<W>; \
+    p.cu[BLOCK_ ## W ## x ## H].psy_cost_pp   = psyCost_pp_neon<BLOCK_ ## W ## x ## H>; \
+    p.cu[BLOCK_ ## W ## x ## H].transpose     = transpose_neon<W>;
+#else  // !HIGH_BIT_DEPTH
 #define LUMA_CU(W, H) \
     p.cu[BLOCK_ ## W ## x ## H].sub_ps        = pixel_sub_ps_neon<W, H>; \
     p.cu[BLOCK_ ## W ## x ## H].add_ps[NONALIGNED]    = pixel_add_ps_neon<W, H>; \
@@ -1770,7 +1793,7 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_ ## W ## x ## H].cpy1Dto2D_shl[ALIGNED] = cpy1Dto2D_shl_neon<W>; \
     p.cu[BLOCK_ ## W ## x ## H].psy_cost_pp   = psyCost_pp_neon<BLOCK_ ## W ## x ## H>; \
     p.cu[BLOCK_ ## W ## x ## H].transpose     = transpose_neon<W>;
-
+#endif // HIGH_BIT_DEPTH
 
     LUMA_PU_S(4, 4);
     LUMA_PU_S(8, 8);
@@ -1920,7 +1943,19 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.chroma[X265_CSP_I420].pu[CHROMA_420_32x24].satd = satd8_neon<32, 24>;
     p.chroma[X265_CSP_I420].pu[CHROMA_420_32x32].satd = satd8_neon<32, 32>;
 
+#if HIGH_BIT_DEPTH
+#define CHROMA_CU_420(W, H) \
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].copy_pp = blockcopy_pp_neon<W, H>; \
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].sub_ps = pixel_sub_ps_neon<W, H>;  \
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].add_ps[NONALIGNED] = pixel_add_ps_neon<W, H>; \
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].add_ps[ALIGNED] = pixel_add_ps_neon<W, H>;
 
+#define CHROMA_CU_S_420(W, H) \
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].copy_pp = blockcopy_pp_neon<W, H>; \
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].sub_ps = pixel_sub_ps_neon<W, H>;  \
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].add_ps[NONALIGNED] = pixel_add_ps_neon<W, H>; \
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].add_ps[ALIGNED] = pixel_add_ps_neon<W, H>;
+#else // !HIGH_BIT_DEPTH
 #define CHROMA_CU_420(W, H) \
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].copy_pp = blockcopy_pp_neon<W, H>; \
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].copy_ps = blockcopy_ps_neon<W, H>; \
@@ -1934,7 +1969,7 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].sub_ps = pixel_sub_ps_neon<W, H>;  \
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].add_ps[NONALIGNED] = pixel_add_ps_neon<W, H>; \
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].add_ps[ALIGNED] = pixel_add_ps_neon<W, H>;
-
+#endif // HIGH_BIT_DEPTH
 
     CHROMA_CU_S_420(4, 4)
     CHROMA_CU_420(8, 8)
@@ -2008,6 +2043,19 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.chroma[X265_CSP_I422].pu[CHROMA_422_12x32].satd = satd4_neon<12, 32>;
 
 
+#if HIGH_BIT_DEPTH
+#define CHROMA_CU_422(W, H) \
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].copy_pp = blockcopy_pp_neon<W, H>; \
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].sub_ps = pixel_sub_ps_neon<W, H>; \
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].add_ps[NONALIGNED] = pixel_add_ps_neon<W, H>; \
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].add_ps[ALIGNED] = pixel_add_ps_neon<W, H>;
+
+#define CHROMA_CU_S_422(W, H) \
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].copy_pp = blockcopy_pp_neon<W, H>; \
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].sub_ps = pixel_sub_ps_neon<W, H>; \
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].add_ps[NONALIGNED] = pixel_add_ps_neon<W, H>; \
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].add_ps[ALIGNED] = pixel_add_ps_neon<W, H>;
+#else // !HIGH_BIT_DEPTH
 #define CHROMA_CU_422(W, H) \
     p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].copy_pp = blockcopy_pp_neon<W, H>; \
     p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].copy_ps = blockcopy_ps_neon<W, H>; \
@@ -2021,6 +2069,7 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].sub_ps = pixel_sub_ps_neon<W, H>; \
     p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].add_ps[NONALIGNED] = pixel_add_ps_neon<W, H>; \
     p.chroma[X265_CSP_I422].cu[BLOCK_422_ ## W ## x ## H].add_ps[ALIGNED] = pixel_add_ps_neon<W, H>;
+#endif // HIGH_BIT_DEPTH
 
 
     CHROMA_CU_S_422(4, 8)
