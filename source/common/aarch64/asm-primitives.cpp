@@ -433,19 +433,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_16x16].cpy2Dto1D_shr = PFX(cpy2Dto1D_shr_16x16_neon);
     p.cu[BLOCK_32x32].cpy2Dto1D_shr = PFX(cpy2Dto1D_shr_32x32_neon);
 
-    // cpy1Dto2D_shl
-    p.cu[BLOCK_4x4].cpy1Dto2D_shl[ALIGNED]      = PFX(cpy1Dto2D_shl_4x4_neon);
-    p.cu[BLOCK_8x8].cpy1Dto2D_shl[ALIGNED]      = PFX(cpy1Dto2D_shl_8x8_neon);
-    p.cu[BLOCK_16x16].cpy1Dto2D_shl[ALIGNED]    = PFX(cpy1Dto2D_shl_16x16_neon);
-    p.cu[BLOCK_32x32].cpy1Dto2D_shl[ALIGNED]    = PFX(cpy1Dto2D_shl_32x32_neon);
-    p.cu[BLOCK_64x64].cpy1Dto2D_shl[ALIGNED]    = PFX(cpy1Dto2D_shl_64x64_neon);
-
-    p.cu[BLOCK_4x4].cpy1Dto2D_shl[NONALIGNED]   = PFX(cpy1Dto2D_shl_4x4_neon);
-    p.cu[BLOCK_8x8].cpy1Dto2D_shl[NONALIGNED]   = PFX(cpy1Dto2D_shl_8x8_neon);
-    p.cu[BLOCK_16x16].cpy1Dto2D_shl[NONALIGNED] = PFX(cpy1Dto2D_shl_16x16_neon);
-    p.cu[BLOCK_32x32].cpy1Dto2D_shl[NONALIGNED] = PFX(cpy1Dto2D_shl_32x32_neon);
-    p.cu[BLOCK_64x64].cpy1Dto2D_shl[NONALIGNED] = PFX(cpy1Dto2D_shl_64x64_neon);
-
     // cpy1Dto2D_shr
     p.cu[BLOCK_4x4].cpy1Dto2D_shr   = PFX(cpy1Dto2D_shr_4x4_neon);
     p.cu[BLOCK_8x8].cpy1Dto2D_shr   = PFX(cpy1Dto2D_shr_8x8_neon);
@@ -634,15 +621,6 @@ void setupSvePrimitives(EncoderPrimitives &p)
     // cpy2Dto1D_shr
     p.cu[BLOCK_16x16].cpy2Dto1D_shr = PFX(cpy2Dto1D_shr_16x16_sve);
     p.cu[BLOCK_32x32].cpy2Dto1D_shr = PFX(cpy2Dto1D_shr_32x32_sve);
-
-    // cpy1Dto2D_shl
-    p.cu[BLOCK_16x16].cpy1Dto2D_shl[ALIGNED]    = PFX(cpy1Dto2D_shl_16x16_sve);
-    p.cu[BLOCK_32x32].cpy1Dto2D_shl[ALIGNED]    = PFX(cpy1Dto2D_shl_32x32_sve);
-    p.cu[BLOCK_64x64].cpy1Dto2D_shl[ALIGNED]    = PFX(cpy1Dto2D_shl_64x64_sve);
-
-    p.cu[BLOCK_16x16].cpy1Dto2D_shl[NONALIGNED] = PFX(cpy1Dto2D_shl_16x16_sve);
-    p.cu[BLOCK_32x32].cpy1Dto2D_shl[NONALIGNED] = PFX(cpy1Dto2D_shl_32x32_sve);
-    p.cu[BLOCK_64x64].cpy1Dto2D_shl[NONALIGNED] = PFX(cpy1Dto2D_shl_64x64_sve);
 
     // cpy1Dto2D_shr
     p.cu[BLOCK_16x16].cpy1Dto2D_shr = PFX(cpy1Dto2D_shr_16x16_sve);
