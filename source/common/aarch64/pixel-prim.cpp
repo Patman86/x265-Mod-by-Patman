@@ -1689,11 +1689,29 @@ void cpy2Dto1D_shl_neon(int16_t *dst, const int16_t *src, intptr_t srcStride, in
     X265_CHECK((((intptr_t)src | (srcStride * sizeof(*src))) & 15) == 0 || size == 4, "src alignment error\n");
     X265_CHECK(shift >= 0, "invalid shift\n");
 
-    for (int i = 0; i < size; i++)
+    for (int h = 0; h < size; h++)
     {
-        for (int j = 0; j < size; j++)
+        int w = 0;
+        for (; w + 16 <= size; w += 16)
         {
-            dst[j] = src[j] << shift;
+            int16x8_t a0_lo = vld1q_s16(src + w);
+            int16x8_t a0_hi = vld1q_s16(src + w + 8);
+            int16x8_t d0_lo = vshlq_s16(a0_lo, vdupq_n_s16(shift));
+            int16x8_t d0_hi = vshlq_s16(a0_hi, vdupq_n_s16(shift));
+            vst1q_s16(dst + w, d0_lo);
+            vst1q_s16(dst + w + 8, d0_hi);
+        }
+        if (size == 8)
+        {
+            int16x8_t a0 = vld1q_s16(src + w);
+            int16x8_t d0 = vshlq_s16(a0, vdupq_n_s16(shift));
+            vst1q_s16(dst + w, d0);
+        }
+        if (size == 4)
+        {
+            int16x4_t a0 = vld1_s16(src + w);
+            int16x4_t d0 = vshl_s16(a0, vdup_n_s16(shift));
+            vst1_s16(dst + w, d0);
         }
 
         src += srcStride;
