@@ -426,10 +426,7 @@ void Lowres::init(PicYuv *origPic, int poc)
     if (!!origPic->m_param->rc.aqMode || !!origPic->m_param->rc.hevcAq || !!origPic->m_param->bAQMotion || !!origPic->m_param->bEnableWeightedPred || !!origPic->m_param->bEnableWeightedBiPred)
         {
         memset(qpAqOffset, 0, sizeof(double) * cuCountFullRes);
-        memset(invQscaleFactor, 0, sizeof(int) * cuCountFullRes);
         memset(qpCuTreeOffset, 0,sizeof(double) * cuCountFullRes);
-        if (origPic->m_param->rc.qgSize == 8)
-             memset(invQscaleFactor8x8, 0, sizeof(int) * cuCount);
         memset(edgeInclined, 0, sizeof(int) * cuCountFullRes);
         }
      if (origPic->m_param->bAQMotion)

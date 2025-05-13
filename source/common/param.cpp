@@ -3066,11 +3066,9 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     memcpy(dst->svtHevcParam, src->svtHevcParam, sizeof(EB_H265_ENC_CONFIGURATION));
 #endif
     /* Film grain */
-    if (src->filmGrain)
-        dst->filmGrain = src->filmGrain;
+    dst->filmGrain = src->filmGrain;
     /* Aom Film grain*/
-    if (src->aomFilmGrain)
-        dst->aomFilmGrain = src->aomFilmGrain;
+    dst->aomFilmGrain = src->aomFilmGrain;
     dst->bEnableSBRC = src->bEnableSBRC;
     dst->bConfigRCFrame = src->bConfigRCFrame;
     dst->isAbrLadderEnable = src->isAbrLadderEnable;

@@ -1317,7 +1317,7 @@ function PFX(cpy1Dto2D_shr_64x64_sve)
     ptrue           p0.h, vl8
     mov             z2.h, #1
     lsl             z2.h, p0/m, z2.h, z1.h
-.rept 128
+.rept 64
     ld1d            {z5.d}, p0/z, [x1]
     ld1d            {z6.d}, p0/z, [x1, #1, mul vl]
     ld1d            {z7.d}, p0/z, [x1, #2, mul vl]
@@ -1360,7 +1360,7 @@ function PFX(cpy1Dto2D_shr_64x64_sve)
     ptrue           p0.h, vl16
     mov             z2.h, #1
     lsl             z2.h, p0/m, z2.h, z1.h
-.rept 128
+.rept 64
     ld1d            {z5.d}, p0/z, [x1]
     ld1d            {z6.d}, p0/z, [x1, #1, mul vl]
     ld1d            {z7.d}, p0/z, [x1, #2, mul vl]
@@ -1387,7 +1387,7 @@ function PFX(cpy1Dto2D_shr_64x64_sve)
     ptrue           p0.h, vl32
     mov             z2.h, #1
     lsl             z2.h, p0/m, z2.h, z1.h
-.rept 128
+.rept 64
     ld1d            {z5.d}, p0/z, [x1]
     ld1d            {z6.d}, p0/z, [x1, #1, mul vl]
     add             x1, x1, #128
@@ -1404,7 +1404,7 @@ function PFX(cpy1Dto2D_shr_64x64_sve)
     ptrue           p0.h, vl64
     mov             z2.h, #1
     lsl             z2.h, p0/m, z2.h, z1.h
-.rept 128
+.rept 64
     ld1d            {z5.d}, p0/z, [x1]
     add             x1, x1, #128
     add             z5.h, p0/m, z5.h, z2.h

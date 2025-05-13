@@ -3,6 +3,7 @@
  *
  * Authors: Hari Limaye <hari.limaye@arm.com>
  *          Jonathan Wright <jonathan.wright@arm.com>
+ *          Gerda Zsejke More <gerdazsejke.more@arm.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -50,6 +51,17 @@ static inline int64x2_t x265_sdotq_s16(int64x2_t acc, int16x8_t x, int16x8_t y)
     return svget_neonq_s64(svdot_s64(svset_neonq_s64(svundef_s64(), acc),
                                      svset_neonq_s16(svundef_s16(), x),
                                      svset_neonq_s16(svundef_s16(), y)));
+}
+
+#define x265_sdotq_lane_s16(sum, s0, f, lane)                               \
+        svget_neonq_s64(svdot_lane_s64(svset_neonq_s64(svundef_s64(), sum), \
+                                       svset_neonq_s16(svundef_s16(), s0),  \
+                                       svset_neonq_s16(svundef_s16(), f), lane))
+
+static inline uint16x8_t x265_tblq_u16(uint16x8_t x, uint16x8_t idx)
+{
+    return svget_neonq_u16(svtbl_u16(svset_neonq_u16(svundef_u16(), x),
+                                     svset_neonq_u16(svundef_u16(), idx)));
 }
 
 static inline int8x16_t x265_sve_mask(const int x, const int endX,

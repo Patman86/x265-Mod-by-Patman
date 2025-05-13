@@ -19,799 +19,805 @@ namespace
 {
 
 
-/* SATD SA8D variants - based on x264 */
-static inline void SUMSUB_AB(int16x8_t &sum, int16x8_t &sub, const int16x8_t a, const int16x8_t b)
+static inline void sumsubq_s16(int16x8_t *sum, int16x8_t *sub, const int16x8_t a, const int16x8_t b)
 {
-    sum = vaddq_s16(a, b);
-    sub = vsubq_s16(a, b);
+    *sum = vaddq_s16(a, b);
+    *sub = vsubq_s16(a, b);
 }
 
-static inline void transpose_8h_8h(int16x8_t &t1, int16x8_t &t2,
-                                   const int16x8_t s1, const int16x8_t s2)
+static inline void transpose_s16_s16x2(int16x8_t *t1, int16x8_t *t2,
+                                       const int16x8_t s1, const int16x8_t s2)
 {
-    t1 = vtrn1q_s16(s1, s2);
-    t2 = vtrn2q_s16(s1, s2);
+    *t1 = vtrn1q_s16(s1, s2);
+    *t2 = vtrn2q_s16(s1, s2);
 }
 
-static inline void transpose_4s_8h(int16x8_t &t1, int16x8_t &t2,
-                                   const int16x8_t s1, const int16x8_t s2)
+static inline void transpose_s16_s32x2(int16x8_t *t1, int16x8_t *t2,
+                                       const int16x8_t s1, const int16x8_t s2)
 {
     int32x4_t tmp1 = vreinterpretq_s32_s16(s1);
     int32x4_t tmp2 = vreinterpretq_s32_s16(s2);
 
-    t1 = vreinterpretq_s16_s32(vtrn1q_s32(tmp1, tmp2));
-    t2 = vreinterpretq_s16_s32(vtrn2q_s32(tmp1, tmp2));
+    *t1 = vreinterpretq_s16_s32(vtrn1q_s32(tmp1, tmp2));
+    *t2 = vreinterpretq_s16_s32(vtrn2q_s32(tmp1, tmp2));
 }
 
-static inline void transpose_2d_8h(int16x8_t &t1, int16x8_t &t2,
-                                   const int16x8_t s1, const int16x8_t s2)
+static inline void transpose_s16_s64x2(int16x8_t *t1, int16x8_t *t2,
+                                       const int16x8_t s1, const int16x8_t s2)
 {
     int64x2_t tmp1 = vreinterpretq_s64_s16(s1);
     int64x2_t tmp2 = vreinterpretq_s64_s16(s2);
 
-    t1 = vreinterpretq_s16_s64(vtrn1q_s64(tmp1, tmp2));
-    t2 = vreinterpretq_s16_s64(vtrn2q_s64(tmp1, tmp2));
+    *t1 = vreinterpretq_s16_s64(vtrn1q_s64(tmp1, tmp2));
+    *t2 = vreinterpretq_s16_s64(vtrn2q_s64(tmp1, tmp2));
 }
 
-static inline void SUMSUB_ABCD(int16x8_t &s1, int16x8_t &d1, int16x8_t &s2, int16x8_t &d2,
-                               int16x8_t a, int16x8_t  b, int16x8_t  c, int16x8_t  d)
+static inline uint16x8_t max_abs_s16(const int16x8_t a, const int16x8_t b)
 {
-    SUMSUB_AB(s1, d1, a, b);
-    SUMSUB_AB(s2, d2, c, d);
+    uint16x8_t abs0 = vreinterpretq_u16_s16(vabsq_s16(a));
+    uint16x8_t abs1 = vreinterpretq_u16_s16(vabsq_s16(b));
+
+    return vmaxq_u16(abs0, abs1);
 }
 
-static inline void HADAMARD4_V(int16x8_t &r1, int16x8_t &r2, int16x8_t &r3, int16x8_t &r4,
-                               int16x8_t &t1, int16x8_t &t2, int16x8_t &t3, int16x8_t &t4)
+#if X265_DEPTH == 12
+static inline void sumsubq_s32(int32x4_t *sum, int32x4_t *sub, const int32x4_t a, const int32x4_t b)
 {
-    SUMSUB_ABCD(t1, t2, t3, t4, r1, r2, r3, r4);
-    SUMSUB_ABCD(r1, r3, r2, r4, t1, t3, t2, t4);
+    *sum = vaddq_s32(a, b);
+    *sub = vsubq_s32(a, b);
 }
 
-
-static int _satd_4x8_8x4_end_neon(int16x8_t v0, int16x8_t v1, int16x8_t v2, int16x8_t v3)
-
+static inline void sumsublq_s16(int32x4_t *sum_lo, int32x4_t *sum_hi,
+                                int32x4_t *sub_lo, int32x4_t *sub_hi,
+                                const int16x8_t a, const int16x8_t b)
 {
-
-    int16x8_t v4, v5, v6, v7, v16, v17, v18, v19;
-
-
-    SUMSUB_AB(v16, v17, v0,  v1);
-    SUMSUB_AB(v18, v19, v2,  v3);
-
-    SUMSUB_AB(v4 , v6 , v16, v18);
-    SUMSUB_AB(v5 , v7 , v17, v19);
-
-    transpose_8h_8h(v0, v1, v4, v5);
-    transpose_8h_8h(v2, v3, v6, v7);
-
-    SUMSUB_AB(v16, v17, v0,  v1);
-    SUMSUB_AB(v18, v19, v2,  v3);
-
-    transpose_4s_8h(v0, v1, v16, v18);
-    transpose_4s_8h(v2, v3, v17, v19);
-
-    uint16x8_t abs0 = vreinterpretq_u16_s16(vabsq_s16(v0));
-    uint16x8_t abs1 = vreinterpretq_u16_s16(vabsq_s16(v1));
-    uint16x8_t abs2 = vreinterpretq_u16_s16(vabsq_s16(v2));
-    uint16x8_t abs3 = vreinterpretq_u16_s16(vabsq_s16(v3));
-
-    uint16x8_t max0 = vmaxq_u16(abs0, abs1);
-    uint16x8_t max1 = vmaxq_u16(abs2, abs3);
-
-    uint16x8_t sum = vaddq_u16(max0, max1);
-    return vaddlvq_u16(sum);
+    *sum_lo = vaddl_s16(vget_low_s16(a), vget_low_s16(b));
+    *sub_lo = vsubl_s16(vget_low_s16(a), vget_low_s16(b));
+    *sum_hi = vaddl_s16(vget_high_s16(a), vget_high_s16(b));
+    *sub_hi = vsubl_s16(vget_high_s16(a), vget_high_s16(b));
 }
 
-static inline int _satd_4x4_neon(int16x8_t v0, int16x8_t v1)
+static inline void transpose_inplace_s32_s64x2(int32x4_t *t1, int32x4_t *t2)
 {
-    int16x8_t v2, v3;
-    SUMSUB_AB(v2,  v3,  v0,  v1);
+    int64x2_t tmp1 = vreinterpretq_s64_s32(*t1);
+    int64x2_t tmp2 = vreinterpretq_s64_s32(*t2);
 
-    transpose_2d_8h(v0, v1, v2, v3);
-    SUMSUB_AB(v2,  v3,  v0,  v1);
+    *t1 = vreinterpretq_s32_s64(vtrn1q_s64(tmp1, tmp2));
+    *t2 = vreinterpretq_s32_s64(vtrn2q_s64(tmp1, tmp2));
+}
 
-    transpose_8h_8h(v0, v1, v2, v3);
-    SUMSUB_AB(v2,  v3,  v0,  v1);
+static inline uint32x4_t max_abs_s32(int32x4_t a, int32x4_t b)
+{
+    uint32x4_t abs0 = vreinterpretq_u32_s32(vabsq_s32(a));
+    uint32x4_t abs1 = vreinterpretq_u32_s32(vabsq_s32(b));
 
-    transpose_4s_8h(v0, v1, v2, v3);
+    return vmaxq_u32(abs0, abs1);
+}
 
-    uint16x8_t abs0 = vreinterpretq_u16_s16(vabsq_s16(v0));
-    uint16x8_t abs1 = vreinterpretq_u16_s16(vabsq_s16(v1));
-    uint16x8_t max = vmaxq_u16(abs0, abs1);
+#endif // X265_DEPTH == 12
+
+#if HIGH_BIT_DEPTH
+static inline void load_diff_u16x8x4(const uint16_t *pix1, intptr_t stride_pix1,
+                                     const uint16_t *pix2, intptr_t stride_pix2, int16x8_t diff[4])
+{
+    uint16x8_t r[4], t[4];
+    load_u16x8xn<4>(pix1, stride_pix1, r);
+    load_u16x8xn<4>(pix2, stride_pix2, t);
+
+    diff[0] = vreinterpretq_s16_u16(vsubq_u16(r[0], t[0]));
+    diff[1] = vreinterpretq_s16_u16(vsubq_u16(r[1], t[1]));
+    diff[2] = vreinterpretq_s16_u16(vsubq_u16(r[2], t[2]));
+    diff[3] = vreinterpretq_s16_u16(vsubq_u16(r[3], t[3]));
+}
+
+static inline void load_diff_u16x8x4_dual(const uint16_t *pix1, intptr_t stride_pix1,
+                                          const uint16_t *pix2, intptr_t stride_pix2, int16x8_t diff[8])
+{
+    load_diff_u16x8x4(pix1, stride_pix1, pix2, stride_pix2, diff);
+    load_diff_u16x8x4(pix1 + 4 * stride_pix1, stride_pix1,
+                      pix2 + 4 * stride_pix2, stride_pix2, diff + 4);
+}
+
+static inline void load_diff_u16x8x8(const uint16_t *pix1, intptr_t stride_pix1,
+                                     const uint16_t *pix2, intptr_t stride_pix2, int16x8_t diff[8])
+{
+    uint16x8_t r[8], t[8];
+    load_u16x8xn<8>(pix1, stride_pix1, r);
+    load_u16x8xn<8>(pix2, stride_pix2, t);
+
+    diff[0] = vreinterpretq_s16_u16(vsubq_u16(r[0], t[0]));
+    diff[1] = vreinterpretq_s16_u16(vsubq_u16(r[1], t[1]));
+    diff[2] = vreinterpretq_s16_u16(vsubq_u16(r[2], t[2]));
+    diff[3] = vreinterpretq_s16_u16(vsubq_u16(r[3], t[3]));
+    diff[4] = vreinterpretq_s16_u16(vsubq_u16(r[4], t[4]));
+    diff[5] = vreinterpretq_s16_u16(vsubq_u16(r[5], t[5]));
+    diff[6] = vreinterpretq_s16_u16(vsubq_u16(r[6], t[6]));
+    diff[7] = vreinterpretq_s16_u16(vsubq_u16(r[7], t[7]));
+}
+
+#else // !HIGH_BIT_DEPTH
+static inline void load_diff_u8x8x4(const uint8_t *pix1, intptr_t stride_pix1,
+                                    const uint8_t *pix2, intptr_t stride_pix2, int16x8_t diff[4])
+{
+    uint8x8_t r[4], t[4];
+    load_u8x8xn<4>(pix1, stride_pix1, r);
+    load_u8x8xn<4>(pix2, stride_pix2, t);
+
+    diff[0] = vreinterpretq_s16_u16(vsubl_u8(r[0], t[0]));
+    diff[1] = vreinterpretq_s16_u16(vsubl_u8(r[1], t[1]));
+    diff[2] = vreinterpretq_s16_u16(vsubl_u8(r[2], t[2]));
+    diff[3] = vreinterpretq_s16_u16(vsubl_u8(r[3], t[3]));
+}
+
+static inline void load_diff_u8x8x8(const uint8_t *pix1, intptr_t stride_pix1,
+                                    const uint8_t *pix2, intptr_t stride_pix2, int16x8_t diff[8])
+{
+    load_diff_u8x8x4(pix1, stride_pix1, pix2, stride_pix2, diff);
+    load_diff_u8x8x4(pix1 + 4 * stride_pix1, stride_pix1,
+                     pix2 + 4 * stride_pix2, stride_pix2, diff + 4);
+}
+
+static inline void load_diff_u8x16x4(const uint8_t *pix1, intptr_t stride_pix1,
+                                     const uint8_t *pix2, intptr_t stride_pix2, int16x8_t diff[8])
+{
+    uint8x16_t s1[4], s2[4];
+    load_u8x16xn<4>(pix1, stride_pix1, s1);
+    load_u8x16xn<4>(pix2, stride_pix2, s2);
+
+    diff[0] = vreinterpretq_s16_u16(vsubl_u8(vget_low_u8(s1[0]), vget_low_u8(s2[0])));
+    diff[1] = vreinterpretq_s16_u16(vsubl_u8(vget_low_u8(s1[1]), vget_low_u8(s2[1])));
+    diff[2] = vreinterpretq_s16_u16(vsubl_u8(vget_low_u8(s1[2]), vget_low_u8(s2[2])));
+    diff[3] = vreinterpretq_s16_u16(vsubl_u8(vget_low_u8(s1[3]), vget_low_u8(s2[3])));
+    diff[4] = vreinterpretq_s16_u16(vsubl_u8(vget_high_u8(s1[0]), vget_high_u8(s2[0])));
+    diff[5] = vreinterpretq_s16_u16(vsubl_u8(vget_high_u8(s1[1]), vget_high_u8(s2[1])));
+    diff[6] = vreinterpretq_s16_u16(vsubl_u8(vget_high_u8(s1[2]), vget_high_u8(s2[2])));
+    diff[7] = vreinterpretq_s16_u16(vsubl_u8(vget_high_u8(s1[3]), vget_high_u8(s2[3])));
+}
+
+#endif // HIGH_BIT_DEPTH
+
+// 4 way hadamard vertical pass.
+static inline void hadamard_4_v(const int16x8_t in_coefs[4], int16x8_t out_coefs[4])
+{
+    int16x8_t s0, s1, d0, d1;
+
+    sumsubq_s16(&s0, &d0, in_coefs[0], in_coefs[1]);
+    sumsubq_s16(&s1, &d1, in_coefs[2], in_coefs[3]);
+
+    sumsubq_s16(&out_coefs[0], &out_coefs[2], s0, s1);
+    sumsubq_s16(&out_coefs[1], &out_coefs[3], d0, d1);
+}
+
+// 8 way hadamard vertical pass.
+static inline void hadamard_8_v(const int16x8_t in_coefs[8], int16x8_t out_coefs[8])
+{
+    int16x8_t temp[8];
+
+    hadamard_4_v(in_coefs, temp);
+    hadamard_4_v(in_coefs + 4, temp + 4);
+
+    sumsubq_s16(&out_coefs[0], &out_coefs[4], temp[0], temp[4]);
+    sumsubq_s16(&out_coefs[1], &out_coefs[5], temp[1], temp[5]);
+    sumsubq_s16(&out_coefs[2], &out_coefs[6], temp[2], temp[6]);
+    sumsubq_s16(&out_coefs[3], &out_coefs[7], temp[3], temp[7]);
+}
+
+// 4 way hadamard horizontal pass.
+static inline void hadamard_4_h(const int16x8_t in_coefs[4], int16x8_t out_coefs[4])
+{
+    int16x8_t s0, s1, d0, d1, t0, t1, t2, t3;
+
+    transpose_s16_s16x2(&t0, &t1, in_coefs[0], in_coefs[1]);
+    transpose_s16_s16x2(&t2, &t3, in_coefs[2], in_coefs[3]);
+
+    sumsubq_s16(&s0, &d0, t0, t1);
+    sumsubq_s16(&s1, &d1, t2, t3);
+
+    transpose_s16_s32x2(&out_coefs[0], &out_coefs[1], s0, s1);
+    transpose_s16_s32x2(&out_coefs[2], &out_coefs[3], d0, d1);
+}
+
+#if X265_DEPTH != 12
+// 8 way hadamard horizontal pass.
+static inline void hadamard_8_h(int16x8_t coefs[8], uint16x8_t out[4])
+{
+    int16x8_t s0, s1, s2, s3, d0, d1, d2, d3;
+    int16x8_t temp[8];
+
+    hadamard_4_h(coefs, temp);
+    hadamard_4_h(coefs + 4, temp + 4);
+
+    sumsubq_s16(&s0, &d0, temp[0], temp[1]);
+    sumsubq_s16(&s1, &d1, temp[2], temp[3]);
+    sumsubq_s16(&s2, &d2, temp[4], temp[5]);
+    sumsubq_s16(&s3, &d3, temp[6], temp[7]);
+
+    transpose_s16_s64x2(&temp[0], &temp[1], s0, s2);
+    transpose_s16_s64x2(&temp[2], &temp[3], s1, s3);
+    transpose_s16_s64x2(&temp[4], &temp[5], d0, d2);
+    transpose_s16_s64x2(&temp[6], &temp[7], d1, d3);
+
+    out[0] = max_abs_s16(temp[0], temp[1]);
+    out[1] = max_abs_s16(temp[2], temp[3]);
+    out[2] = max_abs_s16(temp[4], temp[5]);
+    out[3] = max_abs_s16(temp[6], temp[7]);
+}
+
+#else // X265_DEPTH == 12
+static inline void hadamard_8_h(int16x8_t coefs[8], uint32x4_t out[4])
+{
+    int16x8_t a[8];
+
+    transpose_s16_s16x2(&a[0], &a[1], coefs[0], coefs[1]);
+    transpose_s16_s16x2(&a[2], &a[3], coefs[2], coefs[3]);
+    transpose_s16_s16x2(&a[4], &a[5], coefs[4], coefs[5]);
+    transpose_s16_s16x2(&a[6], &a[7], coefs[6], coefs[7]);
+
+    int32x4_t a_lo[8], a_hi[8], b_lo[8], b_hi[8];
+
+    sumsublq_s16(&a_lo[0], &a_hi[0], &a_lo[4], &a_hi[4], a[0], a[1]);
+    sumsublq_s16(&a_lo[1], &a_hi[1], &a_lo[5], &a_hi[5], a[2], a[3]);
+    sumsublq_s16(&a_lo[2], &a_hi[2], &a_lo[6], &a_hi[6], a[4], a[5]);
+    sumsublq_s16(&a_lo[3], &a_hi[3], &a_lo[7], &a_hi[7], a[6], a[7]);
+
+    transpose_inplace_s32_s64x2(&a_lo[0], &a_lo[1]);
+    transpose_inplace_s32_s64x2(&a_lo[2], &a_lo[3]);
+    transpose_inplace_s32_s64x2(&a_lo[4], &a_lo[5]);
+    transpose_inplace_s32_s64x2(&a_lo[6], &a_lo[7]);
+
+    transpose_inplace_s32_s64x2(&a_hi[0], &a_hi[1]);
+    transpose_inplace_s32_s64x2(&a_hi[2], &a_hi[3]);
+    transpose_inplace_s32_s64x2(&a_hi[4], &a_hi[5]);
+    transpose_inplace_s32_s64x2(&a_hi[6], &a_hi[7]);
+
+    sumsubq_s32(&b_lo[0], &b_lo[1], a_lo[0], a_lo[1]);
+    sumsubq_s32(&b_lo[2], &b_lo[3], a_lo[2], a_lo[3]);
+    sumsubq_s32(&b_lo[4], &b_lo[5], a_lo[4], a_lo[5]);
+    sumsubq_s32(&b_lo[6], &b_lo[7], a_lo[6], a_lo[7]);
+
+    sumsubq_s32(&b_hi[0], &b_hi[1], a_hi[0], a_hi[1]);
+    sumsubq_s32(&b_hi[2], &b_hi[3], a_hi[2], a_hi[3]);
+    sumsubq_s32(&b_hi[4], &b_hi[5], a_hi[4], a_hi[5]);
+    sumsubq_s32(&b_hi[6], &b_hi[7], a_hi[6], a_hi[7]);
+
+    uint32x4_t max0_lo = max_abs_s32(b_lo[0], b_hi[0]);
+    uint32x4_t max1_lo = max_abs_s32(b_lo[1], b_hi[1]);
+    uint32x4_t max2_lo = max_abs_s32(b_lo[2], b_hi[2]);
+    uint32x4_t max3_lo = max_abs_s32(b_lo[3], b_hi[3]);
+    uint32x4_t max0_hi = max_abs_s32(b_lo[4], b_hi[4]);
+    uint32x4_t max1_hi = max_abs_s32(b_lo[5], b_hi[5]);
+    uint32x4_t max2_hi = max_abs_s32(b_lo[6], b_hi[6]);
+    uint32x4_t max3_hi = max_abs_s32(b_lo[7], b_hi[7]);
+
+    out[0] = vaddq_u32(max0_lo, max0_hi);
+    out[1] = vaddq_u32(max1_lo, max1_hi);
+    out[2] = vaddq_u32(max2_lo, max2_hi);
+    out[3] = vaddq_u32(max3_lo, max3_hi);
+}
+
+#endif // X265_DEPTH != 12
+
+static inline int hadamard_4x4(int16x8_t a0, int16x8_t a1)
+{
+    int16x8_t sum, dif, t0, t1;
+    sumsubq_s16(&sum, &dif, a0, a1);
+
+    transpose_s16_s64x2(&t0, &t1, sum, dif);
+    sumsubq_s16(&sum, &dif, t0, t1);
+
+    transpose_s16_s16x2(&t0, &t1, sum, dif);
+    sumsubq_s16(&sum, &dif, t0, t1);
+
+    transpose_s16_s32x2(&t0, &t1, sum, dif);
+
+    uint16x8_t max = max_abs_s16(t0, t1);
 
     return vaddlvq_u16(max);
 }
 
-static void _satd_8x4v_8x8h_neon(int16x8_t &v0, int16x8_t &v1, int16x8_t &v2, int16x8_t &v3, int16x8_t &v20,
-                                 int16x8_t &v21, int16x8_t &v22, int16x8_t &v23)
+// Calculate 2 4x4 hadamard transformation.
+static void hadamard_4x4_dual(int16x8_t diff[4], uint16x8_t *out)
 {
-    int16x8_t v16, v17, v18, v19, v4, v5, v6, v7;
+    int16x8_t temp[4];
 
-    SUMSUB_AB(v16, v18, v0,  v2);
-    SUMSUB_AB(v17, v19, v1,  v3);
+    hadamard_4_v(diff, temp);
+    hadamard_4_h(temp, diff);
 
-    HADAMARD4_V(v20, v21, v22, v23, v0,  v1, v2, v3);
+    uint16x8_t sum0 = max_abs_s16(diff[0], diff[1]);
+    uint16x8_t sum1 = max_abs_s16(diff[2], diff[3]);
 
-    transpose_8h_8h(v0,  v1,  v16, v17);
-    transpose_8h_8h(v2,  v3,  v18, v19);
-    transpose_8h_8h(v4,  v5,  v20, v21);
-    transpose_8h_8h(v6,  v7,  v22, v23);
-
-    SUMSUB_AB(v16, v17, v0,  v1);
-    SUMSUB_AB(v18, v19, v2,  v3);
-    SUMSUB_AB(v20, v21, v4,  v5);
-    SUMSUB_AB(v22, v23, v6,  v7);
-
-    transpose_4s_8h(v0,  v2,  v16, v18);
-    transpose_4s_8h(v1,  v3,  v17, v19);
-    transpose_4s_8h(v4,  v6,  v20, v22);
-    transpose_4s_8h(v5,  v7,  v21, v23);
-
-    uint16x8_t abs0 = vreinterpretq_u16_s16(vabsq_s16(v0));
-    uint16x8_t abs1 = vreinterpretq_u16_s16(vabsq_s16(v1));
-    uint16x8_t abs2 = vreinterpretq_u16_s16(vabsq_s16(v2));
-    uint16x8_t abs3 = vreinterpretq_u16_s16(vabsq_s16(v3));
-    uint16x8_t abs4 = vreinterpretq_u16_s16(vabsq_s16(v4));
-    uint16x8_t abs5 = vreinterpretq_u16_s16(vabsq_s16(v5));
-    uint16x8_t abs6 = vreinterpretq_u16_s16(vabsq_s16(v6));
-    uint16x8_t abs7 = vreinterpretq_u16_s16(vabsq_s16(v7));
-
-    v0 = vreinterpretq_s16_u16(vmaxq_u16(abs0, abs2));
-    v1 = vreinterpretq_s16_u16(vmaxq_u16(abs1, abs3));
-    v2 = vreinterpretq_s16_u16(vmaxq_u16(abs4, abs6));
-    v3 = vreinterpretq_s16_u16(vmaxq_u16(abs5, abs7));
+    *out = vaddq_u16(sum0, sum1);
 }
+
+// Calculate 4 4x4 hadamard transformation.
+static inline void hadamard_4x4_quad(int16x8_t diff[8], uint16x8_t out[2])
+{
+    int16x8_t temp[8];
+
+    hadamard_4_v(diff, temp);
+    hadamard_4_v(diff + 4, temp + 4);
+
+    hadamard_4_h(temp, diff);
+    hadamard_4_h(temp + 4, diff + 4);
+
+    uint16x8_t sum0 = max_abs_s16(diff[0], diff[1]);
+    uint16x8_t sum1 = max_abs_s16(diff[2], diff[3]);
+    uint16x8_t sum2 = max_abs_s16(diff[4], diff[5]);
+    uint16x8_t sum3 = max_abs_s16(diff[6], diff[7]);
+
+    out[0] = vaddq_u16(sum0, sum1);
+    out[1] = vaddq_u16(sum2, sum3);
+}
+
+#if X265_DEPTH == 8
+static inline void hadamard_8x8(int16x8_t diff[8], uint16x8_t out[2])
+{
+    int16x8_t temp[8];
+    uint16x8_t sum[4];
+
+    hadamard_8_v(diff, temp);
+    hadamard_8_h(temp, sum);
+
+    out[0] = vaddq_u16(sum[0], sum[1]);
+    out[1] = vaddq_u16(sum[2], sum[3]);
+}
+
+#elif X265_DEPTH == 10
+static inline void hadamard_8x8(int16x8_t diff[8], uint32x4_t out[2])
+{
+    int16x8_t temp[8];
+    uint16x8_t sum[4];
+
+    hadamard_8_v(diff, temp);
+    hadamard_8_h(temp, sum);
+
+    out[0] = vpaddlq_u16(sum[0]);
+    out[1] = vpaddlq_u16(sum[1]);
+    out[0] = vpadalq_u16(out[0], sum[2]);
+    out[1] = vpadalq_u16(out[1], sum[3]);
+}
+
+#elif X265_DEPTH == 12
+static inline void hadamard_8x8(int16x8_t diff[8], uint32x4_t out[2])
+{
+    int16x8_t temp[8];
+    uint32x4_t sum[4];
+
+    hadamard_8_v(diff, temp);
+    hadamard_8_h(temp, sum);
+
+    out[0] = vaddq_u32(sum[0], sum[1]);
+    out[1] = vaddq_u32(sum[2], sum[3]);
+}
+
+#endif // X265_DEPTH == 8
 
 #if HIGH_BIT_DEPTH
-
-#if (X265_DEPTH > 10)
-static inline void transpose_2d_4s(int32x4_t &t1, int32x4_t &t2,
-                                   const int32x4_t s1, const int32x4_t s2)
+static inline int pixel_satd_4x4_neon(const uint16_t *pix1, intptr_t stride_pix1,
+                                      const uint16_t *pix2, intptr_t stride_pix2)
 {
-    int64x2_t tmp1 = vreinterpretq_s64_s32(s1);
-    int64x2_t tmp2 = vreinterpretq_s64_s32(s2);
+    uint16x4_t s[4], r[4];
+    load_u16x4xn<4>(pix1, stride_pix1, s);
+    load_u16x4xn<4>(pix2, stride_pix2, r);
 
-    t1 = vreinterpretq_s32_s64(vtrn1q_s64(tmp1, tmp2));
-    t2 = vreinterpretq_s32_s64(vtrn2q_s64(tmp1, tmp2));
+    uint16x8_t s0 = vcombine_u16(s[0], s[2]);
+    uint16x8_t s1 = vcombine_u16(s[1], s[3]);
+    uint16x8_t r0 = vcombine_u16(r[0], r[2]);
+    uint16x8_t r1 = vcombine_u16(r[1], r[3]);
+
+    int16x8_t diff0 = vreinterpretq_s16_u16(vsubq_u16(s0, r0));
+    int16x8_t diff1 = vreinterpretq_s16_u16(vsubq_u16(r1, s1));
+
+    return hadamard_4x4(diff0, diff1);
 }
 
-static inline void ISUMSUB_AB(int32x4_t &sum, int32x4_t &sub, const int32x4_t a, const int32x4_t b)
+static inline int pixel_satd_4x8_neon(const uint16_t *pix1, intptr_t stride_pix1,
+                                      const uint16_t *pix2, intptr_t stride_pix2)
 {
-    sum = vaddq_s32(a, b);
-    sub = vsubq_s32(a, b);
+    int16x8_t diff[4];
+
+    uint16x4_t s[8], r[8];
+    load_u16x4xn<8>(pix1, stride_pix1, s);
+    load_u16x4xn<8>(pix2, stride_pix2, r);
+
+    uint16x8_t s0 = vcombine_u16(s[0], s[4]);
+    uint16x8_t s1 = vcombine_u16(s[1], s[5]);
+    uint16x8_t s2 = vcombine_u16(s[2], s[6]);
+    uint16x8_t s3 = vcombine_u16(s[3], s[7]);
+    uint16x8_t r0 = vcombine_u16(r[0], r[4]);
+    uint16x8_t r1 = vcombine_u16(r[1], r[5]);
+    uint16x8_t r2 = vcombine_u16(r[2], r[6]);
+    uint16x8_t r3 = vcombine_u16(r[3], r[7]);
+
+    diff[0] = vreinterpretq_s16_u16(vsubq_u16(s0, r0));
+    diff[1] = vreinterpretq_s16_u16(vsubq_u16(r1, s1));
+    diff[2] = vreinterpretq_s16_u16(vsubq_u16(s2, r2));
+    diff[3] = vreinterpretq_s16_u16(vsubq_u16(r3, s3));
+
+    uint16x8_t out;
+    hadamard_4x4_dual(diff, &out);
+
+    return vaddlvq_u16(out);
 }
 
-static inline void ISUMSUB_AB_FROM_INT16(int32x4_t &suml, int32x4_t &sumh, int32x4_t &subl, int32x4_t &subh,
-        const int16x8_t a, const int16x8_t b)
+static inline int pixel_satd_8x4_neon(const uint16_t *pix1, intptr_t stride_pix1,
+                                      const uint16_t *pix2, intptr_t stride_pix2)
 {
-    suml = vaddl_s16(vget_low_s16(a), vget_low_s16(b));
-    sumh = vaddl_high_s16(a, b);
-    subl = vsubl_s16(vget_low_s16(a), vget_low_s16(b));
-    subh = vsubl_high_s16(a, b);
+    int16x8_t diff[4];
+    load_diff_u16x8x4(pix1, stride_pix1, pix2, stride_pix2, diff);
+
+    uint16x8_t out;
+    hadamard_4x4_dual(diff, &out);
+
+    return vaddlvq_u16(out);
 }
 
-#endif
-
-static inline void _sub_8x8_fly(const uint16_t *pix1, intptr_t stride_pix1, const uint16_t *pix2, intptr_t stride_pix2,
-                                int16x8_t &v0, int16x8_t &v1, int16x8_t &v2, int16x8_t &v3,
-                                int16x8_t &v20, int16x8_t &v21, int16x8_t &v22, int16x8_t &v23)
+static inline int pixel_satd_8x8_neon(const uint16_t *pix1, intptr_t stride_pix1,
+                                      const uint16_t *pix2, intptr_t stride_pix2)
 {
-    uint16x8_t r0, r1, r2, r3;
-    uint16x8_t t0, t1, t2, t3;
-    int16x8_t v16, v17;
-    int16x8_t v18, v19;
+    int16x8_t diff[8];
+    uint16x8_t out[2];
 
-    r0 = vld1q_u16(pix1 + 0 * stride_pix1);
-    r1 = vld1q_u16(pix1 + 1 * stride_pix1);
-    r2 = vld1q_u16(pix1 + 2 * stride_pix1);
-    r3 = vld1q_u16(pix1 + 3 * stride_pix1);
+    load_diff_u16x8x4_dual(pix1, stride_pix1, pix2, stride_pix2, diff);
+    hadamard_4x4_quad(diff, out);
 
-    t0 = vld1q_u16(pix2 + 0 * stride_pix2);
-    t1 = vld1q_u16(pix2 + 1 * stride_pix2);
-    t2 = vld1q_u16(pix2 + 2 * stride_pix2);
-    t3 = vld1q_u16(pix2 + 3 * stride_pix2);
+    uint32x4_t res = vpaddlq_u16(out[0]);
+    res = vpadalq_u16(res, out[1]);
 
-    v16 = vreinterpretq_s16_u16(vsubq_u16(r0, t0));
-    v17 = vreinterpretq_s16_u16(vsubq_u16(r1, t1));
-    v18 = vreinterpretq_s16_u16(vsubq_u16(r2, t2));
-    v19 = vreinterpretq_s16_u16(vsubq_u16(r3, t3));
-
-    r0 = vld1q_u16(pix1 + 4 * stride_pix1);
-    r1 = vld1q_u16(pix1 + 5 * stride_pix1);
-    r2 = vld1q_u16(pix1 + 6 * stride_pix1);
-    r3 = vld1q_u16(pix1 + 7 * stride_pix1);
-
-    t0 = vld1q_u16(pix2 + 4 * stride_pix2);
-    t1 = vld1q_u16(pix2 + 5 * stride_pix2);
-    t2 = vld1q_u16(pix2 + 6 * stride_pix2);
-    t3 = vld1q_u16(pix2 + 7 * stride_pix2);
-
-    v20 = vreinterpretq_s16_u16(vsubq_u16(r0, t0));
-    v21 = vreinterpretq_s16_u16(vsubq_u16(r1, t1));
-    v22 = vreinterpretq_s16_u16(vsubq_u16(r2, t2));
-    v23 = vreinterpretq_s16_u16(vsubq_u16(r3, t3));
-
-    SUMSUB_AB(v0,  v1,  v16, v17);
-    SUMSUB_AB(v2,  v3,  v18, v19);
-
+    return vaddvq_u32(res);
 }
 
-
-
-
-static void _satd_16x4_neon(const uint16_t *pix1, intptr_t stride_pix1, const uint16_t *pix2, intptr_t stride_pix2,
-                            int16x8_t &v0, int16x8_t &v1, int16x8_t &v2, int16x8_t &v3)
+static inline int pixel_satd_8x16_neon(const uint16_t *pix1, intptr_t stride_pix1,
+                                       const uint16_t *pix2, intptr_t stride_pix2)
 {
-    uint16x8_t r0, r1, r2, r3;
-    uint16x8_t t0, t1, t2, t3;
-    int16x8_t v16, v17, v20, v21;
-    int16x8_t v18, v19, v22, v23;
+    int16x8_t diff[16];
+    uint16x8_t out[4];
 
-    r0 = vld1q_u16(pix1 + 0 * stride_pix1);
-    r1 = vld1q_u16(pix1 + 1 * stride_pix1);
-    r2 = vld1q_u16(pix1 + 2 * stride_pix1);
-    r3 = vld1q_u16(pix1 + 3 * stride_pix1);
+    load_diff_u16x8x4_dual(pix1, stride_pix1, pix2, stride_pix2, diff);
+    load_diff_u16x8x4_dual(pix1 + 8 * stride_pix1, stride_pix1,
+                           pix2 + 8 * stride_pix2, stride_pix2, diff + 8);
 
-    t0 = vld1q_u16(pix2 + 0 * stride_pix2);
-    t1 = vld1q_u16(pix2 + 1 * stride_pix2);
-    t2 = vld1q_u16(pix2 + 2 * stride_pix2);
-    t3 = vld1q_u16(pix2 + 3 * stride_pix2);
+    hadamard_4x4_quad(diff, out);
+    hadamard_4x4_quad(diff + 8, out + 2);
 
-    v16 = vreinterpretq_s16_u16(vsubq_u16(r0, t0));
-    v17 = vreinterpretq_s16_u16(vsubq_u16(r1, t1));
-    v18 = vreinterpretq_s16_u16(vsubq_u16(r2, t2));
-    v19 = vreinterpretq_s16_u16(vsubq_u16(r3, t3));
+    uint16x8_t sum0 = vaddq_u16(out[0], out[1]);
+    uint16x8_t sum1 = vaddq_u16(out[2], out[3]);
 
-    r0 = vld1q_u16(pix1 + 0 * stride_pix1 + 8);
-    r1 = vld1q_u16(pix1 + 1 * stride_pix1 + 8);
-    r2 = vld1q_u16(pix1 + 2 * stride_pix1 + 8);
-    r3 = vld1q_u16(pix1 + 3 * stride_pix1 + 8);
+    uint32x4_t res = vpaddlq_u16(sum0);
+    res = vpadalq_u16(res, sum1);
 
-    t0 = vld1q_u16(pix2 + 0 * stride_pix2 + 8);
-    t1 = vld1q_u16(pix2 + 1 * stride_pix2 + 8);
-    t2 = vld1q_u16(pix2 + 2 * stride_pix2 + 8);
-    t3 = vld1q_u16(pix2 + 3 * stride_pix2 + 8);
-
-    v20 = vreinterpretq_s16_u16(vsubq_u16(r0, t0));
-    v21 = vreinterpretq_s16_u16(vsubq_u16(r1, t1));
-    v22 = vreinterpretq_s16_u16(vsubq_u16(r2, t2));
-    v23 = vreinterpretq_s16_u16(vsubq_u16(r3, t3));
-
-    SUMSUB_AB(v0,  v1,  v16, v17);
-    SUMSUB_AB(v2,  v3,  v18, v19);
-
-    _satd_8x4v_8x8h_neon(v0, v1, v2, v3, v20, v21, v22, v23);
-
+    return vaddvq_u32(res);
 }
 
-
-int pixel_satd_4x4_neon(const uint16_t *pix1, intptr_t stride_pix1, const uint16_t *pix2, intptr_t stride_pix2)
+static inline int pixel_satd_16x4_neon(const uint16_t *pix1, intptr_t stride_pix1,
+                                       const uint16_t *pix2, intptr_t stride_pix2)
 {
-    uint16x4_t t0_0 = vld1_u16(pix1 + 0 * stride_pix1);
-    uint16x4_t t1_0 = vld1_u16(pix1 + 1 * stride_pix1);
-    uint16x4_t t0_1 = vld1_u16(pix1 + 2 * stride_pix1);
-    uint16x4_t t1_1 = vld1_u16(pix1 + 3 * stride_pix1);
-    uint16x8_t t0 = vcombine_u16(t0_0, t0_1);
-    uint16x8_t t1 = vcombine_u16(t1_0, t1_1);
+    int16x8_t diff[8];
 
-    uint16x4_t r0_0 = vld1_u16(pix2 + 0 * stride_pix2);
-    uint16x4_t r1_0 = vld1_u16(pix2 + 1 * stride_pix2);
-    uint16x4_t r0_1 = vld1_u16(pix2 + 2 * stride_pix2);
-    uint16x4_t r1_1 = vld1_u16(pix2 + 3 * stride_pix2);
-    uint16x8_t r0 = vcombine_u16(r0_0, r0_1);
-    uint16x8_t r1 = vcombine_u16(r1_0, r1_1);
+    load_diff_u16x8x4(pix1, stride_pix1, pix2, stride_pix2, diff);
+    load_diff_u16x8x4(pix1 + 8, stride_pix1, pix2 + 8, stride_pix2, diff + 4);
 
-    int16x8_t v0 = vreinterpretq_s16_u16(vsubq_u16(t0, r0));
-    int16x8_t v1 = vreinterpretq_s16_u16(vsubq_u16(r1, t1));
+    uint16x8_t sum0, sum1;
+    hadamard_4x4_dual(diff, &sum0);
+    hadamard_4x4_dual(diff + 4, &sum1);
 
-    return _satd_4x4_neon(v0, v1);
+    sum0 = vaddq_u16(sum0, sum1);
+
+    return vaddlvq_u16(sum0);
 }
 
-
-
-
-
-
-int pixel_satd_8x4_neon(const uint16_t *pix1, intptr_t stride_pix1, const uint16_t *pix2, intptr_t stride_pix2)
+static inline int pixel_satd_16x8_neon(const uint16_t *pix1, intptr_t stride_pix1,
+                                       const uint16_t *pix2, intptr_t stride_pix2)
 {
-    uint16x8_t i0, i1, i2, i3, i4, i5, i6, i7;
+    int16x8_t diff[16];
+    uint16x8_t out[4];
 
-    i0 = vld1q_u16(pix1 + 0 * stride_pix1);
-    i1 = vld1q_u16(pix2 + 0 * stride_pix2);
-    i2 = vld1q_u16(pix1 + 1 * stride_pix1);
-    i3 = vld1q_u16(pix2 + 1 * stride_pix2);
-    i4 = vld1q_u16(pix1 + 2 * stride_pix1);
-    i5 = vld1q_u16(pix2 + 2 * stride_pix2);
-    i6 = vld1q_u16(pix1 + 3 * stride_pix1);
-    i7 = vld1q_u16(pix2 + 3 * stride_pix2);
+    load_diff_u16x8x4_dual(pix1, stride_pix1, pix2, stride_pix2, diff);
+    load_diff_u16x8x4_dual(pix1 + 8, stride_pix1,  pix2 + 8, stride_pix2, diff + 8);
 
-    int16x8_t v0 = vreinterpretq_s16_u16(vsubq_u16(i0, i1));
-    int16x8_t v1 = vreinterpretq_s16_u16(vsubq_u16(i2, i3));
-    int16x8_t v2 = vreinterpretq_s16_u16(vsubq_u16(i4, i5));
-    int16x8_t v3 = vreinterpretq_s16_u16(vsubq_u16(i6, i7));
+    hadamard_4x4_quad(diff, out);
+    hadamard_4x4_quad(diff + 8, out + 2);
 
-    return _satd_4x8_8x4_end_neon(v0, v1, v2, v3);
+#if X265_DEPTH == 10
+    uint16x8_t sum0 = vaddq_u16(out[0], out[1]);
+    uint16x8_t sum1 = vaddq_u16(out[2], out[3]);
+
+    sum0 = vaddq_u16(sum0, sum1);
+
+    return vaddlvq_u16(sum0);
+#else // X265_DEPTH == 12
+    uint32x4_t sum0 = vpaddlq_u16(out[0]);
+    uint32x4_t sum1 = vpaddlq_u16(out[1]);
+    sum0 = vpadalq_u16(sum0, out[2]);
+    sum1 = vpadalq_u16(sum1, out[3]);
+
+    sum0 = vaddq_u32(sum0, sum1);
+
+    return vaddvq_u32(sum0);
+#endif // X265_DEPTH == 10
 }
 
-
-int pixel_satd_16x16_neon(const uint16_t *pix1, intptr_t stride_pix1, const uint16_t *pix2, intptr_t stride_pix2)
+static inline int pixel_satd_16x16_neon(const uint16_t *pix1, intptr_t stride_pix1,
+                                        const uint16_t *pix2, intptr_t stride_pix2)
 {
-    uint32x4_t v30 = vdupq_n_u32(0), v31 = vdupq_n_u32(0);
-    int16x8_t v0, v1, v2, v3;
+    uint32x4_t sum[2]= { vdupq_n_u32(0), vdupq_n_u32(0) };
+    int16x8_t diff[8];
+    uint16x8_t out[2];
 
-    for (int offset = 0; offset <= 12; offset += 4)
+    for (int i = 0; i < 4; ++i)
     {
-        _satd_16x4_neon(pix1 + offset * stride_pix1, stride_pix1,
-                        pix2 + offset * stride_pix2,stride_pix2,
-                        v0, v1, v2, v3);
-        v30 = vpadalq_u16(v30, vreinterpretq_u16_s16(v0));
-        v30 = vpadalq_u16(v30, vreinterpretq_u16_s16(v1));
-        v31 = vpadalq_u16(v31, vreinterpretq_u16_s16(v2));
-        v31 = vpadalq_u16(v31, vreinterpretq_u16_s16(v3));
+        load_diff_u16x8x4(pix1, stride_pix1, pix2, stride_pix2, diff);
+        load_diff_u16x8x4(pix1 + 8, stride_pix1, pix2 + 8, stride_pix2, diff + 4);
+
+        hadamard_4x4_quad(diff, out);
+
+        sum[0] = vpadalq_u16(sum[0], out[0]);
+        sum[1] = vpadalq_u16(sum[1], out[1]);
+
+        pix1 += 4 * stride_pix1;
+        pix2 += 4 * stride_pix2;
     }
 
-    return vaddvq_u32(vaddq_u32(v30, v31));
+    return vaddvq_u32(vaddq_u32(sum[0], sum[1]));
 }
 
-#else       //HIGH_BIT_DEPTH
-
-static void _satd_16x4_neon(const uint8_t *pix1, intptr_t stride_pix1, const uint8_t *pix2, intptr_t stride_pix2,
-                            int16x8_t &v0, int16x8_t &v1, int16x8_t &v2, int16x8_t &v3)
+static inline int pixel_sa8d_8x8_neon(const uint16_t *pix1, intptr_t stride_pix1,
+                                      const uint16_t *pix2, intptr_t stride_pix2)
 {
-    uint8x16_t r0, r1, r2, r3;
-    uint8x16_t t0, t1, t2, t3;
-    int16x8_t v16, v17, v20, v21;
-    int16x8_t v18, v19, v22, v23;
+    int16x8_t diff[8];
+    uint32x4_t res[2];
 
-    r0 = vld1q_u8(pix1 + 0 * stride_pix1);
-    r1 = vld1q_u8(pix1 + 1 * stride_pix1);
-    r2 = vld1q_u8(pix1 + 2 * stride_pix1);
-    r3 = vld1q_u8(pix1 + 3 * stride_pix1);
+    load_diff_u16x8x4_dual(pix1, stride_pix1, pix2, stride_pix2, diff);
+    hadamard_8x8(diff, res);
 
-    t0 = vld1q_u8(pix2 + 0 * stride_pix2);
-    t1 = vld1q_u8(pix2 + 1 * stride_pix2);
-    t2 = vld1q_u8(pix2 + 2 * stride_pix2);
-    t3 = vld1q_u8(pix2 + 3 * stride_pix2);
+    uint32x4_t s = vaddq_u32(res[0], res[1]);
 
-    v16 = vreinterpretq_s16_u16(vsubl_u8(vget_low_u8(r0), vget_low_u8(t0)));
-    v20 = vreinterpretq_s16_u16(vsubl_high_u8(r0, t0));
-    v17 = vreinterpretq_s16_u16(vsubl_u8(vget_low_u8(r1), vget_low_u8(t1)));
-    v21 = vreinterpretq_s16_u16(vsubl_high_u8(r1, t1));
-    v18 = vreinterpretq_s16_u16(vsubl_u8(vget_low_u8(r2), vget_low_u8(t2)));
-    v22 = vreinterpretq_s16_u16(vsubl_high_u8(r2, t2));
-    v19 = vreinterpretq_s16_u16(vsubl_u8(vget_low_u8(r3), vget_low_u8(t3)));
-    v23 = vreinterpretq_s16_u16(vsubl_high_u8(r3, t3));
-
-    SUMSUB_AB(v0,  v1,  v16, v17);
-    SUMSUB_AB(v2,  v3,  v18, v19);
-
-    _satd_8x4v_8x8h_neon(v0, v1, v2, v3, v20, v21, v22, v23);
-
+    return (vaddvq_u32(s) + 1) >> 1;
 }
 
-
-static inline void _sub_8x8_fly(const uint8_t *pix1, intptr_t stride_pix1, const uint8_t *pix2, intptr_t stride_pix2,
-                                int16x8_t &v0, int16x8_t &v1, int16x8_t &v2, int16x8_t &v3,
-                                int16x8_t &v20, int16x8_t &v21, int16x8_t &v22, int16x8_t &v23)
+static inline int pixel_sa8d_16x16_neon(const uint16_t *pix1, intptr_t stride_pix1,
+                                        const uint16_t *pix2, intptr_t stride_pix2)
 {
-    uint8x8_t r0, r1, r2, r3;
-    uint8x8_t t0, t1, t2, t3;
-    int16x8_t v16, v17;
-    int16x8_t v18, v19;
+    uint32x4_t sum0, sum1;
 
-    r0 = vld1_u8(pix1 + 0 * stride_pix1);
-    r1 = vld1_u8(pix1 + 1 * stride_pix1);
-    r2 = vld1_u8(pix1 + 2 * stride_pix1);
-    r3 = vld1_u8(pix1 + 3 * stride_pix1);
+    int16x8_t diff[8];
+    uint32x4_t res[2];
 
-    t0 = vld1_u8(pix2 + 0 * stride_pix2);
-    t1 = vld1_u8(pix2 + 1 * stride_pix2);
-    t2 = vld1_u8(pix2 + 2 * stride_pix2);
-    t3 = vld1_u8(pix2 + 3 * stride_pix2);
+    load_diff_u16x8x8(pix1, stride_pix1, pix2, stride_pix2, diff);
+    hadamard_8x8(diff, res);
+    sum0 = vaddq_u32(res[0], res[1]);
 
-    v16 = vreinterpretq_s16_u16(vsubl_u8(r0, t0));
-    v17 = vreinterpretq_s16_u16(vsubl_u8(r1, t1));
-    v18 = vreinterpretq_s16_u16(vsubl_u8(r2, t2));
-    v19 = vreinterpretq_s16_u16(vsubl_u8(r3, t3));
+    load_diff_u16x8x8(pix1 + 8, stride_pix1, pix2 + 8, stride_pix2, diff);
+    hadamard_8x8(diff, res);
+    sum1 = vaddq_u32(res[0], res[1]);
 
-    r0 = vld1_u8(pix1 + 4 * stride_pix1);
-    r1 = vld1_u8(pix1 + 5 * stride_pix1);
-    r2 = vld1_u8(pix1 + 6 * stride_pix1);
-    r3 = vld1_u8(pix1 + 7 * stride_pix1);
+    load_diff_u16x8x8(pix1 + 8 * stride_pix1, stride_pix1,
+                      pix2 + 8 * stride_pix2, stride_pix2, diff);
+    hadamard_8x8(diff, res);
+    sum0 = vaddq_u32(sum0, res[0]);
+    sum1 = vaddq_u32(sum1, res[1]);
 
-    t0 = vld1_u8(pix2 + 4 * stride_pix2);
-    t1 = vld1_u8(pix2 + 5 * stride_pix2);
-    t2 = vld1_u8(pix2 + 6 * stride_pix2);
-    t3 = vld1_u8(pix2 + 7 * stride_pix2);
+    load_diff_u16x8x8(pix1 + 8 * stride_pix1 + 8, stride_pix1,
+                      pix2 + 8 * stride_pix2 + 8, stride_pix2, diff);
+    hadamard_8x8(diff, res);
+    sum0 = vaddq_u32(sum0, res[0]);
+    sum1 = vaddq_u32(sum1, res[1]);
 
-    v20 = vreinterpretq_s16_u16(vsubl_u8(r0, t0));
-    v21 = vreinterpretq_s16_u16(vsubl_u8(r1, t1));
-    v22 = vreinterpretq_s16_u16(vsubl_u8(r2, t2));
-    v23 = vreinterpretq_s16_u16(vsubl_u8(r3, t3));
+    sum0 = vaddq_u32(sum0, sum1);
 
-
-    SUMSUB_AB(v0,  v1,  v16, v17);
-    SUMSUB_AB(v2,  v3,  v18, v19);
-
+    return (vaddvq_u32(sum0) + 1) >> 1;
 }
 
-int pixel_satd_4x4_neon(const uint8_t *pix1, intptr_t stride_pix1, const uint8_t *pix2, intptr_t stride_pix2)
+#else // !HIGH_BIT_DEPTH
+static inline int pixel_satd_4x4_neon(const uint8_t *pix1, intptr_t stride_pix1,
+                                      const uint8_t *pix2, intptr_t stride_pix2)
 {
-    uint8x8_t t0 = load_u8x4x2(pix1, 2 * stride_pix1);
-    uint8x8_t t1 = load_u8x4x2(pix1 + stride_pix1, 2 * stride_pix1);
+    uint8x8_t s0 = load_u8x4x2(pix1, 2 * stride_pix1);
+    uint8x8_t s1 = load_u8x4x2(pix1 + stride_pix1, 2 * stride_pix1);
 
     uint8x8_t r0 = load_u8x4x2(pix2, 2 * stride_pix2);
     uint8x8_t r1 = load_u8x4x2(pix2 + stride_pix2, 2 * stride_pix2);
 
-    return _satd_4x4_neon(vreinterpretq_s16_u16(vsubl_u8(t0, r0)),
-                          vreinterpretq_s16_u16(vsubl_u8(r1, t1)));
+    int16x8_t diff0 = vreinterpretq_s16_u16(vsubl_u8(s0, r0));
+    int16x8_t diff1 = vreinterpretq_s16_u16(vsubl_u8(r1, s1));
+
+    return hadamard_4x4(diff0, diff1);
 }
 
-
-int pixel_satd_8x4_neon(const uint8_t *pix1, intptr_t stride_pix1, const uint8_t *pix2, intptr_t stride_pix2)
+static inline int pixel_satd_4x8_neon(const uint8_t *pix1, intptr_t stride_pix1,
+                                      const uint8_t *pix2, intptr_t stride_pix2)
 {
-    uint8x8_t i0, i1, i2, i3, i4, i5, i6, i7;
+    int16x8_t diff[4];
 
-    i0 = vld1_u8(pix1 + 0 * stride_pix1);
-    i1 = vld1_u8(pix2 + 0 * stride_pix2);
-    i2 = vld1_u8(pix1 + 1 * stride_pix1);
-    i3 = vld1_u8(pix2 + 1 * stride_pix2);
-    i4 = vld1_u8(pix1 + 2 * stride_pix1);
-    i5 = vld1_u8(pix2 + 2 * stride_pix2);
-    i6 = vld1_u8(pix1 + 3 * stride_pix1);
-    i7 = vld1_u8(pix2 + 3 * stride_pix2);
+    uint8x8_t s0 = load_u8x4x2(pix1 + 0 * stride_pix1, 4 * stride_pix1);
+    uint8x8_t s1 = load_u8x4x2(pix1 + 1 * stride_pix1, 4 * stride_pix1);
+    uint8x8_t s2 = load_u8x4x2(pix1 + 2 * stride_pix1, 4 * stride_pix1);
+    uint8x8_t s3 = load_u8x4x2(pix1 + 3 * stride_pix1, 4 * stride_pix1);
+    uint8x8_t r0 = load_u8x4x2(pix2 + 0 * stride_pix2, 4 * stride_pix2);
+    uint8x8_t r1 = load_u8x4x2(pix2 + 1 * stride_pix2, 4 * stride_pix2);
+    uint8x8_t r2 = load_u8x4x2(pix2 + 2 * stride_pix2, 4 * stride_pix2);
+    uint8x8_t r3 = load_u8x4x2(pix2 + 3 * stride_pix2, 4 * stride_pix2);
 
-    int16x8_t v0 = vreinterpretq_s16_u16(vsubl_u8(i0, i1));
-    int16x8_t v1 = vreinterpretq_s16_u16(vsubl_u8(i2, i3));
-    int16x8_t v2 = vreinterpretq_s16_u16(vsubl_u8(i4, i5));
-    int16x8_t v3 = vreinterpretq_s16_u16(vsubl_u8(i6, i7));
+    diff[0] = vreinterpretq_s16_u16(vsubl_u8(s0, r0));
+    diff[1] = vreinterpretq_s16_u16(vsubl_u8(r1, s1));
+    diff[2] = vreinterpretq_s16_u16(vsubl_u8(s2, r2));
+    diff[3] = vreinterpretq_s16_u16(vsubl_u8(r3, s3));
 
-    return _satd_4x8_8x4_end_neon(v0, v1, v2, v3);
+    uint16x8_t out;
+    hadamard_4x4_dual(diff, &out);
+
+    return vaddlvq_u16(out);
 }
 
-int pixel_satd_16x16_neon(const uint8_t *pix1, intptr_t stride_pix1, const uint8_t *pix2, intptr_t stride_pix2)
+static inline int pixel_satd_8x4_neon(const uint8_t *pix1, intptr_t stride_pix1,
+                                      const uint8_t *pix2, intptr_t stride_pix2)
 {
-    uint16x8_t v30, v31;
-    int16x8_t v0, v1, v2, v3;
-    uint16x8_t t0, t1;
+    int16x8_t diff[4];
 
-    _satd_16x4_neon(pix1, stride_pix1, pix2, stride_pix2, v0, v1, v2, v3);
-    v30 = vaddq_u16(vreinterpretq_u16_s16(v0), vreinterpretq_u16_s16(v1));
-    v31 = vaddq_u16(vreinterpretq_u16_s16(v2), vreinterpretq_u16_s16(v3));
+    load_diff_u8x8x4(pix1, stride_pix1, pix2, stride_pix2, diff);
 
-    _satd_16x4_neon(pix1 + 4 * stride_pix1, stride_pix1, pix2 + 4 * stride_pix2, stride_pix2, v0, v1, v2, v3);
-    t0 = vaddq_u16(vreinterpretq_u16_s16(v0), vreinterpretq_u16_s16(v1));
-    t1 = vaddq_u16(vreinterpretq_u16_s16(v2), vreinterpretq_u16_s16(v3));
-    v30 = vaddq_u16(v30, t0);
-    v31 = vaddq_u16(v31, t1);
+    uint16x8_t out;
+    hadamard_4x4_dual(diff, &out);
 
-    _satd_16x4_neon(pix1 + 8 * stride_pix1, stride_pix1, pix2 + 8 * stride_pix2, stride_pix2, v0, v1, v2, v3);
-    t0 = vaddq_u16(vreinterpretq_u16_s16(v0), vreinterpretq_u16_s16(v1));
-    t1 = vaddq_u16(vreinterpretq_u16_s16(v2), vreinterpretq_u16_s16(v3));
-    v30 = vaddq_u16(v30, t0);
-    v31 = vaddq_u16(v31, t1);
+    return vaddlvq_u16(out);
+}
 
-    _satd_16x4_neon(pix1 + 12 * stride_pix1, stride_pix1, pix2 + 12 * stride_pix2, stride_pix2, v0, v1, v2, v3);
-    t0 = vaddq_u16(vreinterpretq_u16_s16(v0), vreinterpretq_u16_s16(v1));
-    t1 = vaddq_u16(vreinterpretq_u16_s16(v2), vreinterpretq_u16_s16(v3));
-    v30 = vaddq_u16(v30, t0);
-    v31 = vaddq_u16(v31, t1);
+static inline int pixel_satd_8x8_neon(const uint8_t *pix1, intptr_t stride_pix1,
+                                      const uint8_t *pix2, intptr_t stride_pix2)
+{
+    int16x8_t diff[8];
+    uint16x8_t out[2];
 
-    uint32x4_t sum0 = vpaddlq_u16(v30);
-    uint32x4_t sum1 = vpaddlq_u16(v31);
+    load_diff_u8x8x8(pix1, stride_pix1, pix2, stride_pix2, diff);
+    hadamard_4x4_quad(diff, out);
+
+    out[0] = vaddq_u16(out[0], out[1]);
+
+    return vaddlvq_u16(out[0]);
+}
+
+static inline int pixel_satd_8x16_neon(const uint8_t *pix1, intptr_t stride_pix1,
+                                       const uint8_t *pix2, intptr_t stride_pix2)
+{
+    int16x8_t diff[16];
+    uint16x8_t out[4];
+
+    load_diff_u8x8x8(pix1, stride_pix1, pix2, stride_pix2, diff);
+    load_diff_u8x8x8(pix1 + 8 * stride_pix1, stride_pix1,
+                     pix2 + 8 * stride_pix2, stride_pix2, diff + 8);
+
+    hadamard_4x4_quad(diff, out);
+    hadamard_4x4_quad(diff + 8, out + 2);
+
+    uint16x8_t sum0 = vaddq_u16(out[0], out[1]);
+    uint16x8_t sum1 = vaddq_u16(out[2], out[3]);
+
+    sum0 = vaddq_u16(sum0, sum1);
+
+    return vaddlvq_u16(sum0);
+}
+
+static inline int pixel_satd_16x4_neon(const uint8_t *pix1, intptr_t stride_pix1,
+                                       const uint8_t *pix2, intptr_t stride_pix2)
+{
+    int16x8_t diff[8];
+
+    load_diff_u8x8x4(pix1, stride_pix1, pix2, stride_pix2, diff);
+    load_diff_u8x8x4(pix1 + 8, stride_pix1, pix2 + 8, stride_pix2, diff + 4);
+
+    uint16x8_t out[2];
+    hadamard_4x4_dual(diff, &out[0]);
+    hadamard_4x4_dual(diff + 4, &out[1]);
+
+    out[0] = vaddq_u16(out[0], out[1]);
+
+    return vaddlvq_u16(out[0]);
+}
+
+static inline int pixel_satd_16x8_neon(const uint8_t *pix1, intptr_t stride_pix1,
+                                       const uint8_t *pix2, intptr_t stride_pix2)
+{
+    int16x8_t diff[16];
+    uint16x8_t out[4];
+
+    load_diff_u8x8x8(pix1, stride_pix1, pix2, stride_pix2, diff);
+    load_diff_u8x8x8(pix1 + 8, stride_pix1,  pix2 + 8, stride_pix2, diff + 8);
+
+    hadamard_4x4_quad(diff, out);
+    hadamard_4x4_quad(diff + 8, out + 2);
+
+    uint16x8_t sum0 = vaddq_u16(out[0], out[1]);
+    uint16x8_t sum1 = vaddq_u16(out[2], out[3]);
+
+    sum0 = vaddq_u16(sum0, sum1);
+
+    return vaddlvq_u16(sum0);
+}
+
+static inline int pixel_satd_16x16_neon(const uint8_t *pix1, intptr_t stride_pix1,
+                                        const uint8_t *pix2, intptr_t stride_pix2)
+{
+    uint16x8_t sum[2], out[2];
+    int16x8_t diff[8];
+
+    load_diff_u8x16x4(pix1, stride_pix1, pix2, stride_pix2, diff);
+    hadamard_4x4_quad(diff, out);
+    sum[0] = out[0];
+    sum[1] = out[1];
+
+    load_diff_u8x16x4(pix1 + 4 * stride_pix1, stride_pix1,
+                      pix2 + 4 * stride_pix2, stride_pix2, diff);
+    hadamard_4x4_quad(diff, out);
+    sum[0] = vaddq_u16(sum[0], out[0]);
+    sum[1] = vaddq_u16(sum[1], out[1]);
+
+    load_diff_u8x16x4(pix1 + 8 * stride_pix1, stride_pix1,
+                      pix2 + 8 * stride_pix2, stride_pix2, diff);
+    hadamard_4x4_quad(diff, out);
+    sum[0] = vaddq_u16(sum[0], out[0]);
+    sum[1] = vaddq_u16(sum[1], out[1]);
+
+    load_diff_u8x16x4(pix1 + 12 * stride_pix1, stride_pix1,
+                      pix2 + 12 * stride_pix2, stride_pix2, diff);
+    hadamard_4x4_quad(diff, out);
+    sum[0] = vaddq_u16(sum[0], out[0]);
+    sum[1] = vaddq_u16(sum[1], out[1]);
+
+    uint32x4_t sum0 = vpaddlq_u16(sum[0]);
+    uint32x4_t sum1 = vpaddlq_u16(sum[1]);
+
     sum0 = vaddq_u32(sum0, sum1);
+
     return vaddvq_u32(sum0);
 }
-#endif      //HIGH_BIT_DEPTH
 
-#if HIGH_BIT_DEPTH
-typedef uint32x4_t sa8d_out_type;
-#else
-typedef uint16x8_t sa8d_out_type;
-#endif
-
-static inline void _sa8d_8x8_neon_end(int16x8_t v0, int16x8_t v1, int16x8_t v2,
-                                      int16x8_t v3, int16x8_t v20,
-                                      int16x8_t v21, int16x8_t v22,
-                                      int16x8_t v23, sa8d_out_type &out0,
-                                      sa8d_out_type &out1)
+static inline int pixel_sa8d_8x8_neon(const uint8_t *pix1, intptr_t stride_pix1,
+                                      const uint8_t *pix2, intptr_t stride_pix2)
 {
-    int16x8_t v16, v17, v18, v19;
-    int16x8_t v4, v5, v6, v7;
+    int16x8_t diff[8];
+    uint16x8_t res[2];
 
-    SUMSUB_AB(v16, v18, v0,  v2);
-    SUMSUB_AB(v17, v19, v1,  v3);
+    load_diff_u8x8x8(pix1, stride_pix1, pix2, stride_pix2, diff);
+    hadamard_8x8(diff, res);
 
-    HADAMARD4_V(v20, v21, v22, v23, v0,  v1, v2, v3);
-
-    SUMSUB_AB(v0,  v16, v16, v20);
-    SUMSUB_AB(v1,  v17, v17, v21);
-    SUMSUB_AB(v2,  v18, v18, v22);
-    SUMSUB_AB(v3,  v19, v19, v23);
-
-    transpose_8h_8h(v20, v21, v16, v17);
-    transpose_8h_8h(v4,  v5,  v0,  v1);
-    transpose_8h_8h(v22, v23, v18, v19);
-    transpose_8h_8h(v6,  v7,  v2,  v3);
-
-#if (X265_DEPTH <= 10)
-
-    int16x8_t v24, v25;
-
-    SUMSUB_AB(v2,  v3,  v20, v21);
-    SUMSUB_AB(v24, v25, v4,  v5);
-    SUMSUB_AB(v0,  v1,  v22, v23);
-    SUMSUB_AB(v4,  v5,  v6,  v7);
-
-    transpose_4s_8h(v20, v22, v2,  v0);
-    transpose_4s_8h(v21, v23, v3,  v1);
-    transpose_4s_8h(v16, v18, v24, v4);
-    transpose_4s_8h(v17, v19, v25, v5);
-
-    SUMSUB_AB(v0,  v2,  v20, v22);
-    SUMSUB_AB(v1,  v3,  v21, v23);
-    SUMSUB_AB(v4,  v6,  v16, v18);
-    SUMSUB_AB(v5,  v7,  v17, v19);
-
-    transpose_2d_8h(v16, v20,  v0,  v4);
-    transpose_2d_8h(v17, v21,  v1,  v5);
-    transpose_2d_8h(v18, v22,  v2,  v6);
-    transpose_2d_8h(v19, v23,  v3,  v7);
-
-    uint16x8_t abs0 = vreinterpretq_u16_s16(vabsq_s16(v16));
-    uint16x8_t abs1 = vreinterpretq_u16_s16(vabsq_s16(v17));
-    uint16x8_t abs2 = vreinterpretq_u16_s16(vabsq_s16(v18));
-    uint16x8_t abs3 = vreinterpretq_u16_s16(vabsq_s16(v19));
-    uint16x8_t abs4 = vreinterpretq_u16_s16(vabsq_s16(v20));
-    uint16x8_t abs5 = vreinterpretq_u16_s16(vabsq_s16(v21));
-    uint16x8_t abs6 = vreinterpretq_u16_s16(vabsq_s16(v22));
-    uint16x8_t abs7 = vreinterpretq_u16_s16(vabsq_s16(v23));
-
-    uint16x8_t max0 = vmaxq_u16(abs0, abs4);
-    uint16x8_t max1 = vmaxq_u16(abs1, abs5);
-    uint16x8_t max2 = vmaxq_u16(abs2, abs6);
-    uint16x8_t max3 = vmaxq_u16(abs3, abs7);
-
-#if HIGH_BIT_DEPTH
-    out0 = vpaddlq_u16(max0);
-    out1 = vpaddlq_u16(max1);
-    out0 = vpadalq_u16(out0, max2);
-    out1 = vpadalq_u16(out1, max3);
-
-#else //HIGH_BIT_DEPTH
-
-    out0 = vaddq_u16(max0, max1);
-    out1 = vaddq_u16(max2, max3);
-
-#endif //HIGH_BIT_DEPTH
-
-#else // HIGH_BIT_DEPTH 12 bit only, switching math to int32, each int16x8 is up-convreted to 2 int32x4 (low and high)
-
-    int32x4_t v2l, v2h, v3l, v3h, v24l, v24h, v25l, v25h, v0l, v0h, v1l, v1h;
-    int32x4_t v22l, v22h, v23l, v23h;
-    int32x4_t v4l, v4h, v5l, v5h;
-    int32x4_t v6l, v6h, v7l, v7h;
-    int32x4_t v16l, v16h, v17l, v17h;
-    int32x4_t v18l, v18h, v19l, v19h;
-    int32x4_t v20l, v20h, v21l, v21h;
-
-    ISUMSUB_AB_FROM_INT16(v2l, v2h, v3l, v3h, v20, v21);
-    ISUMSUB_AB_FROM_INT16(v24l, v24h, v25l, v25h, v4, v5);
-
-    v22l = vmovl_s16(vget_low_s16(v22));
-    v22h = vmovl_high_s16(v22);
-    v23l = vmovl_s16(vget_low_s16(v23));
-    v23h = vmovl_high_s16(v23);
-
-    ISUMSUB_AB(v0l,  v1l,  v22l, v23l);
-    ISUMSUB_AB(v0h,  v1h,  v22h, v23h);
-
-    v6l = vmovl_s16(vget_low_s16(v6));
-    v6h = vmovl_high_s16(v6);
-    v7l = vmovl_s16(vget_low_s16(v7));
-    v7h = vmovl_high_s16(v7);
-
-    ISUMSUB_AB(v4l,  v5l,  v6l,  v7l);
-    ISUMSUB_AB(v4h,  v5h,  v6h,  v7h);
-
-    transpose_2d_4s(v20l, v22l, v2l,  v0l);
-    transpose_2d_4s(v21l, v23l, v3l,  v1l);
-    transpose_2d_4s(v16l, v18l, v24l, v4l);
-    transpose_2d_4s(v17l, v19l, v25l, v5l);
-
-    transpose_2d_4s(v20h, v22h, v2h,  v0h);
-    transpose_2d_4s(v21h, v23h, v3h,  v1h);
-    transpose_2d_4s(v16h, v18h, v24h, v4h);
-    transpose_2d_4s(v17h, v19h, v25h, v5h);
-
-    ISUMSUB_AB(v0l,  v2l,  v20l, v22l);
-    ISUMSUB_AB(v1l,  v3l,  v21l, v23l);
-    ISUMSUB_AB(v4l,  v6l,  v16l, v18l);
-    ISUMSUB_AB(v5l,  v7l,  v17l, v19l);
-
-    ISUMSUB_AB(v0h,  v2h,  v20h, v22h);
-    ISUMSUB_AB(v1h,  v3h,  v21h, v23h);
-    ISUMSUB_AB(v4h,  v6h,  v16h, v18h);
-    ISUMSUB_AB(v5h,  v7h,  v17h, v19h);
-
-    v16l = v0l;
-    v16h = v4l;
-    v20l = v0h;
-    v20h = v4h;
-
-    v17l = v1l;
-    v17h = v5l;
-    v21l = v1h;
-    v21h = v5h;
-
-    v18l = v2l;
-    v18h = v6l;
-    v22l = v2h;
-    v22h = v6h;
-
-    v19l = v3l;
-    v19h = v7l;
-    v23l = v3h;
-    v23h = v7h;
-
-    uint32x4_t abs0_lo = vreinterpretq_u32_s32(vabsq_s32(v16l));
-    uint32x4_t abs1_lo = vreinterpretq_u32_s32(vabsq_s32(v17l));
-    uint32x4_t abs2_lo = vreinterpretq_u32_s32(vabsq_s32(v18l));
-    uint32x4_t abs3_lo = vreinterpretq_u32_s32(vabsq_s32(v19l));
-    uint32x4_t abs4_lo = vreinterpretq_u32_s32(vabsq_s32(v20l));
-    uint32x4_t abs5_lo = vreinterpretq_u32_s32(vabsq_s32(v21l));
-    uint32x4_t abs6_lo = vreinterpretq_u32_s32(vabsq_s32(v22l));
-    uint32x4_t abs7_lo = vreinterpretq_u32_s32(vabsq_s32(v23l));
-
-    uint32x4_t abs0_hi = vreinterpretq_u32_s32(vabsq_s32(v16h));
-    uint32x4_t abs1_hi = vreinterpretq_u32_s32(vabsq_s32(v17h));
-    uint32x4_t abs2_hi = vreinterpretq_u32_s32(vabsq_s32(v18h));
-    uint32x4_t abs3_hi = vreinterpretq_u32_s32(vabsq_s32(v19h));
-    uint32x4_t abs4_hi = vreinterpretq_u32_s32(vabsq_s32(v20h));
-    uint32x4_t abs5_hi = vreinterpretq_u32_s32(vabsq_s32(v21h));
-    uint32x4_t abs6_hi = vreinterpretq_u32_s32(vabsq_s32(v22h));
-    uint32x4_t abs7_hi = vreinterpretq_u32_s32(vabsq_s32(v23h));
-
-    uint32x4_t max0_lo = vmaxq_u32(abs0_lo, abs4_lo);
-    uint32x4_t max1_lo = vmaxq_u32(abs1_lo, abs5_lo);
-    uint32x4_t max2_lo = vmaxq_u32(abs2_lo, abs6_lo);
-    uint32x4_t max3_lo = vmaxq_u32(abs3_lo, abs7_lo);
-
-    uint32x4_t max0_hi = vmaxq_u32(abs0_hi, abs4_hi);
-    uint32x4_t max1_hi = vmaxq_u32(abs1_hi, abs5_hi);
-    uint32x4_t max2_hi = vmaxq_u32(abs2_hi, abs6_hi);
-    uint32x4_t max3_hi = vmaxq_u32(abs3_hi, abs7_hi);
-
-    uint32x4_t sum0 = vaddq_u32(max0_lo, max0_hi);
-    uint32x4_t sum1 = vaddq_u32(max1_lo, max1_hi);
-    uint32x4_t sum2 = vaddq_u32(max2_lo, max2_hi);
-    uint32x4_t sum3 = vaddq_u32(max3_lo, max3_hi);
-
-    out0 = vaddq_u32(sum0, sum1);
-    out1 = vaddq_u32(sum2, sum3);
-
-
-#endif
-
+    return (vaddlvq_u16(vaddq_u16(res[0], res[1])) + 1) >> 1;
 }
 
-
-
-static inline void _satd_8x8_neon(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr_t stride_pix2,
-                                  int16x8_t &v0, int16x8_t &v1, int16x8_t &v2, int16x8_t &v3)
+static inline int pixel_sa8d_16x16_neon(const uint8_t *pix1, intptr_t stride_pix1,
+                                        const uint8_t *pix2, intptr_t stride_pix2)
 {
+    int16x8_t diff[8];
+    uint16x8_t res[2];
+    uint32x4_t sum0, sum1;
 
-    int16x8_t v20, v21, v22, v23;
-    _sub_8x8_fly(pix1, stride_pix1, pix2, stride_pix2, v0, v1, v2, v3, v20, v21, v22, v23);
-    _satd_8x4v_8x8h_neon(v0, v1, v2, v3, v20, v21, v22, v23);
+    load_diff_u8x8x8(pix1, stride_pix1, pix2, stride_pix2, diff);
+    hadamard_8x8(diff, res);
+    sum0 = vpaddlq_u16(res[0]);
+    sum1 = vpaddlq_u16(res[1]);
 
+    load_diff_u8x8x8(pix1 + 8, stride_pix1, pix2 + 8, stride_pix2, diff);
+    hadamard_8x8(diff, res);
+    sum0 = vpadalq_u16(sum0, res[0]);
+    sum1 = vpadalq_u16(sum1, res[1]);
+
+    load_diff_u8x8x8(pix1 + 8 * stride_pix1, stride_pix1,
+                     pix2 + 8 * stride_pix2, stride_pix2, diff);
+    hadamard_8x8(diff, res);
+    sum0 = vpadalq_u16(sum0, res[0]);
+    sum1 = vpadalq_u16(sum1, res[1]);
+
+    load_diff_u8x8x8(pix1 + 8 * stride_pix1 + 8, stride_pix1,
+                     pix2 + 8 * stride_pix2 + 8, stride_pix2, diff);
+    hadamard_8x8(diff, res);
+    sum0 = vpadalq_u16(sum0, res[0]);
+    sum1 = vpadalq_u16(sum1, res[1]);
+
+    sum0 = vaddq_u32(sum0, sum1);
+
+    return (vaddvq_u32(sum0) + 1) >> 1;
 }
 
-
-
-int pixel_satd_8x8_neon(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr_t stride_pix2)
-{
-    int16x8_t v0, v1, v2, v3;
-
-    _satd_8x8_neon(pix1, stride_pix1, pix2, stride_pix2, v0, v1, v2, v3);
-    uint16x8_t v30 = vaddq_u16(vreinterpretq_u16_s16(v0), vreinterpretq_u16_s16(v1));
-    uint16x8_t v31 = vaddq_u16(vreinterpretq_u16_s16(v2), vreinterpretq_u16_s16(v3));
-
-#if !(HIGH_BIT_DEPTH)
-    uint16x8_t sum = vaddq_u16(v30, v31);
-    return vaddvq_u32(vpaddlq_u16(sum));
-#else
-    uint32x4_t sum = vpaddlq_u16(v30);
-    sum = vpadalq_u16(sum, v31);
-    return vaddvq_u32(sum);
-#endif
-}
-
-
-int pixel_sa8d_8x8_neon(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr_t stride_pix2)
-{
-    int16x8_t v0, v1, v2, v3;
-    int16x8_t v20, v21, v22, v23;
-    sa8d_out_type res0, res1;
-
-    _sub_8x8_fly(pix1, stride_pix1, pix2, stride_pix2, v0, v1, v2, v3, v20, v21, v22, v23);
-    _sa8d_8x8_neon_end(v0, v1, v2, v3, v20, v21, v22, v23, res0, res1);
-
-#if HIGH_BIT_DEPTH
-    uint32x4_t s = vaddq_u32(res0, res1);
-    return (vaddvq_u32(s) + 1) >> 1;
-#else
-    return (vaddlvq_u16(vaddq_u16(res0, res1)) + 1) >> 1;
-#endif
-}
-
-
-
-
-
-int pixel_sa8d_16x16_neon(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr_t stride_pix2)
-{
-    int16x8_t v0, v1, v2, v3;
-    int16x8_t v20, v21, v22, v23;
-    sa8d_out_type res0, res1;
-    uint32x4_t v30, v31;
-
-    _sub_8x8_fly(pix1, stride_pix1, pix2, stride_pix2, v0, v1, v2, v3, v20, v21, v22, v23);
-    _sa8d_8x8_neon_end(v0, v1, v2, v3, v20, v21, v22, v23, res0, res1);
-
-#if !(HIGH_BIT_DEPTH)
-    v30 = vpaddlq_u16(res0);
-    v31 = vpaddlq_u16(res1);
-#else
-    v30 = vaddq_u32(res0, res1);
-#endif
-
-    _sub_8x8_fly(pix1 + 8, stride_pix1, pix2 + 8, stride_pix2, v0, v1, v2, v3, v20, v21, v22, v23);
-    _sa8d_8x8_neon_end(v0, v1, v2, v3, v20, v21, v22, v23, res0, res1);
-
-#if !(HIGH_BIT_DEPTH)
-    v30 = vpadalq_u16(v30, res0);
-    v31 = vpadalq_u16(v31, res1);
-#else
-    v31 = vaddq_u32(res0, res1);
-#endif
-
-
-    _sub_8x8_fly(pix1 + 8 * stride_pix1, stride_pix1, pix2 + 8 * stride_pix2, stride_pix2, v0, v1, v2, v3, v20, v21, v22,
-                 v23);
-    _sa8d_8x8_neon_end(v0, v1, v2, v3, v20, v21, v22, v23, res0, res1);
-
-#if !(HIGH_BIT_DEPTH)
-    v30 = vpadalq_u16(v30, res0);
-    v31 = vpadalq_u16(v31, res1);
-#else
-    v30 = vaddq_u32(v30, res0);
-    v31 = vaddq_u32(v31, res1);
-#endif
-
-    _sub_8x8_fly(pix1 + 8 * stride_pix1 + 8, stride_pix1, pix2 + 8 * stride_pix2 + 8, stride_pix2, v0, v1, v2, v3, v20, v21,
-                 v22, v23);
-    _sa8d_8x8_neon_end(v0, v1, v2, v3, v20, v21, v22, v23, res0, res1);
-
-#if !(HIGH_BIT_DEPTH)
-    v30 = vpadalq_u16(v30, res0);
-    v31 = vpadalq_u16(v31, res1);
-#else
-    v30 = vaddq_u32(v30, res0);
-    v31 = vaddq_u32(v31, res1);
-#endif
-
-    v30 = vaddq_u32(v30, v31);
-
-    return (vaddvq_u32(v30) + 1) >> 1;
-}
-
-
-
-
-
-
-
+#endif // HIGH_BIT_DEPTH
 
 template<int size>
 void blockfill_s_neon(int16_t *dst, intptr_t dstride, int16_t val)
@@ -1387,11 +1393,131 @@ void getResidual_neon(const pixel *fenc, const pixel *pred, int16_t *residual, i
     }
 }
 
+#if HIGH_BIT_DEPTH
+static inline int calc_energy_8x8(const uint16_t *source, intptr_t sstride)
+{
+    uint16x8_t s[8];
+    load_u16x8xn<8>(source, sstride, s);
+
+    int16x8_t in[8], temp[8];
+
+    in[0] = vreinterpretq_s16_u16(vaddq_u16(s[0], s[1]));
+    in[1] = vreinterpretq_s16_u16(vaddq_u16(s[2], s[3]));
+    in[2] = vreinterpretq_s16_u16(vaddq_u16(s[4], s[5]));
+    in[3] = vreinterpretq_s16_u16(vaddq_u16(s[6], s[7]));
+    in[4] = vreinterpretq_s16_u16(vsubq_u16(s[0], s[1]));
+    in[5] = vreinterpretq_s16_u16(vsubq_u16(s[2], s[3]));
+    in[6] = vreinterpretq_s16_u16(vsubq_u16(s[4], s[5]));
+    in[7] = vreinterpretq_s16_u16(vsubq_u16(s[6], s[7]));
+
+    hadamard_4_v(in, temp);
+    hadamard_4_v(in + 4, temp + 4);
+
+    // The first line after the vertical hadamard transform contains the sum of coefficients.
+    int sum = vaddlvq_s16(temp[0]) >> 2;
+
+#if X265_DEPTH == 10
+    uint16x8_t sa8_out[4];
+
+    hadamard_8_h(temp, sa8_out);
+
+    uint32x4_t res = vpaddlq_u16(sa8_out[0]);
+    res = vpadalq_u16(res, sa8_out[1]);
+    res = vpadalq_u16(res, sa8_out[2]);
+    res = vpadalq_u16(res, sa8_out[3]);
+#else // X265_DEPTH == 12
+    uint32x4_t sa8_out[4];
+
+    hadamard_8_h(temp, sa8_out);
+
+    sa8_out[0] = vaddq_u32(sa8_out[0], sa8_out[1]);
+    sa8_out[2] = vaddq_u32(sa8_out[2], sa8_out[3]);
+    uint32x4_t res = vaddq_u32(sa8_out[0], sa8_out[2]);
+#endif // X265_DEPTH == 10
+
+    int sa8 = (vaddvq_u32(res) + 1) >> 1;
+
+    return sa8 - sum;
+}
+
+#else // !HIGH_BIT_DEPTH
+static inline int calc_energy_8x8(const uint8_t *source, intptr_t sstride)
+{
+    uint8x8_t s[8];
+    load_u8x8xn<8>(source, sstride, s);
+
+    int16x8_t in[8], temp[8];
+
+    in[0] = vreinterpretq_s16_u16(vaddl_u8(s[0], s[1]));
+    in[1] = vreinterpretq_s16_u16(vaddl_u8(s[2], s[3]));
+    in[2] = vreinterpretq_s16_u16(vaddl_u8(s[4], s[5]));
+    in[3] = vreinterpretq_s16_u16(vaddl_u8(s[6], s[7]));
+    in[4] = vreinterpretq_s16_u16(vsubl_u8(s[0], s[1]));
+    in[5] = vreinterpretq_s16_u16(vsubl_u8(s[2], s[3]));
+    in[6] = vreinterpretq_s16_u16(vsubl_u8(s[4], s[5]));
+    in[7] = vreinterpretq_s16_u16(vsubl_u8(s[6], s[7]));
+
+    hadamard_4_v(in, temp);
+    hadamard_4_v(in + 4, temp + 4);
+
+    // The first line after the vertical hadamard transform contains the sum of coefficients.
+    int sum = vaddvq_s16(temp[0]) >> 2;
+
+    uint16x8_t sa8_out[4];
+    hadamard_8_h(temp, sa8_out);
+
+    uint16x8_t res = vaddq_u16(sa8_out[0], sa8_out[1]);
+    res = vaddq_u16(res, sa8_out[2]);
+    res = vaddq_u16(res, sa8_out[3]);
+
+    int sa8 = (vaddlvq_u16(res) + 1) >> 1;
+
+    return sa8 - sum;
+}
+
+#endif // HIGH_BIT_DEPTH
+
+static inline int calc_energy_4x4(const pixel *source, intptr_t sstride)
+{
+#if HIGH_BIT_DEPTH
+    uint16x4_t s[4];
+    load_u16x4xn<4>(source, sstride, s);
+
+    uint16x8_t s01 = vcombine_u16(s[0], s[1]);
+    uint16x8_t s23 = vcombine_u16(s[2], s[3]);
+
+    int16x8_t s01_23 = vreinterpretq_s16_u16(vaddq_u16(s01, s23));
+    int16x8_t d01_23 = vreinterpretq_s16_u16(vsubq_u16(s01, s23));
+#else
+    uint8x8_t s[2];
+    s[0] = load_u8x4x2(source + 0 * sstride, sstride);
+    s[1] = load_u8x4x2(source + 2 * sstride, sstride);
+
+    int16x8_t s01_23 = vreinterpretq_s16_u16(vaddl_u8(s[0], s[1]));
+    int16x8_t d01_23 = vreinterpretq_s16_u16(vsubl_u8(s[0], s[1]));
+#endif
+
+    // The first line after the vertical hadamard transform contains the sum of coefficients.
+    int sum = vaddvq_u16(vreinterpretq_u16_s16(s01_23)) >> 2;
+
+    int16x8_t t0, t1;
+
+    transpose_s16_s64x2(&t0, &t1, s01_23, d01_23);
+    sumsubq_s16(&s01_23, &d01_23, t0, t1);
+
+    transpose_s16_s16x2(&t0, &t1, s01_23, d01_23);
+    sumsubq_s16(&s01_23, &d01_23, t0, t1);
+
+    transpose_s16_s32x2(&t0, &t1, s01_23, d01_23);
+
+    int sat = vaddvq_u16(max_abs_s16(t0, t1));
+
+    return sat - sum;
+}
+
 template<int size>
 int psyCost_pp_neon(const pixel *source, intptr_t sstride, const pixel *recon, intptr_t rstride)
 {
-    static pixel zeroBuf[8] /* = { 0 } */;
-
     if (size)
     {
         int dim = 1 << (size + 2);
@@ -1400,11 +1526,8 @@ int psyCost_pp_neon(const pixel *source, intptr_t sstride, const pixel *recon, i
         {
             for (int j = 0; j < dim; j += 8)
             {
-                /* AC energy, measured by sa8d (AC + DC) minus SAD (DC) */
-                int sourceEnergy = pixel_sa8d_8x8_neon(source + i * sstride + j, sstride, zeroBuf, 0) -
-                                   (sad_pp_neon<8, 8>(source + i * sstride + j, sstride, zeroBuf, 0) >> 2);
-                int reconEnergy =  pixel_sa8d_8x8_neon(recon + i * rstride + j, rstride, zeroBuf, 0) -
-                                   (sad_pp_neon<8, 8>(recon + i * rstride + j, rstride, zeroBuf, 0) >> 2);
+                int sourceEnergy = calc_energy_8x8(source + i * sstride + j, sstride);
+                int reconEnergy = calc_energy_8x8(recon + i * rstride + j, rstride);
 
                 totEnergy += abs(sourceEnergy - reconEnergy);
             }
@@ -1413,11 +1536,9 @@ int psyCost_pp_neon(const pixel *source, intptr_t sstride, const pixel *recon, i
     }
     else
     {
-        /* 4x4 is too small for sa8d */
-        int sourceEnergy = pixel_satd_4x4_neon(source, sstride, zeroBuf, 0) - (sad_pp_neon<4, 4>(source, sstride, zeroBuf,
-                           0) >> 2);
-        int reconEnergy = pixel_satd_4x4_neon(recon, rstride, zeroBuf, 0) - (sad_pp_neon<4, 4>(recon, rstride, zeroBuf,
-                          0) >> 2);
+        int sourceEnergy = calc_energy_4x4(source, sstride);
+        int reconEnergy = calc_energy_4x4(recon, rstride);
+
         return abs(sourceEnergy - reconEnergy);
     }
 }
@@ -1425,7 +1546,7 @@ int psyCost_pp_neon(const pixel *source, intptr_t sstride, const pixel *recon, i
 
 template<int w, int h>
 // Calculate sa8d in blocks of 8x8
-int sa8d8(const pixel *pix1, intptr_t i_pix1, const pixel *pix2, intptr_t i_pix2)
+int sa8d8_neon(const pixel *pix1, intptr_t i_pix1, const pixel *pix2, intptr_t i_pix2)
 {
     int cost = 0;
 
@@ -1440,7 +1561,7 @@ int sa8d8(const pixel *pix1, intptr_t i_pix1, const pixel *pix2, intptr_t i_pix2
 
 template<int w, int h>
 // Calculate sa8d in blocks of 16x16
-int sa8d16(const pixel *pix1, intptr_t i_pix1, const pixel *pix2, intptr_t i_pix2)
+int sa8d16_neon(const pixel *pix1, intptr_t i_pix1, const pixel *pix2, intptr_t i_pix2)
 {
     int cost = 0;
 
@@ -1474,42 +1595,63 @@ void cpy2Dto1D_shl_neon(int16_t *dst, const int16_t *src, intptr_t srcStride, in
 
 
 template<int w, int h>
-// calculate satd in blocks of 4x4
 int satd4_neon(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr_t stride_pix2)
 {
     int satd = 0;
 
-    for (int row = 0; row < h; row += 4)
-        for (int col = 0; col < w; col += 4)
-            satd += pixel_satd_4x4_neon(pix1 + row * stride_pix1 + col, stride_pix1,
-                                        pix2 + row * stride_pix2 + col, stride_pix2);
+    if (w == 4 && h == 4) {
+        satd = pixel_satd_4x4_neon(pix1, stride_pix1, pix2, stride_pix2);
+    } else {
+        for (int row = 0; row < h; row += 8)
+            for (int col = 0; col < w; col += 4)
+                satd += pixel_satd_4x8_neon(pix1 + row * stride_pix1 + col, stride_pix1,
+                                            pix2 + row * stride_pix2 + col, stride_pix2);
+    }
 
     return satd;
 }
 
 template<int w, int h>
-// calculate satd in blocks of 8x4
 int satd8_neon(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr_t stride_pix2)
 {
     int satd = 0;
 
-    if (((w | h) & 15) == 0)
+    if (w % 16 == 0 && h % 16 == 0)
     {
         for (int row = 0; row < h; row += 16)
             for (int col = 0; col < w; col += 16)
                 satd += pixel_satd_16x16_neon(pix1 + row * stride_pix1 + col, stride_pix1,
                                               pix2 + row * stride_pix2 + col, stride_pix2);
-
     }
-    else if (((w | h) & 7) == 0)
+    else if (w % 8 == 0 && h % 16 == 0)
+    {
+        for (int row = 0; row < h; row += 16)
+            for (int col = 0; col < w; col += 8)
+                satd += pixel_satd_8x16_neon(pix1 + row * stride_pix1 + col, stride_pix1,
+                                             pix2 + row * stride_pix2 + col, stride_pix2);
+    }
+    else if (w % 16 == 0 && h % 8 == 0)
+    {
+        for (int row = 0; row < h; row += 8)
+            for (int col = 0; col < w; col += 16)
+                satd += pixel_satd_16x8_neon(pix1 + row * stride_pix1 + col, stride_pix1,
+                                             pix2 + row * stride_pix2 + col, stride_pix2);
+    }
+    else if (w % 16 == 0 && h % 4 == 0)
+    {
+        for (int row = 0; row < h; row += 4)
+            for (int col = 0; col < w; col += 16)
+                satd += pixel_satd_16x4_neon(pix1 + row * stride_pix1 + col, stride_pix1,
+                                             pix2 + row * stride_pix2 + col, stride_pix2);
+    }
+    else if (w % 8 == 0 && h % 8 == 0)
     {
         for (int row = 0; row < h; row += 8)
             for (int col = 0; col < w; col += 8)
                 satd += pixel_satd_8x8_neon(pix1 + row * stride_pix1 + col, stride_pix1,
                                             pix2 + row * stride_pix2 + col, stride_pix2);
-
     }
-    else
+    else // w multiple of 8, h multiple of 4
     {
         for (int row = 0; row < h; row += 4)
             for (int col = 0; col < w; col += 8)
@@ -1634,38 +1776,31 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     LUMA_PU(64, 16);
     LUMA_PU(16, 64);
 
-    p.pu[LUMA_4x4].satd   = pixel_satd_4x4_neon;
-    p.pu[LUMA_8x4].satd   = pixel_satd_8x4_neon;
-    
-    p.pu[LUMA_8x8].satd   = satd8_neon<8, 8>;
-    p.pu[LUMA_16x16].satd = satd8_neon<16, 16>;
-    p.pu[LUMA_16x8].satd  = satd8_neon<16, 8>;
-    p.pu[LUMA_8x16].satd  = satd8_neon<8, 16>;
-    p.pu[LUMA_16x12].satd = satd8_neon<16, 12>;
-    p.pu[LUMA_16x4].satd  = satd8_neon<16, 4>;
-    p.pu[LUMA_32x32].satd = satd8_neon<32, 32>;
-    p.pu[LUMA_32x16].satd = satd8_neon<32, 16>;
-    p.pu[LUMA_16x32].satd = satd8_neon<16, 32>;
-    p.pu[LUMA_32x24].satd = satd8_neon<32, 24>;
-    p.pu[LUMA_24x32].satd = satd8_neon<24, 32>;
-    p.pu[LUMA_32x8].satd  = satd8_neon<32, 8>;
-    p.pu[LUMA_8x32].satd  = satd8_neon<8, 32>;
-    p.pu[LUMA_64x64].satd = satd8_neon<64, 64>;
-    p.pu[LUMA_64x32].satd = satd8_neon<64, 32>;
-    p.pu[LUMA_32x64].satd = satd8_neon<32, 64>;
-    p.pu[LUMA_64x48].satd = satd8_neon<64, 48>;
-    p.pu[LUMA_48x64].satd = satd8_neon<48, 64>;
-    p.pu[LUMA_64x16].satd = satd8_neon<64, 16>;
-    p.pu[LUMA_16x64].satd = satd8_neon<16, 64>;
-
-#if HIGH_BIT_DEPTH
+    p.pu[LUMA_4x4].satd   = satd4_neon<4, 4>;
     p.pu[LUMA_4x8].satd   = satd4_neon<4, 8>;
     p.pu[LUMA_4x16].satd  = satd4_neon<4, 16>;
-#endif // HIGH_BIT_DEPTH
-
-#if !defined(__APPLE__) || HIGH_BIT_DEPTH
+    p.pu[LUMA_8x4].satd   = satd8_neon<8, 4>;
+    p.pu[LUMA_8x8].satd   = satd8_neon<8, 8>;
+    p.pu[LUMA_8x16].satd  = satd8_neon<8, 16>;
+    p.pu[LUMA_8x32].satd  = satd8_neon<8, 32>;
     p.pu[LUMA_12x16].satd = satd4_neon<12, 16>;
-#endif // !defined(__APPLE__)
+    p.pu[LUMA_16x4].satd  = satd8_neon<16, 4>;
+    p.pu[LUMA_16x8].satd  = satd8_neon<16, 8>;
+    p.pu[LUMA_16x12].satd = satd8_neon<16, 12>;
+    p.pu[LUMA_16x16].satd = satd8_neon<16, 16>;
+    p.pu[LUMA_16x32].satd = satd8_neon<16, 32>;
+    p.pu[LUMA_16x64].satd = satd8_neon<16, 64>;
+    p.pu[LUMA_24x32].satd = satd8_neon<24, 32>;
+    p.pu[LUMA_32x8].satd  = satd8_neon<32, 8>;
+    p.pu[LUMA_32x16].satd = satd8_neon<32, 16>;
+    p.pu[LUMA_32x24].satd = satd8_neon<32, 24>;
+    p.pu[LUMA_32x32].satd = satd8_neon<32, 32>;
+    p.pu[LUMA_32x64].satd = satd8_neon<32, 64>;
+    p.pu[LUMA_48x64].satd = satd8_neon<48, 64>;
+    p.pu[LUMA_64x16].satd = satd8_neon<64, 16>;
+    p.pu[LUMA_64x32].satd = satd8_neon<64, 32>;
+    p.pu[LUMA_64x48].satd = satd8_neon<64, 48>;
+    p.pu[LUMA_64x64].satd = satd8_neon<64, 64>;
 
 
     LUMA_CU(4, 4);
@@ -1673,14 +1808,12 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     LUMA_CU(16, 16);
     LUMA_CU(32, 32);
     LUMA_CU(64, 64);
-    
+
 #if !(HIGH_BIT_DEPTH)
     p.cu[BLOCK_8x8].var   = pixel_var_neon<8>;
     p.cu[BLOCK_16x16].var = pixel_var_neon<16>;
-#if defined(__APPLE__)
-    p.cu[BLOCK_32x32].var   = pixel_var_neon<32>;
+    p.cu[BLOCK_32x32].var = pixel_var_neon<32>;
     p.cu[BLOCK_64x64].var = pixel_var_neon<64>;
-#endif // defined(__APPLE__)
 #endif // !(HIGH_BIT_DEPTH)
 
     p.cu[BLOCK_16x16].blockfill_s[NONALIGNED] = blockfill_s_neon<16>; 
@@ -1697,17 +1830,14 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_8x8].calcresidual[ALIGNED]       = getResidual_neon<8>;
     p.cu[BLOCK_16x16].calcresidual[NONALIGNED]  = getResidual_neon<16>;
     p.cu[BLOCK_16x16].calcresidual[ALIGNED]     = getResidual_neon<16>;
-    
-#if defined(__APPLE__)
     p.cu[BLOCK_32x32].calcresidual[NONALIGNED]  = getResidual_neon<32>;
     p.cu[BLOCK_32x32].calcresidual[ALIGNED]     = getResidual_neon<32>;
-#endif // defined(__APPLE__)
 
-    p.cu[BLOCK_4x4].sa8d   = pixel_satd_4x4_neon;
-    p.cu[BLOCK_8x8].sa8d   = pixel_sa8d_8x8_neon;
-    p.cu[BLOCK_16x16].sa8d = pixel_sa8d_16x16_neon;
-    p.cu[BLOCK_32x32].sa8d = sa8d16<32, 32>;
-    p.cu[BLOCK_64x64].sa8d = sa8d16<64, 64>;
+    p.cu[BLOCK_4x4].sa8d   = satd4_neon<4, 4>;
+    p.cu[BLOCK_8x8].sa8d   = sa8d8_neon<8, 8>;
+    p.cu[BLOCK_16x16].sa8d = sa8d16_neon<16, 16>;
+    p.cu[BLOCK_32x32].sa8d = sa8d16_neon<32, 32>;
+    p.cu[BLOCK_64x64].sa8d = sa8d16_neon<64, 64>;
 
 
 #define CHROMA_PU_420(W, H) \
@@ -1743,38 +1873,30 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
 
 
     p.chroma[X265_CSP_I420].pu[CHROMA_420_2x2].satd   = NULL;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_4x4].satd   = pixel_satd_4x4_neon;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x8].satd   = satd8_neon<8, 8>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x16].satd = satd8_neon<16, 16>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x32].satd = satd8_neon<32, 32>;
-
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_4x2].satd   = NULL;
     p.chroma[X265_CSP_I420].pu[CHROMA_420_2x4].satd   = NULL;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x4].satd   = pixel_satd_8x4_neon;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x8].satd  = satd8_neon<16, 8>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x16].satd  = satd8_neon<8, 16>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x16].satd = satd8_neon<32, 16>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x32].satd = satd8_neon<16, 32>;
-
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x6].satd   = NULL;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_6x8].satd   = NULL;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x2].satd   = NULL;
     p.chroma[X265_CSP_I420].pu[CHROMA_420_2x8].satd   = NULL;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x12].satd = satd4_neon<16, 12>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x4].satd  = satd4_neon<16, 4>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x24].satd = satd8_neon<32, 24>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_24x32].satd = satd8_neon<24, 32>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x8].satd  = satd8_neon<32, 8>;
-    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x32].satd  = satd8_neon<8, 32>;
-    
-#if HIGH_BIT_DEPTH
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_4x2].satd   = NULL;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_4x4].satd   = satd4_neon<4, 4>;
     p.chroma[X265_CSP_I420].pu[CHROMA_420_4x8].satd   = satd4_neon<4, 8>;
     p.chroma[X265_CSP_I420].pu[CHROMA_420_4x16].satd  = satd4_neon<4, 16>;
-#endif // HIGH_BIT_DEPTH
-
-#if !defined(__APPLE__) || HIGH_BIT_DEPTH
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_6x8].satd   = NULL;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x2].satd   = NULL;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x4].satd   = satd8_neon<8, 4>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x6].satd   = NULL;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x8].satd   = satd8_neon<8, 8>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x16].satd  = satd8_neon<8, 16>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_8x32].satd  = satd8_neon<8, 32>;
     p.chroma[X265_CSP_I420].pu[CHROMA_420_12x16].satd = satd4_neon<12, 16>;
-#endif // !defined(__APPLE__)
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x4].satd  = satd8_neon<16, 4>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x8].satd  = satd8_neon<16, 8>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x12].satd = satd8_neon<16, 12>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x16].satd = satd8_neon<16, 16>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_16x32].satd = satd8_neon<16, 32>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_24x32].satd = satd8_neon<24, 32>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x8].satd  = satd8_neon<32, 8>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x16].satd = satd8_neon<32, 16>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x24].satd = satd8_neon<32, 24>;
+    p.chroma[X265_CSP_I420].pu[CHROMA_420_32x32].satd = satd8_neon<32, 32>;
 
 
 #define CHROMA_CU_420(W, H) \
@@ -1783,7 +1905,7 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].sub_ps = pixel_sub_ps_neon<W, H>;  \
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].add_ps[NONALIGNED] = pixel_add_ps_neon<W, H>; \
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].add_ps[ALIGNED] = pixel_add_ps_neon<W, H>;
-    
+
 #define CHROMA_CU_S_420(W, H) \
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].copy_pp = blockcopy_pp_neon<W, H>; \
     p.chroma[X265_CSP_I420].cu[BLOCK_420_ ## W ## x ## H].copy_ps = blockcopy_ps_neon<W, H>; \
@@ -1799,9 +1921,9 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
 
 
     p.chroma[X265_CSP_I420].cu[BLOCK_8x8].sa8d   = p.chroma[X265_CSP_I420].pu[CHROMA_420_4x4].satd;
-    p.chroma[X265_CSP_I420].cu[BLOCK_16x16].sa8d = sa8d8<8, 8>;
-    p.chroma[X265_CSP_I420].cu[BLOCK_32x32].sa8d = sa8d16<16, 16>;
-    p.chroma[X265_CSP_I420].cu[BLOCK_64x64].sa8d = sa8d16<32, 32>;
+    p.chroma[X265_CSP_I420].cu[BLOCK_16x16].sa8d = sa8d8_neon<8, 8>;
+    p.chroma[X265_CSP_I420].cu[BLOCK_32x32].sa8d = sa8d16_neon<16, 16>;
+    p.chroma[X265_CSP_I420].cu[BLOCK_64x64].sa8d = sa8d16_neon<32, 32>;
 
 
 #define CHROMA_PU_422(W, H) \
@@ -1837,34 +1959,31 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
 
 
     p.chroma[X265_CSP_I422].pu[CHROMA_422_2x4].satd   = NULL;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x16].satd  = satd8_neon<8, 16>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x32].satd = satd8_neon<16, 32>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x64].satd = satd8_neon<32, 64>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x4].satd   = pixel_satd_4x4_neon;
     p.chroma[X265_CSP_I422].pu[CHROMA_422_2x8].satd   = NULL;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x8].satd   = satd8_neon<8, 8>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x16].satd = satd8_neon<16, 16>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x32].satd  = satd8_neon<8, 32>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x32].satd = satd8_neon<32, 32>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x64].satd = satd8_neon<16, 64>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_6x16].satd  = NULL;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x4].satd   = satd4_neon<8, 4>;
     p.chroma[X265_CSP_I422].pu[CHROMA_422_2x16].satd  = NULL;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x8].satd  = satd8_neon<16, 8>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x16].satd = satd8_neon<32, 16>;
-    
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x12].satd  = satd4_neon<8, 12>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x64].satd  = satd8_neon<8, 64>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_12x32].satd = satd4_neon<12, 32>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x24].satd = satd8_neon<16, 24>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_24x64].satd = satd8_neon<24, 64>;
-    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x48].satd = satd8_neon<32, 48>;
-
-#if HIGH_BIT_DEPTH
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_4x4].satd   = satd4_neon<4, 4>;
     p.chroma[X265_CSP_I422].pu[CHROMA_422_4x8].satd   = satd4_neon<4, 8>;
     p.chroma[X265_CSP_I422].pu[CHROMA_422_4x16].satd  = satd4_neon<4, 16>;
     p.chroma[X265_CSP_I422].pu[CHROMA_422_4x32].satd  = satd4_neon<4, 32>;
-#endif // HIGH_BIT_DEPTH
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_6x16].satd  = NULL;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x4].satd   = satd8_neon<8, 4>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x8].satd   = satd8_neon<8, 8>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x12].satd  = satd8_neon<8, 12>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x16].satd  = satd8_neon<8, 16>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x32].satd  = satd8_neon<8, 32>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_8x64].satd  = satd8_neon<8, 64>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_12x32].satd = satd4_neon<12, 32>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x8].satd  = satd8_neon<16, 8>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x16].satd = satd8_neon<16, 16>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x24].satd = satd8_neon<16, 24>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x32].satd = satd8_neon<16, 32>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_16x64].satd = satd8_neon<16, 64>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_24x64].satd = satd8_neon<24, 64>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x16].satd = satd8_neon<32, 16>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x32].satd = satd8_neon<32, 32>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x48].satd = satd8_neon<32, 48>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_32x64].satd = satd8_neon<32, 64>;
+    p.chroma[X265_CSP_I422].pu[CHROMA_422_12x32].satd = satd4_neon<12, 32>;
 
 
 #define CHROMA_CU_422(W, H) \
@@ -1887,10 +2006,14 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     CHROMA_CU_422(16, 32)
     CHROMA_CU_422(32, 64)
 
-    p.chroma[X265_CSP_I422].cu[BLOCK_8x8].sa8d   = p.chroma[X265_CSP_I422].pu[CHROMA_422_4x8].satd;
-    p.chroma[X265_CSP_I422].cu[BLOCK_16x16].sa8d = sa8d8<8, 16>;
-    p.chroma[X265_CSP_I422].cu[BLOCK_32x32].sa8d = sa8d16<16, 32>;
-    p.chroma[X265_CSP_I422].cu[BLOCK_64x64].sa8d = sa8d16<32, 64>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_8x8].sa8d       = p.chroma[X265_CSP_I422].pu[CHROMA_422_4x8].satd;
+    p.chroma[X265_CSP_I422].cu[BLOCK_16x16].sa8d     = sa8d8_neon<8, 16>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_32x32].sa8d     = sa8d16_neon<16, 32>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_64x64].sa8d     = sa8d16_neon<32, 64>;
+
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sa8d  = sa8d8_neon<8, 16>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].sa8d = sa8d16_neon<16, 32>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].sa8d = sa8d16_neon<32, 64>;
 
     p.weight_pp = weight_pp_neon;
 

@@ -1,7 +1,7 @@
 /*****************************************************************************
- * Copyright (C) 2022-2023 MulticoreWare, Inc
+ * Copyright (C) 2025 MulticoreWare, Inc
  *
- * Authors: David Chen <david.chen@myais.com.cn>
+ * Authors: Gerda Zsejke More <gerdazsejke.more@arm.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,38 +21,17 @@
  * For more information, contact us at license @ x265.com.
  *****************************************************************************/
 
-#include "asm-sve.S"
-#include "pixel-util-common.S"
+#ifndef X265_FILTER_PRIM_SVE_H
+#define X265_FILTER_PRIM_SVE_H
 
-.arch armv8-a+sve
+#if defined(HAVE_SVE)
 
-#ifdef __APPLE__
-.section __RODATA,__rodata
-#else
-.section .rodata
-#endif
+#include "primitives.h"
 
-.align 4
+namespace X265_NS {
+void setupFilterPrimitives_sve(EncoderPrimitives &p);
+}
 
-.text
+#endif // defined(HAVE_SVE)
 
-function PFX(pixel_sub_ps_8x16_sve)
-    lsl             x1, x1, #1
-    ptrue           p0.h, vl8
-.rept 8
-    ld1b            {z0.h}, p0/z, [x2]
-    ld1b            {z1.h}, p0/z, [x3]
-    add             x2, x2, x4
-    add             x3, x3, x5
-    ld1b            {z2.h}, p0/z, [x2]
-    ld1b            {z3.h}, p0/z, [x3]
-    add             x2, x2, x4
-    add             x3, x3, x5
-    sub             z4.h, z0.h, z1.h
-    sub             z5.h, z2.h, z3.h
-    st1             {v4.8h}, [x0], x1
-    st1             {v5.8h}, [x0], x1
-.endr
-    ret
-endfunc
-
+#endif // X265_FILTER_PRIM_SVE_H

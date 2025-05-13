@@ -106,8 +106,7 @@ static void inline load_u8x16xn(const uint8_t *src, const intptr_t stride,
 {
     for (int i = 0; i < N; ++i)
     {
-        dst[i] = vld1q_u8(src);
-        src += stride;
+        dst[i] = vld1q_u8(src + i * stride);
     }
 }
 
@@ -230,8 +229,7 @@ static void inline load_u16x8xn(const uint16_t *src, const intptr_t stride,
 {
     for (int i = 0; i < N; ++i)
     {
-        dst[i] = vld1q_u16(src);
-        src += stride;
+        dst[i] = vld1q_u16(src + i * stride);
     }
 }
 
