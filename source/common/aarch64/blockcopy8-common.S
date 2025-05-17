@@ -37,12 +37,3 @@
     sri             v1.8h, v1.8h, #1
     neg             v0.8h, v0.8h
 .endm
-
-.macro cpy2Dto1D_shr_start
-    add             x2, x2, x2
-    dup             v0.8h, w3
-    cmeq            v1.8h, v1.8h, v1.8h
-    sshl            v1.8h, v1.8h, v0.8h
-    sri             v1.8h, v1.8h, #1
-    neg             v0.8h, v0.8h
-.endm

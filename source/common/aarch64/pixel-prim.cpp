@@ -1719,6 +1719,41 @@ void cpy2Dto1D_shl_neon(int16_t *dst, const int16_t *src, intptr_t srcStride, in
     }
 }
 
+template<int size>
+void cpy2Dto1D_shr_neon(int16_t* dst, const int16_t* src, intptr_t srcStride, int shift)
+{
+    X265_CHECK(((intptr_t)dst & 15) == 0, "dst alignment error\n");
+    X265_CHECK((((intptr_t)src | (srcStride * sizeof(*src))) & 15) == 0 || size == 4, "src alignment error\n");
+    X265_CHECK(shift > 0, "invalid shift\n");
+
+    for (int h = 0; h < size; h++)
+    {
+        for (int w = 0; w + 16 <= size; w += 16)
+        {
+            int16x8_t s0_lo = vld1q_s16(src + w);
+            int16x8_t s0_hi = vld1q_s16(src + w + 8);
+            int16x8_t d0_lo = vrshlq_s16(s0_lo, vdupq_n_s16(-shift));
+            int16x8_t d0_hi = vrshlq_s16(s0_hi, vdupq_n_s16(-shift));
+            vst1q_s16(dst + w, d0_lo);
+            vst1q_s16(dst + w + 8, d0_hi);
+        }
+        if (size == 8)
+        {
+            int16x8_t s0 = vld1q_s16(src);
+            int16x8_t d0 = vrshlq_s16(s0, vdupq_n_s16(-shift));
+            vst1q_s16(dst, d0);
+        }
+        if (size == 4)
+        {
+            int16x4_t s0 = vld1_s16(src);
+            int16x4_t d0 = vrshl_s16(s0, vdup_n_s16(-shift));
+            vst1_s16(dst, d0);
+        }
+
+        src += srcStride;
+        dst += size;
+    }
+}
 
 template<int w, int h>
 int satd4_neon(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr_t stride_pix2)
@@ -1884,6 +1919,7 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_ ## W ## x ## H].copy_ss       = blockcopy_ss_neon<W, H>; \
     p.cu[BLOCK_ ## W ## x ## H].copy_sp       = blockcopy_sp_neon<W, H>; \
     p.cu[BLOCK_ ## W ## x ## H].cpy2Dto1D_shl = cpy2Dto1D_shl_neon<W>; \
+    p.cu[BLOCK_ ## W ## x ## H].cpy2Dto1D_shr = cpy2Dto1D_shr_neon<W>; \
     p.cu[BLOCK_ ## W ## x ## H].cpy1Dto2D_shl[NONALIGNED] = cpy1Dto2D_shl_neon<W>; \
     p.cu[BLOCK_ ## W ## x ## H].cpy1Dto2D_shl[ALIGNED] = cpy1Dto2D_shl_neon<W>; \
     p.cu[BLOCK_ ## W ## x ## H].psy_cost_pp   = psyCost_pp_neon<BLOCK_ ## W ## x ## H>; \
