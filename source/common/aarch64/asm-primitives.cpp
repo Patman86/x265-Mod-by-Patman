@@ -420,13 +420,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_16x16].count_nonzero   = PFX(count_nonzero_16_neon);
     p.cu[BLOCK_32x32].count_nonzero   = PFX(count_nonzero_32_neon);
 
-    // cpy1Dto2D_shr
-    p.cu[BLOCK_4x4].cpy1Dto2D_shr   = PFX(cpy1Dto2D_shr_4x4_neon);
-    p.cu[BLOCK_8x8].cpy1Dto2D_shr   = PFX(cpy1Dto2D_shr_8x8_neon);
-    p.cu[BLOCK_16x16].cpy1Dto2D_shr = PFX(cpy1Dto2D_shr_16x16_neon);
-    p.cu[BLOCK_32x32].cpy1Dto2D_shr = PFX(cpy1Dto2D_shr_32x32_neon);
-    p.cu[BLOCK_64x64].cpy1Dto2D_shr = PFX(cpy1Dto2D_shr_64x64_neon);
-
     // sad
     ALL_LUMA_PU(sad, pixel_sad, neon);
     ALL_LUMA_PU(sad_x3, sad_x3, neon);
@@ -599,11 +592,6 @@ void setupSvePrimitives(EncoderPrimitives &p)
     // Block_fill
     LUMA_TU_CAN_USE_SVE(blockfill_s[ALIGNED], blockfill_s);
     LUMA_TU_CAN_USE_SVE(blockfill_s[NONALIGNED], blockfill_s);
-
-    // cpy1Dto2D_shr
-    p.cu[BLOCK_16x16].cpy1Dto2D_shr = PFX(cpy1Dto2D_shr_16x16_sve);
-    p.cu[BLOCK_32x32].cpy1Dto2D_shr = PFX(cpy1Dto2D_shr_32x32_sve);
-    p.cu[BLOCK_64x64].cpy1Dto2D_shr = PFX(cpy1Dto2D_shr_64x64_sve);
 
     // sse_ss
     p.cu[BLOCK_4x4].sse_ss   = PFX(pixel_sse_ss_4x4_sve);

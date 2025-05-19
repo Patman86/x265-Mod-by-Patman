@@ -1438,6 +1438,41 @@ void cpy1Dto2D_shl_neon(int16_t *dst, const int16_t *src, intptr_t dstStride, in
     }
 }
 
+template<int size>
+void cpy1Dto2D_shr_neon(int16_t* dst, const int16_t* src, intptr_t dstStride, int shift)
+{
+    X265_CHECK((((intptr_t)dst | (dstStride * sizeof(*dst))) & 15) == 0 || size == 4, "dst alignment error\n");
+    X265_CHECK(((intptr_t)src & 15) == 0, "src alignment error\n");
+    X265_CHECK(shift > 0, "invalid shift\n");
+
+    for (int h = 0; h < size; h++)
+    {
+        for (int w = 0; w + 16 <= size; w += 16)
+        {
+            int16x8_t s0_lo = vld1q_s16(src + w);
+            int16x8_t s0_hi = vld1q_s16(src + w + 8);
+            int16x8_t d0_lo = vrshlq_s16(s0_lo, vdupq_n_s16(-shift));
+            int16x8_t d0_hi = vrshlq_s16(s0_hi, vdupq_n_s16(-shift));
+            vst1q_s16(dst + w, d0_lo);
+            vst1q_s16(dst + w + 8, d0_hi);
+        }
+        if (size == 8)
+        {
+            int16x8_t s0 = vld1q_s16(src);
+            int16x8_t d0 = vrshlq_s16(s0, vdupq_n_s16(-shift));
+            vst1q_s16(dst, d0);
+        }
+        if (size == 4)
+        {
+            int16x4_t s0 = vld1_s16(src);
+            int16x4_t d0 = vrshl_s16(s0, vdup_n_s16(-shift));
+            vst1_s16(dst, d0);
+        }
+
+        src += size;
+        dst += dstStride;
+    }
+}
 
 template<int size>
 uint64_t pixel_var_neon(const uint8_t *pix, intptr_t i_stride)
@@ -1922,6 +1957,7 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_ ## W ## x ## H].cpy2Dto1D_shr = cpy2Dto1D_shr_neon<W>; \
     p.cu[BLOCK_ ## W ## x ## H].cpy1Dto2D_shl[NONALIGNED] = cpy1Dto2D_shl_neon<W>; \
     p.cu[BLOCK_ ## W ## x ## H].cpy1Dto2D_shl[ALIGNED] = cpy1Dto2D_shl_neon<W>; \
+    p.cu[BLOCK_ ## W ## x ## H].cpy1Dto2D_shr = cpy1Dto2D_shr_neon<W>; \
     p.cu[BLOCK_ ## W ## x ## H].psy_cost_pp   = psyCost_pp_neon<BLOCK_ ## W ## x ## H>; \
     p.cu[BLOCK_ ## W ## x ## H].transpose     = transpose_neon<W>;
 #endif // HIGH_BIT_DEPTH

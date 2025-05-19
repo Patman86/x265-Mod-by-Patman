@@ -22,7 +22,6 @@
  *****************************************************************************/
 
 #include "asm.S"
-#include "blockcopy8-common.S"
 
 #ifdef __APPLE__
 .section __RODATA,__rodata
@@ -247,103 +246,5 @@ function PFX(count_nonzero_32_neon)
 
     uaddlv          s0, v18.8h
     fmov            w0, s0
-    ret
-endfunc
-
-function PFX(cpy1Dto2D_shr_4x4_neon)
-    cpy1Dto2D_shr_start
-    ld1             {v2.16b-v3.16b}, [x1]
-    sub             v2.8h, v2.8h, v1.8h
-    sub             v3.8h, v3.8h, v1.8h
-    sshl            v2.8h, v2.8h, v0.8h
-    sshl            v3.8h, v3.8h, v0.8h
-    st1             {v2.d}[0], [x0], x2
-    st1             {v2.d}[1], [x0], x2
-    st1             {v3.d}[0], [x0], x2
-    st1             {v3.d}[1], [x0], x2
-    ret
-endfunc
-
-function PFX(cpy1Dto2D_shr_8x8_neon)
-    cpy1Dto2D_shr_start
-.rept 4
-    ld1             {v2.16b-v3.16b}, [x1], #32
-    sub             v2.8h, v2.8h, v1.8h
-    sub             v3.8h, v3.8h, v1.8h
-    sshl            v2.8h, v2.8h, v0.8h
-    sshl            v3.8h, v3.8h, v0.8h
-    st1             {v2.16b}, [x0], x2
-    st1             {v3.16b}, [x0], x2
-.endr
-    ret
-endfunc
-
-function PFX(cpy1Dto2D_shr_16x16_neon)
-    cpy1Dto2D_shr_start
-    mov             w12, #4
-.Loop_cpy1Dto2D_shr_16:
-    sub             w12, w12, #1
-.rept 4
-    ld1             {v2.8h-v3.8h}, [x1], #32
-    sub             v2.8h, v2.8h, v1.8h
-    sub             v3.8h, v3.8h, v1.8h
-    sshl            v2.8h, v2.8h, v0.8h
-    sshl            v3.8h, v3.8h, v0.8h
-    st1             {v2.8h-v3.8h}, [x0], x2
-.endr
-    cbnz            w12, .Loop_cpy1Dto2D_shr_16
-    ret
-endfunc
-
-function PFX(cpy1Dto2D_shr_32x32_neon)
-    cpy1Dto2D_shr_start
-    mov             w12, #16
-.Loop_cpy1Dto2D_shr_32:
-    sub             w12, w12, #1
-.rept 2
-    ld1             {v2.16b-v5.16b}, [x1], #64
-    sub             v2.8h, v2.8h, v1.8h
-    sub             v3.8h, v3.8h, v1.8h
-    sub             v4.8h, v4.8h, v1.8h
-    sub             v5.8h, v5.8h, v1.8h
-    sshl            v2.8h, v2.8h, v0.8h
-    sshl            v3.8h, v3.8h, v0.8h
-    sshl            v4.8h, v4.8h, v0.8h
-    sshl            v5.8h, v5.8h, v0.8h
-    st1             {v2.16b-v5.16b}, [x0], x2
-.endr
-    cbnz            w12, .Loop_cpy1Dto2D_shr_32
-    ret
-endfunc
-
-function PFX(cpy1Dto2D_shr_64x64_neon)
-    cpy1Dto2D_shr_start
-    mov             w12, #32
-    sub             x2, x2, #64
-.Loop_cpy1Dto2D_shr_64:
-    sub             w12, w12, #1
-.rept 2
-    ld1             {v2.16b-v5.16b}, [x1], #64
-    ld1             {v16.16b-v19.16b}, [x1], #64
-    sub             v2.8h, v2.8h, v1.8h
-    sub             v3.8h, v3.8h, v1.8h
-    sub             v4.8h, v4.8h, v1.8h
-    sub             v5.8h, v5.8h, v1.8h
-    sub             v16.8h, v16.8h, v1.8h
-    sub             v17.8h, v17.8h, v1.8h
-    sub             v18.8h, v18.8h, v1.8h
-    sub             v19.8h, v19.8h, v1.8h
-    sshl            v2.8h, v2.8h, v0.8h
-    sshl            v3.8h, v3.8h, v0.8h
-    sshl            v4.8h, v4.8h, v0.8h
-    sshl            v5.8h, v5.8h, v0.8h
-    sshl            v16.8h, v16.8h, v0.8h
-    sshl            v17.8h, v17.8h, v0.8h
-    sshl            v18.8h, v18.8h, v0.8h
-    sshl            v19.8h, v19.8h, v0.8h
-    st1             {v2.16b-v5.16b}, [x0], #64
-    st1             {v16.16b-v19.16b}, [x0], x2
-.endr
-    cbnz            w12, .Loop_cpy1Dto2D_shr_64
     ret
 endfunc
