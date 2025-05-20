@@ -23,6 +23,7 @@
 
 #if defined(HAVE_NEON_I8MM)
 #include "filter-neon-i8mm.h"
+#include "filter-prim.h"
 #if !HIGH_BIT_DEPTH
 
 #include "mem-neon.h"
@@ -58,6 +59,13 @@ static const uint8_t dot_prod_merge_block_tbl[48] = {
     2, 3, 16, 17, 6, 7, 20, 21, 10, 11, 24, 25, 14, 15, 28, 29,
     // Shift left and insert three new columns in transposed 4x4 block.
     3, 16, 17, 18, 7, 20, 21, 22, 11, 24, 25, 26, 15, 28, 29, 30
+};
+
+// This is to use with vtbl2q_s32_s16.
+// Extract the middle two bytes from each 32-bit element in a vector, using these byte
+// indices.
+static const uint8_t vert_shr_tbl[16] = {
+    1, 2, 5, 6, 9, 10, 13, 14, 17, 18, 21, 22, 25, 26, 29, 30
 };
 
 template<bool coeff2>
@@ -956,23 +964,339 @@ void interp8_vert_pp_i8mm(const uint8_t *src, intptr_t srcStride, uint8_t *dst,
     }
 }
 
+template<bool coeff2, int coeffIdy, int width, int height>
+void interp8_hv_pp_i8mm(const pixel *src, intptr_t srcStride, pixel *dst,
+                        intptr_t dstStride, int coeffIdx)
+{
+    const int N_TAPS = 8;
+    const int v_shift = IF_FILTER_PREC + IF_INTERNAL_PREC - X265_DEPTH;
+    // Subtract 8 from shift since we account for that in table lookups.
+    const int v_shift_offset = v_shift - 8;
+    const uint8x16x2_t tbl = vld1q_u8_x2(matmul_permute_tbl[coeffIdx >> 1]);
+    const int8x16_t h_filter = vld1q_s8(matmul_luma_filter[coeffIdx - 1]);
+    const int16x8_t v_filter = vld1q_s16(X265_NS::g_lumaFilter[coeffIdy]);
+    const int16x8_t h_offset = vdupq_n_s16((int16_t)-IF_INTERNAL_OFFS);
+    const int32x4_t v_offset = vdupq_n_s32((1 << (v_shift - 1)) +
+                                           (IF_INTERNAL_OFFS << IF_FILTER_PREC));
+    const uint8x16_t shr_tbl = vld1q_u8(vert_shr_tbl);
+
+    src -= (N_TAPS / 2 - 1) * srcStride + (N_TAPS / 2 - 1);
+
+    int col = 0;
+    for (; col + 16 <= width; col += 16)
+    {
+        const pixel *s = src;
+        pixel *d = dst;
+
+        uint8x16_t h_s0[11], h_s1[11];
+        int16x8_t v_s0[11], v_s1[11];
+
+        h_s0[0] = vld1q_u8(s + 0 * srcStride + 0);
+        v_s0[0] = filter8_8_ps_matmul<coeff2>(h_s0[0], h_filter, h_offset, tbl);
+        h_s1[0] = vld1q_u8(s + 0 * srcStride + 8);
+        v_s1[0] = filter8_8_ps_matmul<coeff2>(h_s1[0], h_filter, h_offset, tbl);
+
+        h_s0[1] = vld1q_u8(s + 1 * srcStride + 0);
+        v_s0[1] = filter8_8_ps_matmul<coeff2>(h_s0[1], h_filter, h_offset, tbl);
+        h_s1[1] = vld1q_u8(s + 1 * srcStride + 8);
+        v_s1[1] = filter8_8_ps_matmul<coeff2>(h_s1[1], h_filter, h_offset, tbl);
+
+        h_s0[2] = vld1q_u8(s + 2 * srcStride + 0);
+        v_s0[2] = filter8_8_ps_matmul<coeff2>(h_s0[2], h_filter, h_offset, tbl);
+        h_s1[2] = vld1q_u8(s + 2 * srcStride + 8);
+        v_s1[2] = filter8_8_ps_matmul<coeff2>(h_s1[2], h_filter, h_offset, tbl);
+
+        h_s0[3] = vld1q_u8(s + 3 * srcStride + 0);
+        v_s0[3] = filter8_8_ps_matmul<coeff2>(h_s0[3], h_filter, h_offset, tbl);
+        h_s1[3] = vld1q_u8(s + 3 * srcStride + 8);
+        v_s1[3] = filter8_8_ps_matmul<coeff2>(h_s1[3], h_filter, h_offset, tbl);
+
+        h_s0[4] = vld1q_u8(s + 4 * srcStride + 0);
+        v_s0[4] = filter8_8_ps_matmul<coeff2>(h_s0[4], h_filter, h_offset, tbl);
+        h_s1[4] = vld1q_u8(s + 4 * srcStride + 8);
+        v_s1[4] = filter8_8_ps_matmul<coeff2>(h_s1[4], h_filter, h_offset, tbl);
+
+        h_s0[5] = vld1q_u8(s + 5 * srcStride + 0);
+        v_s0[5] = filter8_8_ps_matmul<coeff2>(h_s0[5], h_filter, h_offset, tbl);
+        h_s1[5] = vld1q_u8(s + 5 * srcStride + 8);
+        v_s1[5] = filter8_8_ps_matmul<coeff2>(h_s1[5], h_filter, h_offset, tbl);
+
+        h_s0[6] = vld1q_u8(s + 6 * srcStride + 0);
+        v_s0[6] = filter8_8_ps_matmul<coeff2>(h_s0[6], h_filter, h_offset, tbl);
+        h_s1[6] = vld1q_u8(s + 6 * srcStride + 8);
+        v_s1[6] = filter8_8_ps_matmul<coeff2>(h_s1[6], h_filter, h_offset, tbl);
+
+        s += 7 * srcStride;
+
+        for (int row = 0; row < height; row += 4)
+        {
+            uint8x8_t res_lo[4], res_hi[4];
+            int32x4_t sum_lo[8], sum_hi[8];
+
+            h_s0[7] = vld1q_u8(s + 0 * srcStride + 0);
+            v_s0[7] = filter8_8_ps_matmul<coeff2>(h_s0[7], h_filter, h_offset, tbl);
+            filter8_s16x8<coeffIdy>(v_s0 + 0, v_filter, v_offset, sum_lo[0], sum_hi[0]);
+            v_s0[0] = v_s0[4];
+            res_lo[0] = vqshrun_n_s16(vtbl2q_s32_s16(sum_lo[0], sum_hi[0], shr_tbl),
+                                      v_shift_offset);
+
+            h_s1[7] = vld1q_u8(s + 0 * srcStride + 8);
+            v_s1[7] = filter8_8_ps_matmul<coeff2>(h_s1[7], h_filter, h_offset, tbl);
+            filter8_s16x8<coeffIdy>(v_s1 + 0, v_filter, v_offset, sum_lo[1], sum_hi[1]);
+            v_s1[0] = v_s1[4];
+            res_hi[0] = vqshrun_n_s16(vtbl2q_s32_s16(sum_lo[1], sum_hi[1], shr_tbl),
+                                      v_shift_offset);
+
+            h_s0[8] = vld1q_u8(s + 1 * srcStride + 0);
+            v_s0[8] = filter8_8_ps_matmul<coeff2>(h_s0[8], h_filter, h_offset, tbl);
+            filter8_s16x8<coeffIdy>(v_s0 + 1, v_filter, v_offset, sum_lo[2], sum_hi[2]);
+            v_s0[1] = v_s0[5];
+            res_lo[1] = vqshrun_n_s16(vtbl2q_s32_s16(sum_lo[2], sum_hi[2], shr_tbl),
+                                      v_shift_offset);
+
+            h_s1[8] = vld1q_u8(s + 1 * srcStride + 8);
+            v_s1[8] = filter8_8_ps_matmul<coeff2>(h_s1[8], h_filter, h_offset, tbl);
+            filter8_s16x8<coeffIdy>(v_s1 + 1, v_filter, v_offset, sum_lo[3], sum_hi[3]);
+            v_s1[1] = v_s1[5];
+            res_hi[1] = vqshrun_n_s16(vtbl2q_s32_s16(sum_lo[3], sum_hi[3], shr_tbl),
+                                      v_shift_offset);
+
+            h_s0[9] = vld1q_u8(s + 2 * srcStride + 0);
+            v_s0[9] = filter8_8_ps_matmul<coeff2>(h_s0[9], h_filter, h_offset, tbl);
+            filter8_s16x8<coeffIdy>(v_s0 + 2, v_filter, v_offset, sum_lo[4], sum_hi[4]);
+            v_s0[2] = v_s0[6];
+            res_lo[2] = vqshrun_n_s16(vtbl2q_s32_s16(sum_lo[4], sum_hi[4], shr_tbl),
+                                      v_shift_offset);
+
+            h_s1[9] = vld1q_u8(s + 2 * srcStride + 8);
+            v_s1[9] = filter8_8_ps_matmul<coeff2>(h_s1[9], h_filter, h_offset, tbl);
+            filter8_s16x8<coeffIdy>(v_s1 + 2, v_filter, v_offset, sum_lo[5], sum_hi[5]);
+            v_s1[2] = v_s1[6];
+            res_hi[2] = vqshrun_n_s16(vtbl2q_s32_s16(sum_lo[5], sum_hi[5], shr_tbl),
+                                      v_shift_offset);
+
+            h_s0[10] = vld1q_u8(s + 3 * srcStride + 0);
+            v_s0[10] = filter8_8_ps_matmul<coeff2>(h_s0[10], h_filter, h_offset, tbl);
+            filter8_s16x8<coeffIdy>(v_s0 + 3, v_filter, v_offset, sum_lo[6], sum_hi[6]);
+            v_s0[3] = v_s0[7];
+            res_lo[3] = vqshrun_n_s16(vtbl2q_s32_s16(sum_lo[6], sum_hi[6], shr_tbl),
+                                      v_shift_offset);
+
+            h_s1[10] = vld1q_u8(s + 3 * srcStride + 8);
+            v_s1[10] = filter8_8_ps_matmul<coeff2>(h_s1[10], h_filter, h_offset, tbl);
+            filter8_s16x8<coeffIdy>(v_s1 + 3, v_filter, v_offset, sum_lo[7], sum_hi[7]);
+            v_s1[3] = v_s1[7];
+            res_hi[3] = vqshrun_n_s16(vtbl2q_s32_s16(sum_lo[7], sum_hi[7], shr_tbl),
+                                      v_shift_offset);
+
+            vst1q_u8(d + 0 * dstStride, vcombine_u8(res_lo[0], res_hi[0]));
+            vst1q_u8(d + 1 * dstStride, vcombine_u8(res_lo[1], res_hi[1]));
+            vst1q_u8(d + 2 * dstStride, vcombine_u8(res_lo[2], res_hi[2]));
+            vst1q_u8(d + 3 * dstStride, vcombine_u8(res_lo[3], res_hi[3]));
+
+            v_s0[4] = v_s0[8];
+            v_s1[4] = v_s1[8];
+            v_s0[5] = v_s0[9];
+            v_s1[5] = v_s1[9];
+            v_s0[6] = v_s0[10];
+            v_s1[6] = v_s1[10];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+
+        src += 16;
+        dst += 16;
+    }
+
+    for (; col + 8 <= width; col += 8)
+    {
+        const pixel *s = src;
+        pixel *d = dst;
+
+        int16x8_t v_s[11];
+        v_s[0] = filter8_8_ps_matmul<coeff2>(vld1q_u8(s + 0 * srcStride), h_filter,
+                                             h_offset, tbl);
+        v_s[1] = filter8_8_ps_matmul<coeff2>(vld1q_u8(s + 1 * srcStride), h_filter,
+                                             h_offset, tbl);
+        v_s[2] = filter8_8_ps_matmul<coeff2>(vld1q_u8(s + 2 * srcStride), h_filter,
+                                             h_offset, tbl);
+        v_s[3] = filter8_8_ps_matmul<coeff2>(vld1q_u8(s + 3 * srcStride), h_filter,
+                                             h_offset, tbl);
+        v_s[4] = filter8_8_ps_matmul<coeff2>(vld1q_u8(s + 4 * srcStride), h_filter,
+                                             h_offset, tbl);
+        v_s[5] = filter8_8_ps_matmul<coeff2>(vld1q_u8(s + 5 * srcStride), h_filter,
+                                             h_offset, tbl);
+        v_s[6] = filter8_8_ps_matmul<coeff2>(vld1q_u8(s + 6 * srcStride), h_filter,
+                                             h_offset, tbl);
+
+        s += 7 * srcStride;
+
+        for (int row = 0; row < height; row += 4)
+        {
+            uint8x8_t res[4];
+            int32x4_t sum_lo[4], sum_hi[4];
+
+            v_s[7] = filter8_8_ps_matmul<coeff2>(vld1q_u8(s + 0 * srcStride), h_filter,
+                                                 h_offset, tbl);
+            filter8_s16x8<coeffIdy>(v_s + 0, v_filter, v_offset, sum_lo[0], sum_hi[0]);
+            v_s[0] = v_s[4];
+            res[0] = vqshrun_n_s16(vtbl2q_s32_s16(sum_lo[0], sum_hi[0], shr_tbl),
+                                   v_shift_offset);
+
+            v_s[8] = filter8_8_ps_matmul<coeff2>(vld1q_u8(s + 1 * srcStride), h_filter,
+                                                 h_offset, tbl);
+            filter8_s16x8<coeffIdy>(v_s + 1, v_filter, v_offset, sum_lo[1], sum_hi[1]);
+            v_s[1] = v_s[5];
+            res[1] = vqshrun_n_s16(vtbl2q_s32_s16(sum_lo[1], sum_hi[1], shr_tbl),
+                                   v_shift_offset);
+
+            v_s[9] = filter8_8_ps_matmul<coeff2>(vld1q_u8(s + 2 * srcStride), h_filter,
+                                                 h_offset, tbl);
+            filter8_s16x8<coeffIdy>(v_s + 2, v_filter, v_offset, sum_lo[2], sum_hi[2]);
+            v_s[2] = v_s[6];
+            res[2] = vqshrun_n_s16(vtbl2q_s32_s16(sum_lo[2], sum_hi[2], shr_tbl),
+                                   v_shift_offset);
+
+            v_s[10] = filter8_8_ps_matmul<coeff2>(vld1q_u8(s + 3 * srcStride), h_filter,
+                                                  h_offset, tbl);
+            filter8_s16x8<coeffIdy>(v_s + 3, v_filter, v_offset, sum_lo[3], sum_hi[3]);
+            v_s[3] = v_s[7];
+            res[3] = vqshrun_n_s16(vtbl2q_s32_s16(sum_lo[3], sum_hi[3], shr_tbl),
+                                   v_shift_offset);
+
+            store_u8xnxm<8, 4>(d + 0, dstStride, res);
+
+            v_s[4] = v_s[8];
+            v_s[5] = v_s[9];
+            v_s[6] = v_s[10];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+
+        src += 8;
+        dst += 8;
+    }
+
+    if (width % 8 != 0)
+    {
+        const pixel *s = src;
+        pixel *d = dst;
+
+        int16x4_t v_s[11];
+        v_s[0] = filter8_4_ps_matmul<coeff2>(vld1q_u8(s + 0 * srcStride), h_filter,
+                                             h_offset, tbl);
+        v_s[1] = filter8_4_ps_matmul<coeff2>(vld1q_u8(s + 1 * srcStride), h_filter,
+                                             h_offset, tbl);
+        v_s[2] = filter8_4_ps_matmul<coeff2>(vld1q_u8(s + 2 * srcStride), h_filter,
+                                             h_offset, tbl);
+        v_s[3] = filter8_4_ps_matmul<coeff2>(vld1q_u8(s + 3 * srcStride), h_filter,
+                                             h_offset, tbl);
+        v_s[4] = filter8_4_ps_matmul<coeff2>(vld1q_u8(s + 4 * srcStride), h_filter,
+                                             h_offset, tbl);
+        v_s[5] = filter8_4_ps_matmul<coeff2>(vld1q_u8(s + 5 * srcStride), h_filter,
+                                             h_offset, tbl);
+        v_s[6] = filter8_4_ps_matmul<coeff2>(vld1q_u8(s + 6 * srcStride), h_filter,
+                                             h_offset, tbl);
+
+        s += 7 * srcStride;
+
+        for (int row = 0; row < height; row += 4)
+        {
+            uint8x8_t res[2];
+            int32x4_t sum[4];
+
+            v_s[7] = filter8_4_ps_matmul<coeff2>(vld1q_u8(s + 0 * srcStride), h_filter,
+                                                 h_offset, tbl);
+            filter8_s16x4<coeffIdy>(v_s + 0, v_filter, v_offset, sum[0]);
+            v_s[0] = v_s[4];
+
+            v_s[8] = filter8_4_ps_matmul<coeff2>(vld1q_u8(s + 1 * srcStride), h_filter,
+                                                 h_offset, tbl);
+            filter8_s16x4<coeffIdy>(v_s + 1, v_filter, v_offset, sum[1]);
+            v_s[1] = v_s[5];
+
+            v_s[9] = filter8_4_ps_matmul<coeff2>(vld1q_u8(s + 2 * srcStride), h_filter,
+                                                 h_offset, tbl);
+            filter8_s16x4<coeffIdy>(v_s + 2, v_filter, v_offset, sum[2]);
+            v_s[2] = v_s[6];
+
+            v_s[10] = filter8_4_ps_matmul<coeff2>(vld1q_u8(s + 3 * srcStride), h_filter,
+                                                  h_offset, tbl);
+            filter8_s16x4<coeffIdy>(v_s + 3, v_filter, v_offset, sum[3]);
+            v_s[3] = v_s[7];
+
+            res[0] = vqshrun_n_s16(vtbl2q_s32_s16(sum[0], sum[1], shr_tbl),
+                                   v_shift_offset);
+            res[1] = vqshrun_n_s16(vtbl2q_s32_s16(sum[2], sum[3], shr_tbl),
+                                   v_shift_offset);
+
+            store_u8x4_strided_xN<4>(d + 0 * dstStride, dstStride, res);
+
+            v_s[4] = v_s[8];
+            v_s[5] = v_s[9];
+            v_s[6] = v_s[10];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+    }
+}
+
 // Declaration for use in interp_hv_pp_i8mm().
 template<int N, int width, int height>
 void interp_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
                          intptr_t dstStride, int coeffIdx);
 
-// Implementation of luma_hvpp, using Neon i8mm implementation for the
-// horizontal part, and Armv8.0 Neon implementation for the vertical part.
 template<int width, int height>
 void interp_hv_pp_i8mm(const pixel *src, intptr_t srcStride, pixel *dst,
                        intptr_t dstStride, int idxX, int idxY)
 {
-    const int N_TAPS = 8;
-    ALIGN_VAR_32(int16_t, immed[width * (height + N_TAPS - 1)]);
+// Use the merged hv paths with Clang only as performance with GCC is worse than the
+// existing approach of doing horizontal and vertical interpolation separately.
+#ifdef __clang__
+    switch (idxX)
+    {
+    case 2:
+        switch (idxY)
+        {
+        case 1:
+            return interp8_hv_pp_i8mm<true, 1, width, height>(src, srcStride, dst,
+                                                              dstStride, idxX);
+        case 2:
+            return interp8_hv_pp_i8mm<true, 2, width, height>(src, srcStride, dst,
+                                                              dstStride, idxX);
+        case 3:
+            return interp8_hv_pp_i8mm<true, 3, width, height>(src, srcStride, dst,
+                                                              dstStride, idxX);
+        }
+
+    default:
+        switch (idxY)
+        {
+        case 1:
+            return interp8_hv_pp_i8mm<false, 1, width, height>(src, srcStride, dst,
+                                                               dstStride, idxX);
+        case 2:
+            return interp8_hv_pp_i8mm<false, 2, width, height>(src, srcStride, dst,
+                                                               dstStride, idxX);
+        case 3:
+            return interp8_hv_pp_i8mm<false, 3, width, height>(src, srcStride, dst,
+                                                               dstStride, idxX);
+        }
+    }
+
+#else // __clang__
+    // Implementation of luma_hvpp, using Neon I8MM implementation for the
+    // horizontal part, and Armv8.0 Neon implementation for the vertical part.
+    const int N = 8;
+    ALIGN_VAR_32(int16_t, immed[width * (height + N - 1)]);
 
     interp8_horiz_ps_i8mm<width, height>(src, srcStride, immed, width, idxX, 1);
-    interp_vert_sp_neon<N_TAPS, width, height>(immed + (N_TAPS / 2 - 1) * width,
-                                               width, dst, dstStride, idxY);
+    interp_vert_sp_neon<N, width, height>(immed + (N / 2 - 1) * width, width, dst,
+                                          dstStride, idxY);
+#endif // __clang__
 }
 
 #define LUMA_I8MM(W, H) \
