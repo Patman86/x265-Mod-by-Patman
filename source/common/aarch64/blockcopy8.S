@@ -33,62 +33,6 @@
 
 .text
 
-// void x265_blockfill_s_neon(int16_t* dst, intptr_t dstride, int16_t val)
-function PFX(blockfill_s_4x4_neon)
-    dup             v0.4h, w2
-    lsl             x1, x1, #1
-.rept 4
-    st1             {v0.4h}, [x0], x1
-.endr
-    ret
-endfunc
-
-function PFX(blockfill_s_8x8_neon)
-    dup             v0.8h, w2
-    lsl             x1, x1, #1
-.rept 8
-    st1             {v0.8h}, [x0], x1
-.endr
-    ret
-endfunc
-
-function PFX(blockfill_s_16x16_neon)
-    dup             v0.8h, w2
-    mov             v1.16b, v0.16b
-    lsl             x1, x1, #1
-.rept 16
-    stp             q0, q1, [x0]
-    add             x0, x0, x1
-.endr
-    ret
-endfunc
-
-function PFX(blockfill_s_32x32_neon)
-    dup             v0.8h, w2
-    mov             v1.16b, v0.16b
-    mov             v2.16b, v0.16b
-    mov             v3.16b, v0.16b
-    lsl             x1, x1, #1
-.rept 32
-    st1             {v0.8h-v3.8h}, [x0], x1
-.endr
-    ret
-endfunc
-
-function PFX(blockfill_s_64x64_neon)
-    dup             v0.8h, w2
-    mov             v1.16b, v0.16b
-    mov             v2.16b, v0.16b
-    mov             v3.16b, v0.16b
-    lsl             x1, x1, #1
-    sub             x1, x1, #64
-.rept 64
-    st1             {v0.8h-v3.8h}, [x0], #64
-    st1             {v0.8h-v3.8h}, [x0], x1
-.endr
-    ret
-endfunc
-
 // uint32_t copy_count(int16_t* coeff, const int16_t* residual, intptr_t resiStride)
 function PFX(copy_cnt_4_neon)
     lsl             x2, x2, #1

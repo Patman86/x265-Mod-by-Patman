@@ -819,24 +819,6 @@ static inline int pixel_sa8d_16x16_neon(const uint8_t *pix1, intptr_t stride_pix
 
 #endif // HIGH_BIT_DEPTH
 
-template<int size>
-void blockfill_s_neon(int16_t *dst, intptr_t dstride, int16_t val)
-{
-    for (int y = 0; y < size; y++)
-    {
-        int x = 0;
-        int16x8_t v = vdupq_n_s16(val);
-        for (; (x + 8) <= size; x += 8)
-        {
-            vst1q_s16(dst + y * dstride + x, v);
-        }
-        for (; x < size; x++)
-        {
-            dst[y * dstride + x] = val;
-        }
-    }
-}
-
 template<int lx, int ly>
 int sad_pp_neon(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr_t stride_pix2)
 {
@@ -915,6 +897,26 @@ int sad_pp_neon(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intp
     return sum;
 }
 
+template<int size>
+void blockfill_s_neon(int16_t *dst, intptr_t dstride, int16_t val)
+{
+    for (int h = 0; h < size; h++)
+    {
+        for (int w = 0; w + 16 <= size; w += 16)
+        {
+            vst1q_s16(dst + h * dstride + w, vdupq_n_s16(val));
+            vst1q_s16(dst + h * dstride + w + 8, vdupq_n_s16(val));
+        }
+        if (size == 8)
+        {
+            vst1q_s16(dst + h * dstride, vdupq_n_s16(val));
+        }
+        if (size == 4)
+        {
+            vst1_s16(dst + h * dstride, vdup_n_s16(val));
+        }
+    }
+}
 
 #if !HIGH_BIT_DEPTH
 template<int width, int height>
@@ -1937,6 +1939,8 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_ ## W ## x ## H].sub_ps        = pixel_sub_ps_neon<W, H>; \
     p.cu[BLOCK_ ## W ## x ## H].add_ps[NONALIGNED]    = pixel_add_ps_neon<W, H>; \
     p.cu[BLOCK_ ## W ## x ## H].add_ps[ALIGNED] = pixel_add_ps_neon<W, H>; \
+    p.cu[BLOCK_ ## W ## x ## H].blockfill_s[NONALIGNED] = blockfill_s_neon<W>; \
+    p.cu[BLOCK_ ## W ## x ## H].blockfill_s[ALIGNED]    = blockfill_s_neon<W>; \
     p.cu[BLOCK_ ## W ## x ## H].copy_pp       = blockcopy_pp_neon<W, H>; \
     p.cu[BLOCK_ ## W ## x ## H].copy_ss       = blockcopy_ss_neon<W, H>; \
     p.cu[BLOCK_ ## W ## x ## H].cpy2Dto1D_shl = cpy2Dto1D_shl_neon<W>; \
@@ -1949,6 +1953,8 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_ ## W ## x ## H].sub_ps        = pixel_sub_ps_neon<W, H>; \
     p.cu[BLOCK_ ## W ## x ## H].add_ps[NONALIGNED]    = pixel_add_ps_neon<W, H>; \
     p.cu[BLOCK_ ## W ## x ## H].add_ps[ALIGNED] = pixel_add_ps_neon<W, H>; \
+    p.cu[BLOCK_ ## W ## x ## H].blockfill_s[NONALIGNED] = blockfill_s_neon<W>; \
+    p.cu[BLOCK_ ## W ## x ## H].blockfill_s[ALIGNED]    = blockfill_s_neon<W>; \
     p.cu[BLOCK_ ## W ## x ## H].copy_pp       = blockcopy_pp_neon<W, H>; \
     p.cu[BLOCK_ ## W ## x ## H].copy_ps       = blockcopy_ps_neon<W, H>; \
     p.cu[BLOCK_ ## W ## x ## H].copy_ss       = blockcopy_ss_neon<W, H>; \
@@ -2027,13 +2033,6 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p)
     p.cu[BLOCK_32x32].var = pixel_var_neon<32>;
     p.cu[BLOCK_64x64].var = pixel_var_neon<64>;
 #endif // !(HIGH_BIT_DEPTH)
-
-    p.cu[BLOCK_16x16].blockfill_s[NONALIGNED] = blockfill_s_neon<16>;
-    p.cu[BLOCK_16x16].blockfill_s[ALIGNED]    = blockfill_s_neon<16>;
-    p.cu[BLOCK_32x32].blockfill_s[NONALIGNED] = blockfill_s_neon<32>;
-    p.cu[BLOCK_32x32].blockfill_s[ALIGNED]    = blockfill_s_neon<32>;
-    p.cu[BLOCK_64x64].blockfill_s[NONALIGNED] = blockfill_s_neon<64>;
-    p.cu[BLOCK_64x64].blockfill_s[ALIGNED]    = blockfill_s_neon<64>;
 
 
     p.cu[BLOCK_4x4].calcresidual[NONALIGNED]    = getResidual_neon<4>;

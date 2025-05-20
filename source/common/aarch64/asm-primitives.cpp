@@ -404,10 +404,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     ALL_CHROMA_444_PU(p2s[NONALIGNED], filterPixelToShort, neon);
     ALL_LUMA_PU(convert_p2s[NONALIGNED], filterPixelToShort, neon);
 
-    // Block_fill
-    ALL_LUMA_TU(blockfill_s[ALIGNED], blockfill_s, neon);
-    ALL_LUMA_TU(blockfill_s[NONALIGNED], blockfill_s, neon);
-
     // copy_count
     p.cu[BLOCK_4x4].copy_cnt     = PFX(copy_cnt_4_neon);
     p.cu[BLOCK_8x8].copy_cnt     = PFX(copy_cnt_8_neon);
@@ -588,10 +584,6 @@ void setupSvePrimitives(EncoderPrimitives &p)
     CHROMA_422_PU_SVE_FILTER_PIXEL_TO_SHORT(p2s[NONALIGNED]);
     CHROMA_444_PU_SVE_FILTER_PIXEL_TO_SHORT(p2s[NONALIGNED]);
     LUMA_PU_SVE_FILTER_PIXEL_TO_SHORT(convert_p2s[NONALIGNED]);
-
-    // Block_fill
-    LUMA_TU_CAN_USE_SVE(blockfill_s[ALIGNED], blockfill_s);
-    LUMA_TU_CAN_USE_SVE(blockfill_s[NONALIGNED], blockfill_s);
 
     // sse_ss
     p.cu[BLOCK_4x4].sse_ss   = PFX(pixel_sse_ss_4x4_sve);

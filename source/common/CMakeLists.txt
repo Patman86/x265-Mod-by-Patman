@@ -114,7 +114,7 @@ if(ENABLE_ASSEMBLY AND (ARM64 OR CROSS_COMPILE_ARM64))
     # Add Arm assembly files here.
     set(A_SRCS asm.S mc-a.S mc-a-common.S sad-a.S pixel-util.S pixel-util-common.S p2s.S p2s-common.S blockcopy8.S ssd-a.S ssd-a-common.S intrapred.S dct.S)
     set(A_SRCS_NEON_DOTPROD sad-neon-dotprod.S ssd-neon-dotprod.S)
-    set(A_SRCS_SVE asm-sve.S blockcopy8-sve.S p2s-sve.S pixel-util-sve.S ssd-a-sve.S)
+    set(A_SRCS_SVE asm-sve.S p2s-sve.S pixel-util-sve.S ssd-a-sve.S)
     set(A_SRCS_SVE2 mc-a-sve2.S pixel-util-sve2.S)
     set(VEC_PRIMITIVES)
 
