@@ -21,6 +21,7 @@
  * For more information, contact us at license @ x265.com.
  *****************************************************************************/
 
+#include "filter-prim.h"
 #include "filter-neon-dotprod.h"
 
 #if !HIGH_BIT_DEPTH
@@ -41,6 +42,13 @@ static const uint8_t dot_prod_merge_block_tbl[48] = {
     2, 3, 16, 17, 6, 7, 20, 21, 10, 11, 24, 25, 14, 15, 28, 29,
     // Shift left and insert three new columns in transposed 4x4 block.
     3, 16, 17, 18, 7, 20, 21, 22, 11, 24, 25, 26, 15, 28, 29, 30
+};
+
+// This is to use with vtbl2q_s32_s16.
+// Extract the middle two bytes from each 32-bit element in a vector, using these byte
+// indices.
+static const uint8_t vert_shr_tbl[16] = {
+    1, 2, 5, 6, 9, 10, 13, 14, 17, 18, 21, 22, 25, 26, 29, 30
 };
 
 uint8x8_t inline filter8_8_pp(uint8x16_t samples, const int8x8_t filter,
@@ -972,24 +980,168 @@ void interp8_vert_ps_dotprod(const uint8_t *src, intptr_t srcStride,
     }
 }
 
+template<int coeffIdx, int coeffIdy, int width, int height>
+void interp8_hv_pp_dotprod(const pixel *src, intptr_t srcStride, pixel *dst,
+                           intptr_t dstStride)
+{
+    const int v_shift = IF_FILTER_PREC + IF_INTERNAL_PREC - X265_DEPTH;
+    // Subtract 8 from shift since we account for that in table lookups.
+    const int v_shift_offset = v_shift - 8;
+    const int16x8_t v_filter = vld1q_s16(X265_NS::g_lumaFilter[coeffIdy]);
+    const int32x4_t v_offset = vdupq_n_s32((1 << (v_shift - 1)) +
+                                           (IF_INTERNAL_OFFS << IF_FILTER_PREC));
+
+    src -= 3 * srcStride + 3;
+
+    const uint8x16x3_t tbl = vld1q_u8_x3(dotprod_permute_tbl);
+    const int8x8_t filter = vmovn_s16(vld1q_s16(g_lumaFilter[coeffIdx]));
+    const uint8x16_t shr_tbl = vld1q_u8(vert_shr_tbl);
+
+    uint8x16_t h_s[11];
+    load_u8x16xn<7>(src, srcStride, h_s);
+
+    int16x4_t v_s[11];
+    v_s[0] = filter8_4_ps(h_s[0], filter, tbl);
+    v_s[1] = filter8_4_ps(h_s[1], filter, tbl);
+    v_s[2] = filter8_4_ps(h_s[2], filter, tbl);
+    v_s[3] = filter8_4_ps(h_s[3], filter, tbl);
+    v_s[4] = filter8_4_ps(h_s[4], filter, tbl);
+    v_s[5] = filter8_4_ps(h_s[5], filter, tbl);
+    v_s[6] = filter8_4_ps(h_s[6], filter, tbl);
+
+    src += 7 * srcStride;
+
+    for (int row = 0; row < height; row += 4)
+    {
+        load_u8x16xn<4>(src, srcStride, h_s + 7);
+        v_s[7] = filter8_4_ps(h_s[7], filter, tbl);
+        v_s[8] = filter8_4_ps(h_s[8], filter, tbl);
+        v_s[9] = filter8_4_ps(h_s[9], filter, tbl);
+        v_s[10] = filter8_4_ps(h_s[10], filter, tbl);
+
+        int32x4_t sum[4];
+        filter8_s16x4<coeffIdy>(v_s + 0, v_filter, v_offset, sum[0]);
+        filter8_s16x4<coeffIdy>(v_s + 1, v_filter, v_offset, sum[1]);
+        filter8_s16x4<coeffIdy>(v_s + 2, v_filter, v_offset, sum[2]);
+        filter8_s16x4<coeffIdy>(v_s + 3, v_filter, v_offset, sum[3]);
+
+        int16x8_t sum_s16[4];
+        sum_s16[0] = vtbl2q_s32_s16(sum[0], sum[1], shr_tbl);
+        sum_s16[1] = vtbl2q_s32_s16(sum[2], sum[3], shr_tbl);
+
+        uint8x8_t res[2];
+        res[0] = vqshrun_n_s16(sum_s16[0], v_shift_offset);
+        res[1] = vqshrun_n_s16(sum_s16[1], v_shift_offset);
+
+        store_u8x4_strided_xN<4>(dst + 0 * dstStride, dstStride, res);
+
+        v_s[0] = v_s[4];
+        v_s[1] = v_s[5];
+        v_s[2] = v_s[6];
+        v_s[3] = v_s[7];
+        v_s[4] = v_s[8];
+        v_s[5] = v_s[9];
+        v_s[6] = v_s[10];
+
+        src += 4 * srcStride;
+        dst += 4 * dstStride;
+    }
+}
+
 // Declaration for use in interp_hv_pp_dotprod().
 template<int N, int width, int height>
 void interp_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
                          intptr_t dstStride, int coeffIdx);
 
-// Implementation of luma_hvpp, using Neon DotProd implementation for the
-// horizontal part, and Armv8.0 Neon implementation for the vertical part.
 template<int width, int height>
 void interp_hv_pp_dotprod(const pixel *src, intptr_t srcStride, pixel *dst,
                           intptr_t dstStride, int idxX, int idxY)
 {
+// Use the merged hv paths with Clang only as performance with GCC is worse than the
+// existing approach of doing horizontal and vertical interpolation separately.
+#ifdef __clang__
+    if (width == 4 && height <= 8)
+    {
+        switch (idxX)
+        {
+        case 1:
+        {
+            switch (idxY)
+            {
+            case 1:
+                return interp8_hv_pp_dotprod<1, 1, width, height>(src, srcStride, dst,
+                                                                  dstStride);
+            case 2:
+                return interp8_hv_pp_dotprod<1, 2, width, height>(src, srcStride, dst,
+                                                                  dstStride);
+            case 3:
+                return interp8_hv_pp_dotprod<1, 3, width, height>(src, srcStride, dst,
+                                                                  dstStride);
+            }
+
+            break;
+        }
+        case 2:
+        {
+            switch (idxY)
+            {
+            case 1:
+                return interp8_hv_pp_dotprod<2, 1, width, height>(src, srcStride, dst,
+                                                                  dstStride);
+            case 2:
+                return interp8_hv_pp_dotprod<2, 2, width, height>(src, srcStride, dst,
+                                                                  dstStride);
+            case 3:
+                return interp8_hv_pp_dotprod<2, 3, width, height>(src, srcStride, dst,
+                                                                  dstStride);
+            }
+
+            break;
+        }
+        case 3:
+        {
+            switch (idxY)
+            {
+            case 1:
+                return interp8_hv_pp_dotprod<3, 1, width, height>(src, srcStride, dst,
+                                                                  dstStride);
+            case 2:
+                return interp8_hv_pp_dotprod<3, 2, width, height>(src, srcStride, dst,
+                                                                  dstStride);
+            case 3:
+                return interp8_hv_pp_dotprod<3, 3, width, height>(src, srcStride, dst,
+                                                                  dstStride);
+            }
+
+            break;
+        }
+        }
+    }
+    else
+    {
+        // Implementation of luma_hvpp, using Neon DotProd implementation for the
+        // horizontal part, and Armv8.0 Neon implementation for the vertical part.
+        const int N_TAPS = 8;
+
+        ALIGN_VAR_32(int16_t, immed[width * (height + N_TAPS - 1)]);
+
+        interp8_horiz_ps_dotprod<width, height>(src, srcStride, immed, width, idxX,
+                                                1);
+        interp_vert_sp_neon<N_TAPS, width, height>(immed + (N_TAPS / 2 - 1) * width,
+                                                   width, dst, dstStride, idxY);
+    }
+#else // __clang__
+    // Implementation of luma_hvpp, using Neon DotProd implementation for the
+    // horizontal part, and Armv8.0 Neon implementation for the vertical part.
     const int N_TAPS = 8;
+
     ALIGN_VAR_32(int16_t, immed[width * (height + N_TAPS - 1)]);
 
     interp8_horiz_ps_dotprod<width, height>(src, srcStride, immed, width, idxX,
                                             1);
     interp_vert_sp_neon<N_TAPS, width, height>(immed + (N_TAPS / 2 - 1) * width,
                                                width, dst, dstStride, idxY);
+#endif // __clang__
 }
 
 #define LUMA_DOTPROD(W, H) \
