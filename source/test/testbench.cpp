@@ -103,6 +103,7 @@ struct test_arch_t
     { "Neon_I8MM", X265_CPU_NEON_I8MM },
     { "SVE", X265_CPU_SVE },
     { "SVE2", X265_CPU_SVE2 },
+    { "SVE2_BitPerm", X265_CPU_SVE2_BITPERM },
     { "FastNeonMRC", X265_CPU_FAST_NEON_MRC },
 #endif
     { "", 0 },
