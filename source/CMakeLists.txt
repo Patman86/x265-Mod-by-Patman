@@ -171,7 +171,7 @@ if(UNIX)
     endif(X64)
 endif(UNIX)
 
-if((X64 AND NOT WIN32) OR ARM64)
+if((X64 AND NOT WIN32) OR ARM64 OR PPC64)
     option(ENABLE_PIC "Enable Position Independent Code" ON)
 else()
     option(ENABLE_PIC "Enable Position Independent Code" OFF)
