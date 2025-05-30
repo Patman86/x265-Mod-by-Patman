@@ -30,6 +30,7 @@
 #define ENABLE_THREADING 1
 
 #if _WIN32
+#define strncasecmp _strnicmp
 #include <io.h>
 #include <fcntl.h>
 #if defined(_MSC_VER)
