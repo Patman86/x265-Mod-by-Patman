@@ -141,7 +141,7 @@ static inline void partialButterfly16_sve(const int16_t *src, int16_t *dst)
     const int line = 16;
 
     int16x8_t O[line];
-    int16x8_t EO[line / 2];
+    int32x4_t EO[line];
     int32x4_t EEE[line];
     int32x4_t EEO[line];
 
@@ -164,9 +164,8 @@ static inline void partialButterfly16_sve(const int16_t *src, int16_t *dst)
         O[i + 0] = vsubq_s16(s0_lo, s0_hi);
         O[i + 1] = vsubq_s16(s1_lo, s1_hi);
 
-        int16x4_t EO_lo = vmovn_s32(vsubq_s32(E0[0], rev32(E0[1])));
-        int16x4_t EO_hi = vmovn_s32(vsubq_s32(E1[0], rev32(E1[1])));
-        EO[i / 2] = vcombine_s16(EO_lo, EO_hi);
+        EO[i + 0] = vsubq_s32(E0[0], rev32(E0[1]));
+        EO[i + 1] = vsubq_s32(E1[0], rev32(E1[1]));
 
         int32x4_t EE0 = vaddq_s32(E0[0], rev32(E0[1]));
         int32x4_t EE1 = vaddq_s32(E1[0], rev32(E1[1]));
@@ -200,13 +199,15 @@ static inline void partialButterfly16_sve(const int16_t *src, int16_t *dst)
 
         for (int k = 2; k < 16; k += 4)
         {
-            int16x8_t c0 = vld1q_s16(t8_odd[(k - 2) / 4]);
+            int32x4_t c0 = x265_vld1sh_s32(&g_t16[k][0]);
 
-            int64x2_t t0 = x265_sdotq_s16(vdupq_n_s64(0), c0, EO[i / 2 + 0]);
-            int64x2_t t1 = x265_sdotq_s16(vdupq_n_s64(0), c0, EO[i / 2 + 1]);
+            int32x4_t t0 = vmulq_s32(c0, EO[i + 0]);
+            int32x4_t t1 = vmulq_s32(c0, EO[i + 1]);
+            int32x4_t t2 = vmulq_s32(c0, EO[i + 2]);
+            int32x4_t t3 = vmulq_s32(c0, EO[i + 3]);
+            int32x4_t t = vpaddq_s32(vpaddq_s32(t0, t1), vpaddq_s32(t2, t3));
 
-            int32x4_t t01 = vcombine_s32(vmovn_s64(t0), vmovn_s64(t1));
-            int16x4_t res = vrshrn_n_s32(t01, shift);
+            int16x4_t res = vrshrn_n_s32(t, shift);
             vst1_s16(dst + k * line, res);
         }
 
@@ -245,7 +246,7 @@ static inline void partialButterfly32_sve(const int16_t *src, int16_t *dst)
     const int line = 32;
 
     int16x8_t O[line][2];
-    int16x8_t EO[line];
+    int32x4_t EO[line][2];
     int32x4_t EEO[line];
     int32x4_t EEEE[line / 2];
     int32x4_t EEEO[line / 2];
@@ -291,16 +292,16 @@ static inline void partialButterfly32_sve(const int16_t *src, int16_t *dst)
         E0[2] = rev32(E0[2]);
         EE0[0] = vaddq_s32(E0[0], E0[3]);
         EE0[1] = vaddq_s32(E0[1], E0[2]);
-        EO[i + 0] = vcombine_s16(vmovn_s32(vsubq_s32(E0[0], E0[3])),
-                                 vmovn_s32(vsubq_s32(E0[1], E0[2])));
+        EO[i + 0][0] = vsubq_s32(E0[0], E0[3]);
+        EO[i + 0][1] = vsubq_s32(E0[1], E0[2]);
 
         int32x4_t EE1[2];
         E1[3] = rev32(E1[3]);
         E1[2] = rev32(E1[2]);
         EE1[0] = vaddq_s32(E1[0], E1[3]);
         EE1[1] = vaddq_s32(E1[1], E1[2]);
-        EO[i + 1] = vcombine_s16(vmovn_s32(vsubq_s32(E1[0], E1[3])),
-                                 vmovn_s32(vsubq_s32(E1[1], E1[2])));
+        EO[i + 1][0] = vsubq_s32(E1[0], E1[3]);
+        EO[i + 1][1] = vsubq_s32(E1[1], E1[2]);
 
         int32x4_t EEE0;
         EE0[1] = rev32(EE0[1]);
@@ -354,18 +355,20 @@ static inline void partialButterfly32_sve(const int16_t *src, int16_t *dst)
     {
         int16_t *d = dst + k * line;
 
-        int16x8_t c0 = vld1q_s16(&g_t32[k][0]);
+        int32x4_t c0 = x265_vld1sh_s32(&g_t32[k][0]);
+        int32x4_t c1 = x265_vld1sh_s32(&g_t32[k][4]);
 
         for (int i = 0; i < line; i += 4)
         {
-            int64x2_t t0 = x265_sdotq_s16(vdupq_n_s64(0), c0, EO[i + 0]);
-            int64x2_t t1 = x265_sdotq_s16(vdupq_n_s64(0), c0, EO[i + 1]);
-            int64x2_t t2 = x265_sdotq_s16(vdupq_n_s64(0), c0, EO[i + 2]);
-            int64x2_t t3 = x265_sdotq_s16(vdupq_n_s64(0), c0, EO[i + 3]);
+            int32x4_t t[4];
+            for (int j = 0; j < 4; ++j) {
+                t[j] = vmulq_s32(c0, EO[i + j][0]);
+                t[j] = vmlaq_s32(t[j], c1, EO[i + j][1]);
+            }
 
-            int32x4_t t01 = vcombine_s32(vmovn_s64(t0), vmovn_s64(t1));
-            int32x4_t t23 = vcombine_s32(vmovn_s64(t2), vmovn_s64(t3));
-            int16x4_t res = vrshrn_n_s32(vpaddq_s32(t01, t23), shift);
+            int32x4_t t0123 = vpaddq_s32(vpaddq_s32(t[0], t[1]),
+                                         vpaddq_s32(t[2], t[3]));
+            int16x4_t res = vrshrn_n_s32(t0123, shift);
             vst1_s16(d, res);
 
             d += 4;
