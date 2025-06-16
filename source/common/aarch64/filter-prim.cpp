@@ -45,9 +45,9 @@ static const uint8_t vert_shr_tbl[16] = {
 #define SHIFT_INTERP_PS (IF_FILTER_PREC - (IF_INTERNAL_PREC - X265_DEPTH))
 #endif
 
-template<bool coeff4, int shift>
-void inline filter4_s16x4(const int16x4_t *s, const int16x4_t f,
-                          const int32x4_t c, int16x4_t &d)
+template<bool coeff4>
+void inline filter4_s16x4_sum(const int16x4_t *s, const int16x4_t f,
+                              const int32x4_t c, int32x4_t &sum)
 {
     if (coeff4)
     {
@@ -55,25 +55,54 @@ void inline filter4_s16x4(const int16x4_t *s, const int16x4_t f,
         int16x4_t sum03 = vadd_s16(s[0], s[3]);
         int16x4_t sum12 = vadd_s16(s[1], s[2]);
 
-        int32x4_t sum = vmlal_n_s16(c, sum12, 9);
+        sum = vmlal_n_s16(c, sum12, 9);
         sum = vsubw_s16(sum, sum03);
-
-        d = vshrn_n_s32(sum, shift - 2);
     }
     else
     {
-        int32x4_t sum = vmlal_lane_s16(c, s[0], f, 0);
+        sum = vmlal_lane_s16(c, s[0], f, 0);
         sum = vmlal_lane_s16(sum, s[1], f, 1);
         sum = vmlal_lane_s16(sum, s[2], f, 2);
         sum = vmlal_lane_s16(sum, s[3], f, 3);
-
-        d = vshrn_n_s32(sum, shift);
     }
 }
 
 template<bool coeff4, int shift>
-void inline filter4_s16x8(const int16x8_t *s, const int16x4_t f,
-                          const int32x4_t c, int16x8_t &d)
+void inline filter4_ss_s16x4(const int16x4_t *s, const int16x4_t f,
+                             const int32x4_t c, int16x4_t &d)
+{
+    int32x4_t sum;
+
+    filter4_s16x4_sum<coeff4>(s, f, c, sum);
+
+    // We divided filter values by 4 so subtract 2 from right shift in case of filter
+    // coefficient 4.
+    const int shift_offset = coeff4 ? shift - 2 : shift;
+
+    d = vshrn_n_s32(sum, shift_offset);
+}
+
+template<bool coeff4, int shift>
+void inline filter4x2_sp_s16x4(const int16x4_t *s0, const int16x4_t *s1,
+                               const int16x4_t f, const int32x4_t c,
+                               const uint8x16_t shr_tbl, uint8x8_t &d)
+{
+    int32x4_t sum0, sum1;
+
+    filter4_s16x4_sum<coeff4>(s0, f, c, sum0);
+    filter4_s16x4_sum<coeff4>(s1, f, c, sum1);
+    int16x8_t sum = vtbl2q_s32_s16(sum0, sum1, shr_tbl);
+
+    // We divided filter values by 4 so subtract 2 from right shift in case of filter
+    // coefficient 4.
+    const int shift_offset = coeff4 ? shift - 2 : shift;
+
+    d = vqshrun_n_s16(sum, shift_offset);
+}
+
+template<bool coeff4>
+void inline filter4_s16x8_sum(const int16x8_t *s, const int16x4_t f,
+                              const int32x4_t c, int32x4_t &sum_lo, int32x4_t &sum_hi)
 {
     if (coeff4)
     {
@@ -81,28 +110,57 @@ void inline filter4_s16x8(const int16x8_t *s, const int16x4_t f,
         int16x8_t sum03 = vaddq_s16(s[0], s[3]);
         int16x8_t sum12 = vaddq_s16(s[1], s[2]);
 
-        int32x4_t sum_lo = vmlal_n_s16(c, vget_low_s16(sum12), 9);
-        int32x4_t sum_hi = vmlal_n_s16(c, vget_high_s16(sum12), 9);
+        sum_lo = vmlal_n_s16(c, vget_low_s16(sum12), 9);
+        sum_hi = vmlal_n_s16(c, vget_high_s16(sum12), 9);
 
         sum_lo = vsubw_s16(sum_lo, vget_low_s16(sum03));
         sum_hi = vsubw_s16(sum_hi, vget_high_s16(sum03));
-
-        d = vcombine_s16(vshrn_n_s32(sum_lo, shift - 2), vshrn_n_s32(sum_hi, shift - 2));
     }
     else
     {
-        int32x4_t sum_lo = vmlal_lane_s16(c, vget_low_s16(s[0]), f, 0);
+        sum_lo = vmlal_lane_s16(c, vget_low_s16(s[0]), f, 0);
         sum_lo = vmlal_lane_s16(sum_lo, vget_low_s16(s[1]), f, 1);
         sum_lo = vmlal_lane_s16(sum_lo, vget_low_s16(s[2]), f, 2);
         sum_lo = vmlal_lane_s16(sum_lo, vget_low_s16(s[3]), f, 3);
 
-        int32x4_t sum_hi = vmlal_lane_s16(c, vget_high_s16(s[0]), f, 0);
+        sum_hi = vmlal_lane_s16(c, vget_high_s16(s[0]), f, 0);
         sum_hi = vmlal_lane_s16(sum_hi, vget_high_s16(s[1]), f, 1);
         sum_hi = vmlal_lane_s16(sum_hi, vget_high_s16(s[2]), f, 2);
         sum_hi = vmlal_lane_s16(sum_hi, vget_high_s16(s[3]), f, 3);
-
-        d = vcombine_s16(vshrn_n_s32(sum_lo, shift), vshrn_n_s32(sum_hi, shift));
     }
+}
+
+template<bool coeff4, int shift>
+void inline filter4_ss_s16x8(const int16x8_t *s, const int16x4_t f,
+                             const int32x4_t c, int16x8_t &d)
+{
+    int32x4_t sum_lo, sum_hi;
+
+    filter4_s16x8_sum<coeff4>(s, f, c, sum_lo, sum_hi);
+
+    // We divided filter values by 4 so subtract 2 from right shift in case of filter
+    // coefficient 4.
+    const int shift_offset = coeff4 ? shift - 2 : shift;
+
+    d = vcombine_s16(vshrn_n_s32(sum_lo, shift_offset),
+                     vshrn_n_s32(sum_hi, shift_offset));
+}
+
+template<bool coeff4, int shift>
+void inline filter4_sp_s16x8(const int16x8_t *s, const int16x4_t f,
+                             const int32x4_t c, const uint8x16_t shr_tbl, uint8x8_t &d)
+{
+    int32x4_t sum_lo, sum_hi;
+
+    filter4_s16x8_sum<coeff4>(s, f, c, sum_lo, sum_hi);
+
+    int16x8_t sum = vtbl2q_s32_s16(sum_lo, sum_hi, shr_tbl);
+
+    // We divided filter values by 4 so subtract 2 from right shift in case of filter
+    // coefficient 4.
+    const int shift_offset = coeff4 ? shift - 2 : shift;
+
+    d = vqshrun_n_s16(sum, shift_offset);
 }
 
 template<bool coeff4, int width, int height>
@@ -134,10 +192,10 @@ void interp4_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst,
                 load_s16x8xn<4>(s, srcStride, in + 3);
 
                 int16x8_t res[4];
-                filter4_s16x8<coeff4, shift>(in + 0, filter, c, res[0]);
-                filter4_s16x8<coeff4, shift>(in + 1, filter, c, res[1]);
-                filter4_s16x8<coeff4, shift>(in + 2, filter, c, res[2]);
-                filter4_s16x8<coeff4, shift>(in + 3, filter, c, res[3]);
+                filter4_ss_s16x8<coeff4, shift>(in + 0, filter, c, res[0]);
+                filter4_ss_s16x8<coeff4, shift>(in + 1, filter, c, res[1]);
+                filter4_ss_s16x8<coeff4, shift>(in + 2, filter, c, res[2]);
+                filter4_ss_s16x8<coeff4, shift>(in + 3, filter, c, res[3]);
 
                 store_s16xnxm<n_store, 4>(res, d, dstStride);
 
@@ -168,10 +226,10 @@ void interp4_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst,
             load_s16x4xn<4>(src, srcStride, in + 3);
 
             int16x4_t res[4];
-            filter4_s16x4<coeff4, shift>(in + 0, filter, c, res[0]);
-            filter4_s16x4<coeff4, shift>(in + 1, filter, c, res[1]);
-            filter4_s16x4<coeff4, shift>(in + 2, filter, c, res[2]);
-            filter4_s16x4<coeff4, shift>(in + 3, filter, c, res[3]);
+            filter4_ss_s16x4<coeff4, shift>(in + 0, filter, c, res[0]);
+            filter4_ss_s16x4<coeff4, shift>(in + 1, filter, c, res[1]);
+            filter4_ss_s16x4<coeff4, shift>(in + 2, filter, c, res[2]);
+            filter4_ss_s16x4<coeff4, shift>(in + 3, filter, c, res[3]);
 
             store_s16xnxm<n_store, 4>(res, dst, dstStride);
 
@@ -188,8 +246,8 @@ void interp4_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst,
             load_s16x4xn<2>(src, srcStride, in + 3);
 
             int16x4_t res[2];
-            filter4_s16x4<coeff4, shift>(in + 0, filter, c, res[0]);
-            filter4_s16x4<coeff4, shift>(in + 1, filter, c, res[1]);
+            filter4_ss_s16x4<coeff4, shift>(in + 0, filter, c, res[0]);
+            filter4_ss_s16x4<coeff4, shift>(in + 1, filter, c, res[1]);
 
             store_s16xnxm<n_store, 2>(res, dst, dstStride);
         }
@@ -210,10 +268,10 @@ void interp4_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst,
                 load_s16x8xn<4>(s, srcStride, in + 3);
 
                 int16x8_t res[4];
-                filter4_s16x8<coeff4, shift>(in + 0, filter, c, res[0]);
-                filter4_s16x8<coeff4, shift>(in + 1, filter, c, res[1]);
-                filter4_s16x8<coeff4, shift>(in + 2, filter, c, res[2]);
-                filter4_s16x8<coeff4, shift>(in + 3, filter, c, res[3]);
+                filter4_ss_s16x8<coeff4, shift>(in + 0, filter, c, res[0]);
+                filter4_ss_s16x8<coeff4, shift>(in + 1, filter, c, res[1]);
+                filter4_ss_s16x8<coeff4, shift>(in + 2, filter, c, res[2]);
+                filter4_ss_s16x8<coeff4, shift>(in + 3, filter, c, res[3]);
 
                 store_s16x8xn<4>(d, dstStride, res);
 
@@ -230,8 +288,8 @@ void interp4_vert_ss_neon(const int16_t *src, intptr_t srcStride, int16_t *dst,
                 load_s16x8xn<2>(s, srcStride, in + 3);
 
                 int16x8_t res[2];
-                filter4_s16x8<coeff4, shift>(in + 0, filter, c, res[0]);
-                filter4_s16x8<coeff4, shift>(in + 1, filter, c, res[1]);
+                filter4_ss_s16x8<coeff4, shift>(in + 0, filter, c, res[0]);
+                filter4_ss_s16x8<coeff4, shift>(in + 1, filter, c, res[1]);
 
                 store_s16x8xn<2>(d, dstStride, res);
             }
@@ -1637,8 +1695,11 @@ void interp4_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
     const int N_TAPS = 4;
     const int headRoom = IF_INTERNAL_PREC - X265_DEPTH;
     const int shift = IF_FILTER_PREC + headRoom;
+    // Subtract 8 from shift since we account for that in table lookups.
+    const int shift_offset = shift - 8;
 
     const int16x4_t filter = vld1_s16(X265_NS::g_chromaFilter[coeffIdx]);
+    const uint8x16_t shr_tbl = vld1q_u8(vert_shr_tbl);
     int32x4_t offset;
 
     if (coeff4)
@@ -1671,19 +1732,17 @@ void interp4_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
             {
                 load_s16x8xn<4>(s, srcStride, in + 3);
 
-                int16x8_t sum[4];
-                filter4_s16x8<coeff4, shift>(in + 0, filter, offset, sum[0]);
-                filter4_s16x8<coeff4, shift>(in + 1, filter, offset, sum[1]);
-                filter4_s16x8<coeff4, shift>(in + 2, filter, offset, sum[2]);
-                filter4_s16x8<coeff4, shift>(in + 3, filter, offset, sum[3]);
+                uint8x8_t sum[4];
+                filter4_sp_s16x8<coeff4, shift_offset>(in + 0, filter, offset, shr_tbl,
+                                                       sum[0]);
+                filter4_sp_s16x8<coeff4, shift_offset>(in + 1, filter, offset, shr_tbl,
+                                                       sum[1]);
+                filter4_sp_s16x8<coeff4, shift_offset>(in + 2, filter, offset, shr_tbl,
+                                                       sum[2]);
+                filter4_sp_s16x8<coeff4, shift_offset>(in + 3, filter, offset, shr_tbl,
+                                                       sum[3]);
 
-                uint8x8_t res[4];
-                res[0] = vqmovun_s16(sum[0]);
-                res[1] = vqmovun_s16(sum[1]);
-                res[2] = vqmovun_s16(sum[2]);
-                res[3] = vqmovun_s16(sum[3]);
-
-                store_u8xnxm<n_store, 4>(d, dstStride, res);
+                store_u8xnxm<n_store, 4>(d, dstStride, sum);
 
                 in[0] = in[4];
                 in[1] = in[5];
@@ -1712,15 +1771,11 @@ void interp4_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
         {
             load_s16x4xn<4>(src, srcStride, in + 3);
 
-            int16x4_t sum[4];
-            filter4_s16x4<coeff4, shift>(in + 0, filter, offset, sum[0]);
-            filter4_s16x4<coeff4, shift>(in + 1, filter, offset, sum[1]);
-            filter4_s16x4<coeff4, shift>(in + 2, filter, offset, sum[2]);
-            filter4_s16x4<coeff4, shift>(in + 3, filter, offset, sum[3]);
-
             uint8x8_t res[2];
-            res[0] = vqmovun_s16(vcombine_s16(sum[0], sum[1]));
-            res[1] = vqmovun_s16(vcombine_s16(sum[2], sum[3]));
+            filter4x2_sp_s16x4<coeff4, shift_offset>(in + 0, in + 1, filter, offset,
+                                                     shr_tbl, res[0]);
+            filter4x2_sp_s16x4<coeff4, shift_offset>(in + 2, in + 3, filter, offset,
+                                                     shr_tbl, res[1]);
 
             store_u8xnxm_strided<n_store, 4>(dst, dstStride, res);
 
@@ -1736,11 +1791,9 @@ void interp4_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
         {
             load_s16x4xn<2>(src, srcStride, in + 3);
 
-            int16x4_t sum[2];
-            filter4_s16x4<coeff4, shift>(in + 0, filter, offset, sum[0]);
-            filter4_s16x4<coeff4, shift>(in + 1, filter, offset, sum[1]);
-
-            uint8x8_t res = vqmovun_s16(vcombine_s16(sum[0], sum[1]));
+            uint8x8_t res;
+            filter4x2_sp_s16x4<coeff4, shift_offset>(in + 0, in + 1, filter, offset,
+                                                     shr_tbl, res);
 
             store_u8xnxm_strided<n_store, 2>(dst, dstStride, &res);
         }
@@ -1760,19 +1813,17 @@ void interp4_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
             {
                 load_s16x8xn<4>(s, srcStride, in + 3);
 
-                int16x8_t sum[4];
-                filter4_s16x8<coeff4, shift>(in + 0, filter, offset, sum[0]);
-                filter4_s16x8<coeff4, shift>(in + 1, filter, offset, sum[1]);
-                filter4_s16x8<coeff4, shift>(in + 2, filter, offset, sum[2]);
-                filter4_s16x8<coeff4, shift>(in + 3, filter, offset, sum[3]);
+                uint8x8_t sum[4];
+                filter4_sp_s16x8<coeff4, shift_offset>(in + 0, filter, offset, shr_tbl,
+                                                       sum[0]);
+                filter4_sp_s16x8<coeff4, shift_offset>(in + 1, filter, offset, shr_tbl,
+                                                       sum[1]);
+                filter4_sp_s16x8<coeff4, shift_offset>(in + 2, filter, offset, shr_tbl,
+                                                       sum[2]);
+                filter4_sp_s16x8<coeff4, shift_offset>(in + 3, filter, offset, shr_tbl,
+                                                       sum[3]);
 
-                uint8x8_t res[4];
-                res[0] = vqmovun_s16(sum[0]);
-                res[1] = vqmovun_s16(sum[1]);
-                res[2] = vqmovun_s16(sum[2]);
-                res[3] = vqmovun_s16(sum[3]);
-
-                store_u8x8xn<4>(d, dstStride, res);
+                store_u8x8xn<4>(d, dstStride, sum);
 
                 in[0] = in[4];
                 in[1] = in[5];
@@ -1786,15 +1837,13 @@ void interp4_vert_sp_neon(const int16_t *src, intptr_t srcStride, uint8_t *dst,
             {
                 load_s16x8xn<2>(s, srcStride, in + 3);
 
-                int16x8_t sum[2];
-                filter4_s16x8<coeff4, shift>(in + 0, filter, offset, sum[0]);
-                filter4_s16x8<coeff4, shift>(in + 1, filter, offset, sum[1]);
+                uint8x8_t sum[2];
+                filter4_sp_s16x8<coeff4, shift_offset>(in + 0, filter, offset, shr_tbl,
+                                                       sum[0]);
+                filter4_sp_s16x8<coeff4, shift_offset>(in + 1, filter, offset, shr_tbl,
+                                                       sum[1]);
 
-                uint8x8_t res[2];
-                res[0] = vqmovun_s16(sum[0]);
-                res[1] = vqmovun_s16(sum[1]);
-
-                store_u8x8xn<2>(d, dstStride, res);
+                store_u8x8xn<2>(d, dstStride, sum);
             }
 
             src += 8;
