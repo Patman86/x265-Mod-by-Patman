@@ -727,6 +727,7 @@ void setupIntrinsicPrimitives(EncoderPrimitives &p, int cpuMask)
         setupFilterPrimitives_sve(p);
         setupSaoPrimitives_sve(p);
         setupDCTPrimitives_sve(p);
+        setupPixelPrimitives_sve(p);
     }
 #endif
 #if defined(HAVE_SVE2) && HAVE_SVE_BRIDGE

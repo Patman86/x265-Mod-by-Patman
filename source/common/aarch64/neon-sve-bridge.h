@@ -58,6 +58,13 @@ static inline int64x2_t x265_sdotq_s16(int64x2_t acc, int16x8_t x, int16x8_t y)
                                        svset_neonq_s16(svundef_s16(), s0),  \
                                        svset_neonq_s16(svundef_s16(), f), lane))
 
+static inline uint64x2_t x265_udotq_u16(uint64x2_t acc, uint16x8_t x, uint16x8_t y)
+{
+    return svget_neonq_u64(svdot_u64(svset_neonq_u64(svundef_u64(), acc),
+                                     svset_neonq_u16(svundef_u16(), x),
+                                     svset_neonq_u16(svundef_u16(), y)));
+}
+
 static inline uint16x8_t x265_tblq_u16(uint16x8_t x, uint16x8_t idx)
 {
     return svget_neonq_u16(svtbl_u16(svset_neonq_u16(svundef_u16(), x),

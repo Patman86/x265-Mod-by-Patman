@@ -19,6 +19,9 @@ void setupPixelPrimitives_neon(EncoderPrimitives &p);
 void setupPixelPrimitives_neon_dotprod(EncoderPrimitives &p);
 #endif
 
+#if defined(HAVE_SVE) && HAVE_SVE_BRIDGE
+void setupPixelPrimitives_sve(EncoderPrimitives &p);
+#endif
 }
 
 
