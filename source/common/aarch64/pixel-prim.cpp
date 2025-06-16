@@ -1110,38 +1110,89 @@ void pixel_sub_ps_neon(int16_t *a, intptr_t dstride, const pixel *b0, const pixe
     }
 }
 
-template<int bx, int by>
-void pixel_add_ps_neon(pixel *a, intptr_t dstride, const pixel *b0, const int16_t *b1, intptr_t sstride0,
-                       intptr_t sstride1)
+template<int width, int height>
+void pixel_add_ps_neon(pixel *dst, intptr_t dstride, const pixel *src0,
+                       const int16_t *src1, intptr_t sstride0, intptr_t sstride1)
 {
-    for (int y = 0; y < by; y++)
+    for (int h = 0; h < height; h++)
     {
-        int x = 0;
-        for (; (x + 8) <= bx; x += 8)
-        {
-            int16x8_t t;
-            int16x8_t b1e = vld1q_s16(b1 + x);
-            int16x8_t b0e;
 #if HIGH_BIT_DEPTH
-            b0e = vreinterpretq_s16_u16(vld1q_u16(b0 + x));
-            t = vaddq_s16(b0e, b1e);
-            t = vminq_s16(t, vdupq_n_s16((1 << X265_DEPTH) - 1));
-            t = vmaxq_s16(t, vdupq_n_s16(0));
-            vst1q_u16(a + x, vreinterpretq_u16_s16(t));
-#else
-            b0e = vreinterpretq_s16_u16(vmovl_u8(vld1_u8(b0 + x)));
-            t = vaddq_s16(b0e, b1e);
-            vst1_u8(a + x, vqmovun_s16(t));
-#endif
-        }
-        for (; x < bx; x++)
+        for (int w = 0; w + 16 <= width; w += 16)
         {
-            a[x] = (int16_t)x265_clip(b0[x] + b1[x]);
-        }
+            uint16x8_t s0_lo = vld1q_u16(src0 + w);
+            uint16x8_t s0_hi = vld1q_u16(src0 + w + 8);
+            int16x8_t s1_lo = vld1q_s16(src1 + w);
+            int16x8_t s1_hi = vld1q_s16(src1 + w + 8);
 
-        b0 += sstride0;
-        b1 += sstride1;
-        a += dstride;
+            uint16x8_t sum_lo = vsqaddq_u16(s0_lo, s1_lo);
+            uint16x8_t sum_hi = vsqaddq_u16(s0_hi, s1_hi);
+
+            sum_lo = vminq_u16(sum_lo, vdupq_n_u16((1 << X265_DEPTH) - 1));
+            sum_hi = vminq_u16(sum_hi, vdupq_n_u16((1 << X265_DEPTH) - 1));
+
+            vst1q_u16(dst + w, sum_lo);
+            vst1q_u16(dst + w + 8, sum_hi);
+        }
+        if (width == 8)
+        {
+            uint16x8_t s0 = vld1q_u16(src0);
+            int16x8_t s1 = vld1q_s16(src1);
+
+            uint16x8_t sum = vsqaddq_u16(s0, s1);
+            sum = vminq_u16(sum, vdupq_n_u16((1 << X265_DEPTH) - 1));
+
+            vst1q_u16(dst, sum);
+        }
+        if (width == 4)
+        {
+            int16x4_t s1 = vld1_s16(src1);
+            uint16x4_t s0 = vld1_u16(src0);
+
+            uint16x4_t sum = vsqadd_u16(s0, s1);
+            sum = vmin_u16(sum, vdup_n_u16((1 << X265_DEPTH) - 1));
+
+            vst1_u16(dst, sum);
+        }
+#else // !HIGH_BIT_DEPTH
+        for (int w = 0; w + 16 <= width; w += 16)
+        {
+            uint8x16_t s0 = vld1q_u8(src0 + w);
+            int16x8_t s1_lo = vld1q_s16(src1 + w);
+            int16x8_t s1_hi = vld1q_s16(src1 + w + 8);
+
+            uint16x8_t sum_lo = vaddw_u8(vreinterpretq_u16_s16(s1_lo), vget_low_u8(s0));
+            uint16x8_t sum_hi = vaddw_u8(vreinterpretq_u16_s16(s1_hi), vget_high_u8(s0));
+            uint8x8_t d0_lo = vqmovun_s16(vreinterpretq_s16_u16(sum_lo));
+            uint8x8_t d0_hi = vqmovun_s16(vreinterpretq_s16_u16(sum_hi));
+
+            vst1_u8(dst + w, d0_lo);
+            vst1_u8(dst + w + 8, d0_hi);
+        }
+        if (width == 8)
+        {
+            uint8x8_t s0 = vld1_u8(src0);
+            int16x8_t s1 = vld1q_s16(src1);
+
+            uint16x8_t sum = vaddw_u8(vreinterpretq_u16_s16(s1), s0);
+            uint8x8_t d0 = vqmovun_s16(vreinterpretq_s16_u16(sum));
+
+            vst1_u8(dst, d0);
+        }
+        if (width == 4)
+        {
+            uint8x8_t s0 = load_u8x4x1(src0);
+            int16x8_t s1 = vcombine_s16(vld1_s16(src1), vdup_n_s16(0));
+
+            uint16x8_t sum = vaddw_u8(vreinterpretq_u16_s16(s1), s0);
+            uint8x8_t d0 = vqmovun_s16(vreinterpretq_s16_u16(sum));
+
+            store_u8x4x1(dst, d0);
+        }
+#endif
+
+        src0 += sstride0;
+        src1 += sstride1;
+        dst += dstride;
     }
 }
 
