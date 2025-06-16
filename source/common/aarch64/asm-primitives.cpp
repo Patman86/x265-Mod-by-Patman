@@ -712,6 +712,7 @@ void setupIntrinsicPrimitives(EncoderPrimitives &p, int cpuMask)
     if (cpuMask & X265_CPU_NEON_DOTPROD)
     {
         setupFilterPrimitives_neon_dotprod(p);
+        setupPixelPrimitives_neon_dotprod(p);
     }
 #endif
 #ifdef HAVE_NEON_I8MM
