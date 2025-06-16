@@ -38,10 +38,13 @@
 .macro pixel_avg_pp_4xN_neon h
 function PFX(pixel_avg_pp_4x\h\()_neon)
 .rept \h
-    ld1             {v0.s}[0], [x2], x3
-    ld1             {v1.s}[0], [x4], x5
+    ldr             s0, [x2]
+    ldr             s1, [x4]
+    add             x2, x2, x3
+    add             x4, x4, x5
     urhadd          v2.8b, v0.8b, v1.8b
-    st1             {v2.s}[0], [x0], x1
+    str             s2, [x0]
+    add             x0, x0, x1
 .endr
     ret
 endfunc
