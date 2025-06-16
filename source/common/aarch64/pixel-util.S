@@ -36,67 +36,6 @@
 
 .text
 
-// uint64_t pixel_var(const pixel* pix, intptr_t i_stride)
-function PFX(pixel_var_8x8_neon)
-    ld1             {v4.8b}, [x0], x1        // pix[x]
-    uxtl            v0.8h, v4.8b             // sum = pix[x]
-    umull           v1.8h, v4.8b, v4.8b
-    uaddlp          v1.4s, v1.8h             // sqr = pix[x] * pix[x]
-
-.rept 7
-    ld1             {v4.8b}, [x0], x1        // pix[x]
-    umull           v31.8h, v4.8b, v4.8b
-    uaddw           v0.8h, v0.8h, v4.8b      // sum += pix[x]
-    uadalp          v1.4s, v31.8h            // sqr += pix[x] * pix[x]
-.endr
-    uaddlv          s0, v0.8h
-    uaddlv          d1, v1.4s
-    fmov            w0, s0
-    fmov            x1, d1
-    orr             x0, x0, x1, lsl #32      // return sum + ((uint64_t)sqr << 32);
-    ret
-endfunc
-
-function PFX(pixel_var_16x16_neon)
-    pixel_var_start
-    mov             w12, #16
-.Loop_var_16:
-    sub             w12, w12, #1
-    ld1             {v4.16b}, [x0], x1
-    pixel_var_1 v4
-    cbnz            w12, .Loop_var_16
-    pixel_var_end
-    ret
-endfunc
-
-function PFX(pixel_var_32x32_neon)
-    pixel_var_start
-    mov             w12, #32
-.Loop_var_32:
-    sub             w12, w12, #1
-    ld1             {v4.16b-v5.16b}, [x0], x1
-    pixel_var_1 v4
-    pixel_var_1 v5
-    cbnz            w12, .Loop_var_32
-    pixel_var_end
-    ret
-endfunc
-
-function PFX(pixel_var_64x64_neon)
-    pixel_var_start
-    mov             w12, #64
-.Loop_var_64:
-    sub             w12, w12, #1
-    ld1             {v4.16b-v7.16b}, [x0], x1
-    pixel_var_1 v4
-    pixel_var_1 v5
-    pixel_var_1 v6
-    pixel_var_1 v7
-    cbnz            w12, .Loop_var_64
-    pixel_var_end
-    ret
-endfunc
-
 // void getResidual4_neon(const pixel* fenc, const pixel* pred, int16_t* residual, intptr_t stride)
 function PFX(getResidual4_neon)
     lsl             x4, x3, #1

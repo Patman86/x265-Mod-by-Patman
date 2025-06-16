@@ -470,12 +470,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     ALL_CHROMA_420_PU(addAvg[ALIGNED], addAvg, neon);
     ALL_CHROMA_422_PU(addAvg[ALIGNED], addAvg, neon);
 
-    // pixel_var
-    p.cu[BLOCK_8x8].var   = PFX(pixel_var_8x8_neon);
-    p.cu[BLOCK_16x16].var = PFX(pixel_var_16x16_neon);
-    p.cu[BLOCK_32x32].var = PFX(pixel_var_32x32_neon);
-    p.cu[BLOCK_64x64].var = PFX(pixel_var_64x64_neon);
-
     // calc_Residual
     p.cu[BLOCK_4x4].calcresidual[NONALIGNED]   = PFX(getResidual4_neon);
     p.cu[BLOCK_8x8].calcresidual[NONALIGNED]   = PFX(getResidual8_neon);
@@ -610,12 +604,6 @@ void setupSve2Primitives(EncoderPrimitives &p)
     CHROMA_420_PU_MULTIPLE_ARCHS(addAvg[ALIGNED], addAvg, sve2);
     CHROMA_422_PU_CAN_USE_SVE2(addAvg[NONALIGNED], addAvg);
     CHROMA_422_PU_CAN_USE_SVE2(addAvg[ALIGNED], addAvg);
-
-    // pixel_var
-    p.cu[BLOCK_8x8].var   = PFX(pixel_var_8x8_sve2);
-    p.cu[BLOCK_16x16].var = PFX(pixel_var_16x16_sve2);
-    p.cu[BLOCK_32x32].var = PFX(pixel_var_32x32_sve2);
-    p.cu[BLOCK_64x64].var = PFX(pixel_var_64x64_sve2);
 
     // calc_Residual
     p.cu[BLOCK_16x16].calcresidual[NONALIGNED] = PFX(getResidual16_sve2);
