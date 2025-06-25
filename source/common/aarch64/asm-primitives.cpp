@@ -462,14 +462,6 @@ void setupNeonPrimitives(EncoderPrimitives &p)
     ALL_LUMA_PU(pixelavg_pp[NONALIGNED], pixel_avg_pp, neon);
     ALL_LUMA_PU(pixelavg_pp[ALIGNED], pixel_avg_pp, neon);
 
-    // addAvg
-    ALL_LUMA_PU(addAvg[NONALIGNED], addAvg, neon);
-    ALL_LUMA_PU(addAvg[ALIGNED], addAvg, neon);
-    ALL_CHROMA_420_PU(addAvg[NONALIGNED], addAvg, neon);
-    ALL_CHROMA_422_PU(addAvg[NONALIGNED], addAvg, neon);
-    ALL_CHROMA_420_PU(addAvg[ALIGNED], addAvg, neon);
-    ALL_CHROMA_422_PU(addAvg[ALIGNED], addAvg, neon);
-
     // calc_Residual
     p.cu[BLOCK_4x4].calcresidual[NONALIGNED]   = PFX(getResidual4_neon);
     p.cu[BLOCK_8x8].calcresidual[NONALIGNED]   = PFX(getResidual8_neon);
@@ -596,14 +588,6 @@ void setupSve2Primitives(EncoderPrimitives &p)
     // pixel_avg_pp
     LUMA_PU_MULTIPLE_ARCHS_3(pixelavg_pp[NONALIGNED], pixel_avg_pp, sve2);
     LUMA_PU_MULTIPLE_ARCHS_3(pixelavg_pp[ALIGNED], pixel_avg_pp, sve2);
-
-    // addAvg
-    LUMA_PU_CAN_USE_SVE2(addAvg[NONALIGNED], addAvg);
-    LUMA_PU_CAN_USE_SVE2(addAvg[ALIGNED], addAvg);
-    CHROMA_420_PU_MULTIPLE_ARCHS(addAvg[NONALIGNED], addAvg, sve2);
-    CHROMA_420_PU_MULTIPLE_ARCHS(addAvg[ALIGNED], addAvg, sve2);
-    CHROMA_422_PU_CAN_USE_SVE2(addAvg[NONALIGNED], addAvg);
-    CHROMA_422_PU_CAN_USE_SVE2(addAvg[ALIGNED], addAvg);
 
     // calc_Residual
     p.cu[BLOCK_16x16].calcresidual[NONALIGNED] = PFX(getResidual16_sve2);
