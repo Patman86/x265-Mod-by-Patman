@@ -15,7 +15,13 @@ namespace X265_NS
 
 void setupPixelPrimitives_neon(EncoderPrimitives &p);
 
+#if defined(HAVE_NEON_DOTPROD)
+void setupPixelPrimitives_neon_dotprod(EncoderPrimitives &p);
+#endif
 
+#if defined(HAVE_SVE) && HAVE_SVE_BRIDGE
+void setupPixelPrimitives_sve(EncoderPrimitives &p);
+#endif
 }
 
 

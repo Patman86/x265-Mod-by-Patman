@@ -74,6 +74,26 @@ static void inline store_u8x4x1(uint8_t *d, const uint8x8_t s)
     vst1_lane_u32((uint32_t *)d, vreinterpret_u32_u8(s), 0);
 }
 
+// Store 2 bytes from the low half of a uint8x8_t.
+static void inline store_u8x2x1(uint8_t *d, const uint8x8_t s)
+{
+    vst1_lane_u16((uint16_t *)d, vreinterpret_u16_u8(s), 0);
+}
+
+// Load 2 int16_t into a int16x8_t.
+static inline int16x8_t load_s16x2x1(const int16_t *p)
+{
+    int32x4_t ret = vld1q_lane_s32((const int32_t *)p, vdupq_n_s32(0), 0);
+
+    return vreinterpretq_s16_s32(ret);
+}
+
+// Store 2 uint16_t from the low half of a uint16x8_t.
+static inline void store_u16x2x1(const uint16_t *d, const uint16x8_t s)
+{
+    vst1q_lane_u32((uint32_t *)d, vreinterpretq_u32_u16(s), 0);
+}
+
 // Store N blocks of 32-bits from (N / 2) D-Registers.
 template<int N>
 static void inline store_u8x4_strided_xN(uint8_t *d, intptr_t stride,
