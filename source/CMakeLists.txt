@@ -44,11 +44,13 @@ endif()
 set(X86_ALIASES x86 i386 i686 x86_64 amd64)
 set(ARM_ALIASES armv6l armv7l)
 set(ARM64_ALIASES arm64 arm64e aarch64)
+set(RISCV64_ALIASES riscv64)
 list(FIND X86_ALIASES "${SYSPROC}" X86MATCH)
 list(FIND ARM_ALIASES "${SYSPROC}" ARMMATCH)
 list(FIND ARM64_ALIASES "${SYSPROC}" ARM64MATCH)
 set(POWER_ALIASES powerpc64 powerpc64le ppc64 ppc64le)
 list(FIND POWER_ALIASES "${SYSPROC}" POWERMATCH)
+list(FIND RISCV64_ALIASES "${SYSPROC}" RISCV64MATCH)
 if(X86MATCH GREATER "-1")
     set(X86 1)
     add_definitions(-DX265_ARCH_X86=1)
@@ -108,6 +110,13 @@ elseif(ARM64MATCH GREATER "-1")
     set(AARCH64_SVE2_FLAG "-march=armv9-a+i8mm+sve2")
     # SVE2 BitPerm implies +dotprod, +sve, and +sve2.
     set(AARCH64_SVE2_BITPERM_FLAG "-march=armv9-a+i8mm+sve2-bitperm")
+elseif(RISCV64MATCH GREATER "-1")
+    message(STATUS "Detected RISCV64 target processor")
+    set(RISCV64 1)
+
+    option(RISCV64_RUNTIME_CPU_DETECT "Enable RISCV64 run-time CPU feature detection" ON)
+
+    option(ENABLE_RVV "Enable RVV" ON)
 else()
     message(STATUS "CMAKE_SYSTEM_PROCESSOR value `${CMAKE_SYSTEM_PROCESSOR}` is unknown")
     message(STATUS "Please add this value near ${CMAKE_CURRENT_LIST_FILE}:${CMAKE_CURRENT_LIST_LINE}")
@@ -171,7 +180,7 @@ if(UNIX)
     endif(X64)
 endif(UNIX)
 
-if((X64 AND NOT WIN32) OR ARM64 OR PPC64)
+if((X64 AND NOT WIN32) OR ARM64 OR PPC64 OR RISCV64)
     option(ENABLE_PIC "Enable Position Independent Code" ON)
 else()
     option(ENABLE_PIC "Enable Position Independent Code" OFF)
@@ -440,6 +449,68 @@ int main() { return 0; }")
             set(ARM_ARGS ${ARM_ARGS} -flax-vector-conversions=none)
         endif()
     endif()
+    if(RISCV64)
+        add_definitions(-DX265_ARCH_RISCV64=1)
+
+        if (RISCV64_RUNTIME_CPU_DETECT)
+            add_definitions(-DRISCV64_RUNTIME_CPU_DETECT=1)
+            message(STATUS "Configuring build for run-time CPU feature detection")
+        endif()
+
+        if(RISCV64_RUNTIME_CPU_DETECT OR CROSS_COMPILE_RISCV64)
+            # Add all extensions when compiling for run-time CPU feature detection or cross compiling.
+            set(CPU_HAS_RVV 1)
+        else()
+            if(CMAKE_SYSTEM_NAME MATCHES "Linux|Darwin")
+                find_package(RVV)
+            else()
+                message(STATUS "Compile-time CPU feature detection unsupported on this platform")
+            endif()
+        endif()
+
+        if(ENABLE_RVV)
+            set(OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
+            set(OLD_CMAKE_TRY_COMPILE_TARGET_TYPE ${CMAKE_TRY_COMPILE_TARGET_TYPE})
+            set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+            # When compilation target is a STATIC_LIBRARY, the LINK_OPTIONS are
+            # passed to the archiver, so we must backup, clear and restore these.
+            # https://gitlab.kitware.com/cmake/cmake/-/issues/23454
+            set(OLD_CMAKE_REQUIRED_LINK_OPTIONS ${CMAKE_REQUIRED_LINK_OPTIONS})
+            set(CMAKE_REQUIRED_LINK_OPTIONS "")
+
+            # Check whether the compiler can compile RVV functions that require
+            # backup/restore of RVV registers according to AAPCS.
+            # https://github.com/llvm/llvm-project/issues/80009.
+            set(RVV_COMPILATION_TEST [[
+int main() {
+  asm volatile(".option arch, +v; vsetvli t0, a0, e32, m1, ta, ma");
+  return 0;
+}]])
+
+            check_c_source_compiles("${RVV_COMPILATION_TEST}" RVV_COMPILATION_C_TEST_COMPILED)
+            check_cxx_source_compiles("${RVV_COMPILATION_TEST}" RVV_COMPILATION_CXX_TEST_COMPILED)
+
+            set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQUIRED_FLAGS})
+            set(CMAKE_TRY_COMPILE_TARGET_TYPE ${OLD_CMAKE_TRY_COMPILE_TARGET_TYPE})
+            set(CMAKE_REQUIRED_LINK_OPTIONS ${OLD_CMAKE_REQUIRED_LINK_OPTIONS})
+            if (NOT(RVV_COMPILATION_C_TEST_COMPILED AND RVV_COMPILATION_CXX_TEST_COMPILED))
+                set(ENABLE_RVV OFF CACHE BOOL "" FORCE)
+                message(STATUS "Disabling RVV")
+            endif()
+        endif()
+
+        if(NOT ENABLE_RVV)
+            message(STATUS "Disabling RVV")
+            set(CPU_HAS_RVV 0)
+        endif()
+
+        if(CPU_HAS_RVV)
+            message(STATUS "Found RVV")
+            add_definitions(-DHAVE_RVV=1)
+        endif()
+
+        set(RISCV64_ARGS -O2)
+    endif()
     if(ENABLE_PIC)
         list(APPEND ARM_ARGS -DPIC -fPIC)
     endif()
@@ -492,7 +563,7 @@ int main() { return 0; }")
     if (CC_HAS_FAST_MATH)
         add_definitions(-ffast-math)
     endif()
-    if (NOT (ARM64 OR CROSS_COMPILE_ARM64))
+    if (NOT (ARM64 OR CROSS_COMPILE_ARM64 OR RISCV64 OR CROSS_COMPILE_RISCV64))
         check_cxx_compiler_flag(-mstackrealign CC_HAS_STACK_REALIGN)
         if (CC_HAS_STACK_REALIGN)
             add_definitions(-mstackrealign)
@@ -548,6 +619,8 @@ if(ARM OR CROSS_COMPILE_ARM OR ARM64 OR CROSS_COMPILE_ARM64)
     if (NOT ENABLE_NEON)
         set(ENABLE_ASSEMBLY OFF CACHE BOOL "" FORCE)
     endif()
+elseif((RISCV64 OR CROSS_COMPILE_RISCV64) AND ENABLE_RVV)
+    option(ENABLE_ASSEMBLY "Enable use of assembly coded primitives" ON)
 elseif(NASM_FOUND AND X86)
     if (NASM_VERSION_STRING VERSION_LESS "2.13.0")
         message(STATUS "Nasm version ${NASM_VERSION_STRING} is too old. 2.13.0 or later required")
@@ -584,7 +657,7 @@ if(EXTRA_LIB)
 endif(EXTRA_LIB)
 mark_as_advanced(EXTRA_LIB EXTRA_LINK_FLAGS)
 
-if(X64 OR ARM64 OR PPC64)
+if(X64 OR ARM64 OR PPC64 OR RISCV64)
     # NOTE: We only officially support high-bit-depth compiles of x265
     # on 64bit architectures. Main10 plus large resolution plus slow
     # preset plus 32bit address space usually means malloc failure.  You
@@ -593,7 +666,7 @@ if(X64 OR ARM64 OR PPC64)
     # license" so to speak.  If it breaks you get to keep both halves.
     # You will need to disable assembly manually.
     option(HIGH_BIT_DEPTH "Store pixel samples as 16bit values (Main10/Main12)" OFF)
-endif(X64 OR ARM64 OR PPC64)
+endif(X64 OR ARM64 OR PPC64 OR RISCV64)
 if(HIGH_BIT_DEPTH)
     option(MAIN12 "Support Main12 instead of Main10" OFF)
     if(MAIN12)
@@ -640,7 +713,7 @@ else()
 endif()
 add_definitions(-DX265_NS=${X265_NS})
 
-if(ARM64)
+if(ARM64 OR RISCV64)
   if(HIGH_BIT_DEPTH)
     if(MAIN12)
       list(APPEND ASM_FLAGS -DHIGH_BIT_DEPTH=1 -DBIT_DEPTH=12 -DX265_NS=${X265_NS})
@@ -650,7 +723,7 @@ if(ARM64)
   else()
     list(APPEND ASM_FLAGS -DHIGH_BIT_DEPTH=0 -DBIT_DEPTH=8 -DX265_NS=${X265_NS})
   endif()
-endif(ARM64)
+endif(ARM64 OR RISCV64)
 
 option(WARNINGS_AS_ERRORS "Stop compiles on first warning" OFF)
 if(WARNINGS_AS_ERRORS)
@@ -847,6 +920,19 @@ if((MSVC_IDE OR XCODE OR GCC) AND ENABLE_ASSEMBLY)
                     DEPENDS ${ASM_SRC})
             endforeach()
         endif()
+    elseif(RISCV64 OR CROSS_COMPILE_RISCV64)
+    # compile RISCV64 arch asm files here
+        enable_language(ASM)
+        foreach(ASM ${RISCV64_ASMS})
+            set(ASM_SRC ${CMAKE_CURRENT_SOURCE_DIR}/common/riscv64/${ASM})
+            list(APPEND ASM_SRCS ${ASM_SRC})
+            list(APPEND ASM_OBJS ${ASM}.${SUFFIX})
+            add_custom_command(
+                OUTPUT ${ASM}.${SUFFIX}
+                COMMAND ${CMAKE_CXX_COMPILER}
+                ARGS ${RISCV64_ARGS} ${ASM_FLAGS} -c ${ASM_SRC} -o ${ASM}.${SUFFIX}
+                DEPENDS ${ASM_SRC})
+        endforeach()
     elseif(X86)
     # compile X86 arch asm files here
         foreach(ASM ${MSVC_ASMS})

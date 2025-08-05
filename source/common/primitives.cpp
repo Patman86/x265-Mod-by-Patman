@@ -91,7 +91,7 @@ void setupAliasPrimitives(EncoderPrimitives &p)
     /* at HIGH_BIT_DEPTH, pixel == short so we can alias many primitives */
     for (int i = 0; i < NUM_CU_SIZES; i++)
     {
-#if !defined(X265_ARCH_ARM64)
+#if !defined(X265_ARCH_ARM64) && !defined(X265_ARCH_RISCV64)
         p.cu[i].sse_pp = (pixel_sse_t)p.cu[i].sse_ss;
 #endif
 
@@ -260,7 +260,7 @@ void x265_setup_primitives(x265_param *param)
             primitives.cu[i].intra_pred_allangs = NULL;
 
 #if ENABLE_ASSEMBLY
-#if defined(X265_ARCH_X86) || defined(X265_ARCH_ARM64)
+#if defined(X265_ARCH_X86) || defined(X265_ARCH_ARM64) || defined(X265_ARCH_RISCV64)
         setupIntrinsicPrimitives(primitives, param->cpuid);
 #endif
         setupAssemblyPrimitives(primitives, param->cpuid);

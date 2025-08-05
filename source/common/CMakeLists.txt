@@ -164,6 +164,27 @@ if(ENABLE_ASSEMBLY AND (ARM64 OR CROSS_COMPILE_ARM64))
     endif()
 endif(ENABLE_ASSEMBLY AND (ARM64 OR CROSS_COMPILE_ARM64))
 
+if(ENABLE_ASSEMBLY AND (RISCV64 OR CROSS_COMPILE_RISCV64))
+    if(GCC AND (CMAKE_CXX_FLAGS_RELEASE MATCHES "-O3"))
+        message(STATUS "Detected CXX compiler using -O3 optimization level")
+        add_definitions(-DAUTO_VECTORIZE=1)
+    endif()
+
+    # Add riscv64 intrinsics files here.
+    set(C_SRCS_RVV asm-primitives.cpp)
+    enable_language(ASM)
+
+    foreach(SRC ${C_SRCS_RVV})
+        set(ASM_PRIMITIVES ${ASM_PRIMITIVES} riscv64/${SRC})
+    endforeach()
+
+    source_group(Assembly FILES ${ASM_PRIMITIVES})
+
+    if(RISCV64_WARNINGS_AS_ERRORS)
+        set_source_files_properties(${ASM_PRIMITIVES} PROPERTIES COMPILE_FLAGS -Werror)
+    endif()
+endif(ENABLE_ASSEMBLY AND (RISCV64 OR CROSS_COMPILE_RISCV64))
+
 if(POWER)
     set_source_files_properties(version.cpp PROPERTIES COMPILE_FLAGS -DX265_VERSION=${X265_VERSION})
     if(ENABLE_ALTIVEC)

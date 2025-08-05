@@ -560,6 +560,9 @@ typedef enum
 #define X265_CPU_NEON_I8MM       (1 << 6)   /* AArch64 Neon I8MM */
 #define X265_CPU_SVE2_BITPERM    (1 << 7)   /* AArch64 SVE2 BitPerm */
 
+/* RISCV */
+#define X265_CPU_RVV             (1 << 0)   /* RISCV vector */
+
 /* IBM Power8 */
 #define X265_CPU_ALTIVEC         0x0000001
 
