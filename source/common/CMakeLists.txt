@@ -180,6 +180,12 @@ if(ENABLE_ASSEMBLY AND (RISCV64 OR CROSS_COMPILE_RISCV64))
 
     source_group(Assembly FILES ${ASM_PRIMITIVES})
 
+    # Add riscv64 assembly files here.
+    set(A_SRCS asm.S blockcopy8.S)
+    set(VEC_PRIMITIVES)
+
+    set(RISCV64_ASMS "${A_SRCS}" CACHE INTERNAL "RISCV64 Assembly Sources")
+
     if(RISCV64_WARNINGS_AS_ERRORS)
         set_source_files_properties(${ASM_PRIMITIVES} PROPERTIES COMPILE_FLAGS -Werror)
     endif()
