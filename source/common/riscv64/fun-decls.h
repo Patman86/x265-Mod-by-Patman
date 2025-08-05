@@ -31,7 +31,28 @@
     ret PFX(name ## _32_ ## cpu(__VA_ARGS__)); \
     ret PFX(name ## _64_ ## cpu(__VA_ARGS__))
 
+#define FUNCDEF_TU_S2(ret, name, cpu, ...) \
+    ret PFX(name ## 4_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## 8_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## 16_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## 32_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## 64_ ## cpu(__VA_ARGS__))
+
+#define FUNCDEF_TU_S3(ret, name, cpu, ...) \
+    ret PFX(name ## 2_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## 3_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## 4_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## 5_ ## cpu(__VA_ARGS__)); \
+
 FUNCDEF_TU_S(uint32_t, copy_cnt, v, int16_t* dst, const int16_t* src, intptr_t srcStride);
 FUNCDEF_TU_S(int, count_nonzero, v, const int16_t* quantCoeff);
+FUNCDEF_TU_S2(void, idct, v, const int16_t* src, int16_t* dst, intptr_t dstStride);
+FUNCDEF_TU_S2(void, dct, v, const int16_t* src, int16_t* dst, intptr_t srcStride);
+FUNCDEF_TU_S3(void, nonPsyRdoQuant, v, int16_t *m_resiDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, uint32_t blkPos);
+FUNCDEF_TU_S3(void, PsyRdoQuant, v, int16_t *m_resiDctCoeff, int16_t *m_fencDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, int64_t *psyScale, uint32_t blkPos);
+
+void PFX(idst4_v)(const int16_t *src, int16_t *dst, intptr_t dstStride);
+void PFX(dst4_v)(const int16_t *src, int16_t *dst, intptr_t srcStride);
+void PFX(denoiseDct_v)(int16_t* dctCoef, uint32_t* resSum, const uint16_t* offset, int numCoeff);
 
 #endif

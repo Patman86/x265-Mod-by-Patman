@@ -52,6 +52,36 @@ void setupRVVPrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_8x8].count_nonzero     = PFX(count_nonzero_8_v);
     p.cu[BLOCK_16x16].count_nonzero   = PFX(count_nonzero_16_v);
     p.cu[BLOCK_32x32].count_nonzero   = PFX(count_nonzero_32_v);
+
+    p.idst4x4               = PFX(idst4_v);
+    p.cu[BLOCK_4x4].idct    = PFX(idct4_v);
+    p.cu[BLOCK_8x8].idct    = PFX(idct8_v);
+    p.cu[BLOCK_16x16].idct  = PFX(idct16_v);
+    p.cu[BLOCK_32x32].idct  = PFX(idct32_v);
+    p.denoiseDct            = PFX(denoiseDct_v);
+
+    p.dst4x4                = PFX(dst4_v);
+    p.cu[BLOCK_4x4].dct     = PFX(dct4_v);
+    p.cu[BLOCK_8x8].dct     = PFX(dct8_v);
+    p.cu[BLOCK_16x16].dct   = PFX(dct16_v);
+    p.cu[BLOCK_32x32].dct   = PFX(dct32_v);
+
+    p.cu[BLOCK_4x4].nonPsyRdoQuant      = PFX(nonPsyRdoQuant2_v);
+    p.cu[BLOCK_8x8].nonPsyRdoQuant      = PFX(nonPsyRdoQuant3_v);
+    p.cu[BLOCK_16x16].nonPsyRdoQuant    = PFX(nonPsyRdoQuant4_v);
+    p.cu[BLOCK_32x32].nonPsyRdoQuant    = PFX(nonPsyRdoQuant5_v);
+    p.cu[BLOCK_4x4].psyRdoQuant         = PFX(PsyRdoQuant2_v);
+    p.cu[BLOCK_8x8].psyRdoQuant         = PFX(PsyRdoQuant3_v);
+    p.cu[BLOCK_16x16].psyRdoQuant       = PFX(PsyRdoQuant4_v);
+    p.cu[BLOCK_32x32].psyRdoQuant       = PFX(PsyRdoQuant5_v);
+    p.cu[BLOCK_4x4].psyRdoQuant_1p      = PFX(nonPsyRdoQuant2_v);
+    p.cu[BLOCK_8x8].psyRdoQuant_1p      = PFX(nonPsyRdoQuant3_v);
+    p.cu[BLOCK_16x16].psyRdoQuant_1p    = PFX(nonPsyRdoQuant4_v);
+    p.cu[BLOCK_32x32].psyRdoQuant_1p    = PFX(nonPsyRdoQuant5_v);
+    p.cu[BLOCK_4x4].psyRdoQuant_2p      = PFX(PsyRdoQuant2_v);
+    p.cu[BLOCK_8x8].psyRdoQuant_2p      = PFX(PsyRdoQuant3_v);
+    p.cu[BLOCK_16x16].psyRdoQuant_2p    = PFX(PsyRdoQuant4_v);
+    p.cu[BLOCK_32x32].psyRdoQuant_2p    = PFX(PsyRdoQuant5_v);
 }
 
 void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask)

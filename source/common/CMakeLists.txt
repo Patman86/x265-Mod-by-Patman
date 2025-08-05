@@ -181,7 +181,7 @@ if(ENABLE_ASSEMBLY AND (RISCV64 OR CROSS_COMPILE_RISCV64))
     source_group(Assembly FILES ${ASM_PRIMITIVES})
 
     # Add riscv64 assembly files here.
-    set(A_SRCS asm.S blockcopy8.S)
+    set(A_SRCS asm.S blockcopy8.S dct.S)
     set(VEC_PRIMITIVES)
 
     set(RISCV64_ASMS "${A_SRCS}" CACHE INTERNAL "RISCV64 Assembly Sources")
