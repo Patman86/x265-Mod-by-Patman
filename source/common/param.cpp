@@ -646,6 +646,7 @@ int x265_param_default_preset(x265_param* param, const char* preset, const char*
     }
     if (tune)
     {
+        param->tune = tune;
         if (!strcmp(tune, "psnr"))
         {
             param->rc.aqStrength = 0.0;
@@ -2746,6 +2747,7 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     if (strlen(src->numaPools)) snprintf(dst->numaPools, X265_MAX_STRING_SIZE, "%s", src->numaPools);
     else dst->numaPools[0] = 0;
 
+    dst->tune = src->tune;
     dst->bEnableWavefront = src->bEnableWavefront;
     dst->bDistributeModeAnalysis = src->bDistributeModeAnalysis;
     dst->bDistributeMotionEstimation = src->bDistributeMotionEstimation;

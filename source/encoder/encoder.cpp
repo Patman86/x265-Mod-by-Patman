@@ -254,6 +254,12 @@ void Encoder::create()
         p->bEnableWavefront = 0;
     }
 
+    // For zero-latency tune, frameNumThreads must be set to 1
+    if (p->tune && (!strcmp(p->tune, "zerolatency") || !strcmp(p->tune, "zero-latency")))
+    {
+        p->frameNumThreads = 1;
+    }
+
     bool allowPools = !strlen(p->numaPools) || strcmp(p->numaPools, "none");
 
     // Trim the thread pool if --wpp, --pme, and --pmode are disabled
