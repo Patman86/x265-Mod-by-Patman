@@ -1831,7 +1831,7 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
             if (!m_pocLast)
             {
                 /*One shot allocation of frames in OriginalPictureBuffer*/
-                int numFramesinOPB = X265_MAX(m_param->bframes, (inFrame[0]->m_mcstf->m_range << 1)) + 1;
+                int numFramesinOPB = X265_MAX(m_param->bframes, m_param->frameNumThreads) + 2;
                 for (int i = 0; i < numFramesinOPB; i++)
                 {
                     Frame* dupFrame = new Frame;
