@@ -64,6 +64,8 @@
 
 #define PFX_C(name)        JOIN(JOIN(JOIN(EXTERN_ASM, X265_NS), _), name)
 
+#define FENC_STRIDE 64
+
 // Alignment of stack arguments of size less than 8 bytes.
 #define STACK_ARG_ALIGNMENT 8
 

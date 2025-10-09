@@ -31,6 +31,34 @@ extern "C" {
 #include "fun-decls.h"
 }
 
+#define ALL_LUMA_PU_TYPED(prim, fncdef, fname, cpu)                            \
+  p.pu[LUMA_4x4].prim = fncdef PFX(fname##_4x4_##cpu);                         \
+  p.pu[LUMA_8x8].prim = fncdef PFX(fname##_8x8_##cpu);                         \
+  p.pu[LUMA_16x16].prim = fncdef PFX(fname##_16x16_##cpu);                     \
+  p.pu[LUMA_32x32].prim = fncdef PFX(fname##_32x32_##cpu);                     \
+  p.pu[LUMA_64x64].prim = fncdef PFX(fname##_64x64_##cpu);                     \
+  p.pu[LUMA_8x4].prim = fncdef PFX(fname##_8x4_##cpu);                         \
+  p.pu[LUMA_4x8].prim = fncdef PFX(fname##_4x8_##cpu);                         \
+  p.pu[LUMA_16x8].prim = fncdef PFX(fname##_16x8_##cpu);                       \
+  p.pu[LUMA_8x16].prim = fncdef PFX(fname##_8x16_##cpu);                       \
+  p.pu[LUMA_16x32].prim = fncdef PFX(fname##_16x32_##cpu);                     \
+  p.pu[LUMA_32x16].prim = fncdef PFX(fname##_32x16_##cpu);                     \
+  p.pu[LUMA_64x32].prim = fncdef PFX(fname##_64x32_##cpu);                     \
+  p.pu[LUMA_32x64].prim = fncdef PFX(fname##_32x64_##cpu);                     \
+  p.pu[LUMA_16x12].prim = fncdef PFX(fname##_16x12_##cpu);                     \
+  p.pu[LUMA_12x16].prim = fncdef PFX(fname##_12x16_##cpu);                     \
+  p.pu[LUMA_16x4].prim = fncdef PFX(fname##_16x4_##cpu);                       \
+  p.pu[LUMA_4x16].prim = fncdef PFX(fname##_4x16_##cpu);                       \
+  p.pu[LUMA_32x24].prim = fncdef PFX(fname##_32x24_##cpu);                     \
+  p.pu[LUMA_24x32].prim = fncdef PFX(fname##_24x32_##cpu);                     \
+  p.pu[LUMA_32x8].prim = fncdef PFX(fname##_32x8_##cpu);                       \
+  p.pu[LUMA_8x32].prim = fncdef PFX(fname##_8x32_##cpu);                       \
+  p.pu[LUMA_64x48].prim = fncdef PFX(fname##_64x48_##cpu);                     \
+  p.pu[LUMA_48x64].prim = fncdef PFX(fname##_48x64_##cpu);                     \
+  p.pu[LUMA_64x16].prim = fncdef PFX(fname##_64x16_##cpu);                     \
+  p.pu[LUMA_16x64].prim = fncdef PFX(fname##_16x64_##cpu)
+#define ALL_LUMA_PU(prim, fname, cpu) ALL_LUMA_PU_TYPED(prim, , fname, cpu)
+
 #if defined(__GNUC__)
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #endif
@@ -82,6 +110,13 @@ void setupRVVPrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_8x8].psyRdoQuant_2p      = PFX(PsyRdoQuant3_v);
     p.cu[BLOCK_16x16].psyRdoQuant_2p    = PFX(PsyRdoQuant4_v);
     p.cu[BLOCK_32x32].psyRdoQuant_2p    = PFX(PsyRdoQuant5_v);
+
+#if !HIGH_BIT_DEPTH
+    // sad
+    ALL_LUMA_PU(sad, pixel_sad, rvv);
+    ALL_LUMA_PU(sad_x3, sad_x3, rvv);
+    ALL_LUMA_PU(sad_x4, sad_x4, rvv);
+#endif
 }
 
 void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask)
