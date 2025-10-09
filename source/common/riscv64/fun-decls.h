@@ -110,6 +110,7 @@ FUNCDEF_TU_S3(void, PsyRdoQuant, v, int16_t *m_resiDctCoeff, int16_t *m_fencDctC
 FUNCDEF_PU(void, sad_x3, rvv, const pixel *, const pixel *, const pixel *, const pixel *, intptr_t, int32_t *);
 FUNCDEF_PU(void, sad_x4, rvv, const pixel *, const pixel *, const pixel *, const pixel *, const pixel *, intptr_t, int32_t *);
 FUNCDEF_CHROMA_PU(int, pixel_sad, rvv, const pixel *, intptr_t, const pixel *, intptr_t);
+FUNCDEF_CHROMA_PU(int, pixel_satd, rvv, const pixel*, intptr_t, const pixel*, intptr_t);
 
 void PFX(idst4_v)(const int16_t *src, int16_t *dst, intptr_t dstStride);
 void PFX(dst4_v)(const int16_t *src, int16_t *dst, intptr_t srcStride);

@@ -117,6 +117,9 @@ elseif(RISCV64MATCH GREATER "-1")
     option(RISCV64_RUNTIME_CPU_DETECT "Enable RISCV64 run-time CPU feature detection" ON)
 
     option(ENABLE_RVV "Enable RVV" ON)
+
+    # Compiler flags only for riscv64 intrinsic file.
+    set(RISCV64_INTRINSIC_FLAG "-march=rv64gcv")
 else()
     message(STATUS "CMAKE_SYSTEM_PROCESSOR value `${CMAKE_SYSTEM_PROCESSOR}` is unknown")
     message(STATUS "Please add this value near ${CMAKE_CURRENT_LIST_FILE}:${CMAKE_CURRENT_LIST_LINE}")
@@ -504,9 +507,28 @@ int main() {
             set(CPU_HAS_RVV 0)
         endif()
 
+        set(CPU_HAS_RVV_INTRINSIC 0)
         if(CPU_HAS_RVV)
             message(STATUS "Found RVV")
             add_definitions(-DHAVE_RVV=1)
+
+            set(RVV_INTRINSIC_TEST [[
+#include <riscv_vector.h>
+#include <stdint.h>
+int main() {
+    size_t vl = __riscv_vsetvl_e32m1(10);
+    return 0;
+}]])
+            set(CMAKE_REQUIRED_FLAGS ${RISCV64_INTRINSIC_FLAG})
+            check_c_source_compiles("${RVV_INTRINSIC_TEST}" RVV_INTRINSIC_C_TEST_COMPILED)
+            check_cxx_source_compiles("${RVV_INTRINSIC_TEST}" RVV_INTRINSIC_CXX_TEST_COMPILED)
+            if (RVV_INTRINSIC_C_TEST_COMPILED AND RVV_INTRINSIC_CXX_TEST_COMPILED)
+                set(CPU_HAS_RVV_INTRINSIC 1)
+                add_definitions(-DHAVE_RVV_INTRINSIC=1)
+                message(STATUS "Found RVV intrinsic")
+            else()
+                message(STATUS "Disabling RVV intrinsic")
+            endif()
         endif()
 
         set(RISCV64_ARGS -O2)
