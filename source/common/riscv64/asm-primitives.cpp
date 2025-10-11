@@ -139,6 +139,42 @@ void setupRVVPrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_16x16].psyRdoQuant_2p    = PFX(PsyRdoQuant4_v);
     p.cu[BLOCK_32x32].psyRdoQuant_2p    = PFX(PsyRdoQuant5_v);
 
+    // ssd_s
+    p.cu[BLOCK_4x4].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_4x4_rvv);
+    p.cu[BLOCK_8x8].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_8x8_rvv);
+    p.cu[BLOCK_16x16].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_16x16_rvv);
+    p.cu[BLOCK_32x32].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_32x32_rvv);
+    p.cu[BLOCK_64x64].ssd_s[NONALIGNED]   = PFX(pixel_ssd_s_64x64_rvv);
+
+    p.cu[BLOCK_4x4].ssd_s[ALIGNED]   = PFX(pixel_ssd_s_4x4_rvv);
+    p.cu[BLOCK_8x8].ssd_s[ALIGNED]   = PFX(pixel_ssd_s_8x8_rvv);
+    p.cu[BLOCK_16x16].ssd_s[ALIGNED] = PFX(pixel_ssd_s_16x16_rvv);
+    p.cu[BLOCK_32x32].ssd_s[ALIGNED] = PFX(pixel_ssd_s_32x32_rvv);
+    p.cu[BLOCK_64x64].ssd_s[ALIGNED] = PFX(pixel_ssd_s_64x64_rvv);
+
+    // sse_pp
+    p.cu[BLOCK_4x4].sse_pp   = PFX(pixel_sse_pp_4x4_rvv);
+    p.cu[BLOCK_8x8].sse_pp   = PFX(pixel_sse_pp_8x8_rvv);
+    p.cu[BLOCK_16x16].sse_pp = PFX(pixel_sse_pp_16x16_rvv);
+    p.cu[BLOCK_32x32].sse_pp = PFX(pixel_sse_pp_32x32_rvv);
+    p.cu[BLOCK_64x64].sse_pp = PFX(pixel_sse_pp_64x64_rvv);
+
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_4x4].sse_pp   = PFX(pixel_sse_pp_4x4_rvv);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_8x8].sse_pp   = PFX(pixel_sse_pp_8x8_rvv);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_16x16].sse_pp = PFX(pixel_sse_pp_16x16_rvv);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_32x32].sse_pp = PFX(pixel_sse_pp_32x32_rvv);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_4x8].sse_pp   = PFX(pixel_sse_pp_4x8_rvv);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sse_pp  = PFX(pixel_sse_pp_8x16_rvv);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].sse_pp = PFX(pixel_sse_pp_16x32_rvv);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].sse_pp = PFX(pixel_sse_pp_32x64_rvv);
+
+    // sse_ss
+    p.cu[BLOCK_4x4].sse_ss   = PFX(pixel_sse_ss_4x4_rvv);
+    p.cu[BLOCK_8x8].sse_ss   = PFX(pixel_sse_ss_8x8_rvv);
+    p.cu[BLOCK_16x16].sse_ss = PFX(pixel_sse_ss_16x16_rvv);
+    p.cu[BLOCK_32x32].sse_ss = PFX(pixel_sse_ss_32x32_rvv);
+    p.cu[BLOCK_64x64].sse_ss = PFX(pixel_sse_ss_64x64_rvv);
+
 #if !HIGH_BIT_DEPTH
     // sad
     ALL_LUMA_PU(sad, pixel_sad, rvv);

@@ -102,6 +102,8 @@
 
 FUNCDEF_TU_S(uint32_t, copy_cnt, v, int16_t* dst, const int16_t* src, intptr_t srcStride);
 FUNCDEF_TU_S(int, count_nonzero, v, const int16_t* quantCoeff);
+FUNCDEF_TU_S(sse_t, pixel_ssd_s, rvv, const int16_t*, intptr_t);
+FUNCDEF_TU_S(sse_t, pixel_ssd_s_aligned, rvv, const int16_t*, intptr_t);
 FUNCDEF_TU_S2(void, idct, v, const int16_t* src, int16_t* dst, intptr_t dstStride);
 FUNCDEF_TU_S2(void, dct, v, const int16_t* src, int16_t* dst, intptr_t srcStride);
 FUNCDEF_TU_S3(void, nonPsyRdoQuant, v, int16_t *m_resiDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, uint32_t blkPos);
@@ -109,8 +111,12 @@ FUNCDEF_TU_S3(void, PsyRdoQuant, v, int16_t *m_resiDctCoeff, int16_t *m_fencDctC
 
 FUNCDEF_PU(void, sad_x3, rvv, const pixel *, const pixel *, const pixel *, const pixel *, intptr_t, int32_t *);
 FUNCDEF_PU(void, sad_x4, rvv, const pixel *, const pixel *, const pixel *, const pixel *, const pixel *, intptr_t, int32_t *);
+FUNCDEF_PU(sse_t, pixel_sse_pp, rvv, const pixel*, intptr_t, const pixel*, intptr_t);
 FUNCDEF_CHROMA_PU(int, pixel_sad, rvv, const pixel *, intptr_t, const pixel *, intptr_t);
 FUNCDEF_CHROMA_PU(int, pixel_satd, rvv, const pixel*, intptr_t, const pixel*, intptr_t);
+FUNCDEF_CHROMA_PU(sse_t, pixel_ssd_s, rvv, const int16_t*, intptr_t);
+FUNCDEF_CHROMA_PU(sse_t, pixel_ssd_s_aligned, rvv, const int16_t*, intptr_t);
+FUNCDEF_CHROMA_PU(sse_t, pixel_sse_ss, rvv, const int16_t*, intptr_t, const int16_t*, intptr_t);
 
 void PFX(idst4_v)(const int16_t *src, int16_t *dst, intptr_t dstStride);
 void PFX(dst4_v)(const int16_t *src, int16_t *dst, intptr_t srcStride);
