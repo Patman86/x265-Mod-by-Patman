@@ -86,6 +86,9 @@ extern "C" {
     p.chroma[X265_CSP_I422].pu[CHROMA_422_8x64].prim  = fncdef PFX(fname ## _8x64_ ## cpu)
 #define ALL_CHROMA_422_PU(prim, fname, cpu) ALL_CHROMA_422_PU_TYPED(prim, , fname, cpu)
 
+#define LUMA_CU(W, H) \
+    p.cu[BLOCK_ ## W ## x ## H].sub_ps        = pixel_sub_ps_c<W, H>;
+
 #if defined(__GNUC__)
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #endif
@@ -180,7 +183,90 @@ void setupRVVPrimitives(EncoderPrimitives &p)
     ALL_LUMA_PU(sad, pixel_sad, rvv);
     ALL_LUMA_PU(sad_x3, sad_x3, rvv);
     ALL_LUMA_PU(sad_x4, sad_x4, rvv);
+
+    // ssimDist
+    p.cu[BLOCK_4x4].ssimDist = PFX(ssimDist4_v);
+    p.cu[BLOCK_8x8].ssimDist = PFX(ssimDist8_v);
+    p.cu[BLOCK_16x16].ssimDist = PFX(ssimDist16_v);
+    p.cu[BLOCK_32x32].ssimDist = PFX(ssimDist32_v);
+    p.cu[BLOCK_64x64].ssimDist = PFX(ssimDist64_v);
+
+    // normFact
+    p.cu[BLOCK_8x8].normFact = PFX(normFact_v);
+    p.cu[BLOCK_16x16].normFact = PFX(normFact_v);
+    p.cu[BLOCK_32x32].normFact = PFX(normFact_v);
+    p.cu[BLOCK_64x64].normFact = PFX(normFact_v);
 #endif
+
+    // pixel_var
+    p.cu[BLOCK_8x8].var   = PFX(pixel_var_8x8_v);
+    p.cu[BLOCK_16x16].var = PFX(pixel_var_16x16_v);
+    p.cu[BLOCK_32x32].var = PFX(pixel_var_32x32_v);
+    p.cu[BLOCK_64x64].var = PFX(pixel_var_64x64_v);
+
+    // calc_Residual
+    p.cu[BLOCK_4x4].calcresidual[NONALIGNED]   = PFX(getResidual4_v);
+    p.cu[BLOCK_8x8].calcresidual[NONALIGNED]   = PFX(getResidual8_v);
+    p.cu[BLOCK_16x16].calcresidual[NONALIGNED] = PFX(getResidual16_v);
+    p.cu[BLOCK_32x32].calcresidual[NONALIGNED] = PFX(getResidual32_v);
+
+    p.cu[BLOCK_4x4].calcresidual[ALIGNED]   = PFX(getResidual4_v);
+    p.cu[BLOCK_8x8].calcresidual[ALIGNED]   = PFX(getResidual8_v);
+    p.cu[BLOCK_16x16].calcresidual[ALIGNED] = PFX(getResidual16_v);
+    p.cu[BLOCK_32x32].calcresidual[ALIGNED] = PFX(getResidual32_v);
+
+    // pixel_sub_ps
+    p.cu[BLOCK_4x4].sub_ps   = PFX(pixel_sub_ps_4x4_v);
+    p.cu[BLOCK_8x8].sub_ps   = PFX(pixel_sub_ps_8x8_v);
+    p.cu[BLOCK_16x16].sub_ps = PFX(pixel_sub_ps_16x16_v);
+    p.cu[BLOCK_32x32].sub_ps = PFX(pixel_sub_ps_32x32_v);
+    p.cu[BLOCK_64x64].sub_ps = PFX(pixel_sub_ps_64x64_v);
+
+    // chroma sub_ps
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_4x4].sub_ps   = PFX(pixel_sub_ps_4x4_v);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_8x8].sub_ps   = PFX(pixel_sub_ps_8x8_v);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_16x16].sub_ps = PFX(pixel_sub_ps_16x16_v);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_32x32].sub_ps = PFX(pixel_sub_ps_32x32_v);
+
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_4x8].sub_ps   = PFX(pixel_sub_ps_4x8_v);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sub_ps  = PFX(pixel_sub_ps_8x16_v);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].sub_ps = PFX(pixel_sub_ps_16x32_v);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].sub_ps = PFX(pixel_sub_ps_32x64_v);
+
+    // pixel_add_ps
+    p.cu[BLOCK_4x4].add_ps[NONALIGNED]   = PFX(pixel_add_ps_4x4_v);
+    p.cu[BLOCK_8x8].add_ps[NONALIGNED]   = PFX(pixel_add_ps_8x8_v);
+    p.cu[BLOCK_16x16].add_ps[NONALIGNED] = PFX(pixel_add_ps_16x16_v);
+    p.cu[BLOCK_32x32].add_ps[NONALIGNED] = PFX(pixel_add_ps_32x32_v);
+    p.cu[BLOCK_64x64].add_ps[NONALIGNED] = PFX(pixel_add_ps_64x64_v);
+
+    // chroma add_ps
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_4x4].add_ps[NONALIGNED]   = PFX(pixel_add_ps_4x4_v);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_8x8].add_ps[NONALIGNED]   = PFX(pixel_add_ps_8x8_v);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_16x16].add_ps[NONALIGNED] = PFX(pixel_add_ps_16x16_v);
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_32x32].add_ps[NONALIGNED] = PFX(pixel_add_ps_32x32_v);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_4x8].add_ps[NONALIGNED]   = PFX(pixel_add_ps_4x8_v);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].add_ps[NONALIGNED]  = PFX(pixel_add_ps_8x16_v);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].add_ps[NONALIGNED] = PFX(pixel_add_ps_16x32_v);
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].add_ps[NONALIGNED] = PFX(pixel_add_ps_32x64_v);
+
+    //scale2D_64to32
+    p.scale2D_64to32  = PFX(scale2D_64to32_v);
+
+    // scale1D_128to64
+    p.scale1D_128to64[NONALIGNED] = PFX(scale1D_128to64_v);
+    p.scale1D_128to64[ALIGNED] = PFX(scale1D_128to64_v);
+
+    // quant
+    p.dequant_scaling = PFX(dequant_scaling_v);
+    p.dequant_normal = PFX(dequant_normal_v);
+    p.quant = PFX(quant_v);
+    p.nquant = PFX(nquant_v);
+
+    // ssim_4x4x2_core
+    p.ssim_4x4x2_core = PFX(ssim_4x4x2_core_v);
+
+    p.scanPosLast = PFX(scanPosLast_v);
 }
 
 void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask)
