@@ -832,6 +832,43 @@ static inline int pixel_satd_16x16_rvv(const uint8_t *pix1, intptr_t stride_pix1
 
 #endif // HIGH_BIT_DEPTH
 
+// To be optimized
+template<int lx, int ly>
+void pixelavg_pp_rvv(pixel *dst, intptr_t dstride, const pixel *src0, intptr_t sstride0, const pixel *src1,
+                     intptr_t sstride1, int)
+{
+    // Use rnu rounding mode
+    const unsigned int vxrm = 0;
+    for (int y = 0; y < ly; y++)
+    {
+        int x = 0;
+        size_t vl;
+        for (; x < lx; x += vl) {
+#if HIGH_BIT_DEPTH
+            vl = __riscv_vsetvl_e16m1(lx - x);
+            vuint16m1_t in0 = __riscv_vle16_v_u16m1((const uint16_t*)(src0 + x), vl);
+            vuint16m1_t in1 = __riscv_vle16_v_u16m1((const uint16_t*)(src1 + x), vl);
+            // compute (a + b + 1) >> 1
+            vuint16m1_t avg = __riscv_vaaddu_vv_u16m1(in0, in1, vxrm, vl);
+            __riscv_vse16_v_u16m1((uint16_t*)(dst + x), avg, vl);
+#else
+            vl = __riscv_vsetvl_e8m1(lx - x);
+            vuint8m1_t in0 = __riscv_vle8_v_u8m1((const uint8_t*)(src0 + x), vl);
+            vuint8m1_t in1 = __riscv_vle8_v_u8m1((const uint8_t*)(src1 + x), vl);
+            // zero-extended
+            vuint16m2_t w_in0 = __riscv_vzext_vf2_u16m2(in0, vl);
+            vuint16m2_t w_in1 = __riscv_vzext_vf2_u16m2(in1, vl);
+            vuint16m2_t sum = __riscv_vadd_vv_u16m2(w_in0, w_in1, vl);
+            vuint8m1_t avg = __riscv_vnclipu_wx_u8m1(sum, 1, vxrm, vl);
+            __riscv_vse8_v_u8m1((uint8_t*)(dst + x), avg, vl);
+#endif
+        }
+        src0 += sstride0;
+        src1 += sstride1;
+        dst += dstride;
+    }
+}
+
 #if !(HIGH_BIT_DEPTH)
 template<int w, int h>
 int satd4_rvv(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr_t stride_pix2)
@@ -906,6 +943,44 @@ int satd8_rvv(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr
 
 namespace X265_NS {
 void setupPixelPrimitives_rvv(EncoderPrimitives &p) {
+#define LUMA_PU(W, H) \
+    p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[NONALIGNED] = pixelavg_pp_rvv<W, H>; \
+    p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[ALIGNED] = pixelavg_pp_rvv<W, H>;
+
+#if !(HIGH_BIT_DEPTH)
+#define LUMA_PU_S(W, H)
+#else // (HIGH_BIT_DEPTH)
+#define LUMA_PU_S(W, H) \
+    p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[NONALIGNED] = pixelavg_pp_rvv<W, H>; \
+    p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[ALIGNED] = pixelavg_pp_rvv<W, H>;
+#endif // !(HIGH_BIT_DEPTH)
+
+    LUMA_PU_S(4, 4);
+    LUMA_PU_S(8, 8);
+    LUMA_PU(16, 16);
+    LUMA_PU(32, 32);
+    LUMA_PU(64, 64);
+    LUMA_PU_S(4, 8);
+    LUMA_PU_S(8, 4);
+    LUMA_PU(16,  8);
+    LUMA_PU_S(8, 16);
+    LUMA_PU(16, 12);
+    LUMA_PU(12, 16);
+    LUMA_PU(16,  4);
+    LUMA_PU_S(4, 16);
+    LUMA_PU(32, 16);
+    LUMA_PU(16, 32);
+    LUMA_PU(32, 24);
+    LUMA_PU(24, 32);
+    LUMA_PU(32,  8);
+    LUMA_PU_S(8, 32);
+    LUMA_PU(64, 32);
+    LUMA_PU(32, 64);
+    LUMA_PU(64, 48);
+    LUMA_PU(48, 64);
+    LUMA_PU(64, 16);
+    LUMA_PU(16, 64);
+
 #if !(HIGH_BIT_DEPTH)
     p.pu[LUMA_4x4].satd = satd4_rvv<4, 4>;
     p.pu[LUMA_4x8].satd = satd4_rvv<4, 8>;
