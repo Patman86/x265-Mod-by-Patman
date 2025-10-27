@@ -122,4 +122,12 @@ ELF     .size   \name, . - \name
     SUMSUB_ABCD     \r1, \r3, \r2, \r4, \t1, \t3, \t2, \t4
 .endm
 
+.macro SIGNOF x, t1, t2
+    srai            \t1, \x, 31
+    neg             \x, \x
+    li              \t2, 63
+    srl             \x, \x, \t2
+    or              \x, \x, \t1
+.endm
+
 #endif

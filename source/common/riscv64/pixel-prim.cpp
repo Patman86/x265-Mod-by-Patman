@@ -3,8 +3,6 @@
 #include "primitives.h"
 #include "x265.h"
 
-#include "pixel-prim.h"
-
 #include <riscv_vector.h>
 #include <stdint.h>
 

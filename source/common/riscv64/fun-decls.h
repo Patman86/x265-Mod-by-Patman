@@ -155,4 +155,9 @@ void PFX(normFact_v)(const pixel* src, uint32_t blockSize, int shift, uint64_t *
 
 int PFX(scanPosLast_v)(const uint16_t *scan, const coeff_t *coeff, uint16_t *coeffSign, uint16_t *coeffFlag, uint8_t *coeffNum, int numSig, const uint16_t* scanCG4x4, const int trSize);
 
+void PFX(saoCuStatsE0_rvv)(const int16_t *diff, const pixel *rec, intptr_t stride, int endX, int endY, int32_t *stats, int32_t *count);
+void PFX(saoCuStatsE1_rvv)(const int16_t *diff, const pixel *rec, intptr_t stride, int8_t *upBuff1, int endX, int endY, int32_t *stats, int32_t *count);
+void PFX(saoCuStatsE2_rvv)(const int16_t *diff, const pixel *rec, intptr_t stride, int8_t *upBuff1, int8_t *upBufft, int endX, int endY, int32_t *stats, int32_t *count);
+void PFX(saoCuStatsE3_rvv)(const int16_t *diff, const pixel *rec, intptr_t stride, int8_t *upBuff1, int endX, int endY, int32_t *stats, int32_t *count);
+
 #endif

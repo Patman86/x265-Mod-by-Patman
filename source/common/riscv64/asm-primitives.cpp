@@ -144,7 +144,7 @@ extern "C" {
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #endif
 
-#include "pixel-prim.h"
+#include "fun-decls-prim.h"
 
 namespace X265_NS
 {
@@ -332,6 +332,11 @@ void setupRVVPrimitives(EncoderPrimitives &p)
     p.ssim_4x4x2_core = PFX(ssim_4x4x2_core_v);
 
     p.scanPosLast = PFX(scanPosLast_v);
+
+    p.saoCuStatsE0 = PFX(saoCuStatsE0_rvv);
+    p.saoCuStatsE1 = PFX(saoCuStatsE1_rvv);
+    p.saoCuStatsE2 = PFX(saoCuStatsE2_rvv);
+    p.saoCuStatsE3 = PFX(saoCuStatsE3_rvv);
 }
 
 void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask)
@@ -348,6 +353,7 @@ void setupIntrinsicPrimitives(EncoderPrimitives &p, int cpuMask)
     if (cpuMask & X265_CPU_RVV)
     {
         setupPixelPrimitives_rvv(p);
+        setupSaoPrimitives_rvv(p);
     }
 #else
     (void)p;
