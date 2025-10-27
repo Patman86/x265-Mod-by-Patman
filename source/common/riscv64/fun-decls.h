@@ -123,6 +123,8 @@ FUNCDEF_CHROMA_PU(int, pixel_satd, rvv, const pixel*, intptr_t, const pixel*, in
 FUNCDEF_CHROMA_PU(sse_t, pixel_ssd_s, rvv, const int16_t*, intptr_t);
 FUNCDEF_CHROMA_PU(sse_t, pixel_ssd_s_aligned, rvv, const int16_t*, intptr_t);
 FUNCDEF_CHROMA_PU(sse_t, pixel_sse_ss, rvv, const int16_t*, intptr_t, const int16_t*, intptr_t);
+FUNCDEF_CHROMA_PU(void, filterPixelToShort, rvv, const pixel* src, intptr_t srcStride, int16_t* dst, intptr_t dstStride);
+FUNCDEF_CHROMA_PU(void, filterPixelToShort_aligned, rvv, const pixel* src, intptr_t srcStride, int16_t* dst, intptr_t dstStride);
 
 void PFX(idst4_v)(const int16_t *src, int16_t *dst, intptr_t dstStride);
 void PFX(dst4_v)(const int16_t *src, int16_t *dst, intptr_t srcStride);
