@@ -1973,7 +1973,7 @@ int x265_check_params(x265_param* param)
             CHECK(param->hmeRange[level] < 0 || param->hmeRange[level] >= 32768,
                 "Search Range for HME levels must be between 0 and 32768");
     }
-#if !X86_64 && !X265_ARCH_ARM64
+#if !X86_64 && !X265_ARCH_ARM64 && !X265_ARCH_RISCV64
     CHECK(param->searchMethod == X265_SEA && (param->sourceWidth > 840 || param->sourceHeight > 480),
         "SEA motion search does not support resolutions greater than 480p in 32 bit build");
 #endif
@@ -1995,11 +1995,6 @@ int x265_check_params(x265_param* param)
     {
         param->bSingleSeiNal = 0;
         x265_log(param, X265_LOG_WARNING, "None of the SEI messages are enabled. Disabling Single SEI NAL\n");
-    }
-    if (param->bEnableTemporalFilter && (param->frameNumThreads != 1))
-    {
-        param->bEnableTemporalFilter = 0;
-        x265_log(param, X265_LOG_WARNING, "MCSTF can be enabled with frame thread = 1 only. Disabling MCSTF\n");
     }
     CHECK(param->confWinRightOffset < 0, "Conformance Window Right Offset must be 0 or greater");
     CHECK(param->confWinBottomOffset < 0, "Conformance Window Bottom Offset must be 0 or greater");

@@ -96,7 +96,7 @@ struct test_arch_t
     { "AVX2", X265_CPU_AVX2 },
     { "BMI2", X265_CPU_AVX2 | X265_CPU_BMI1 | X265_CPU_BMI2 },
     { "AVX512", X265_CPU_AVX512 },
-#else
+#elif X265_ARCH_ARM64 || X265_ARCH_ARM
     { "ARMv6", X265_CPU_ARMV6 },
     { "NEON", X265_CPU_NEON },
     { "Neon_DotProd", X265_CPU_NEON_DOTPROD },
@@ -105,6 +105,8 @@ struct test_arch_t
     { "SVE2", X265_CPU_SVE2 },
     { "SVE2_BitPerm", X265_CPU_SVE2_BITPERM },
     { "FastNeonMRC", X265_CPU_FAST_NEON_MRC },
+#elif X265_ARCH_RISCV64
+    { "RVV", X265_CPU_RVV},
 #endif
     { "", 0 },
 };
@@ -226,7 +228,7 @@ int main(int argc, char *argv[])
         printf("Testing primitives: %s\n", testArch[i].name);
         fflush(stdout);
 
-#if defined(X265_ARCH_X86) || defined(X265_ARCH_ARM64)
+#if defined(X265_ARCH_X86) || defined(X265_ARCH_ARM64) || defined(X265_ARCH_RISCV64)
         EncoderPrimitives vecprim;
         memset(&vecprim, 0, sizeof(vecprim));
         setupIntrinsicPrimitives(vecprim, testArch[i].flag);
@@ -268,7 +270,7 @@ int main(int argc, char *argv[])
     {
         EncoderPrimitives optprim;
         memset(&optprim, 0, sizeof(optprim));
-#if defined(X265_ARCH_X86) || defined(X265_ARCH_ARM64)
+#if defined(X265_ARCH_X86) || defined(X265_ARCH_ARM64) || defined(X265_ARCH_RISCV64)
         setupIntrinsicPrimitives(optprim, cpuid);
 #endif
 

@@ -129,6 +129,9 @@ const cpu_name_t cpu_names[] =
 #elif X265_ARCH_POWER8
     { "Altivec",         X265_CPU_ALTIVEC },
 
+#elif X265_ARCH_RISCV64
+    { "RVV",           X265_CPU_RVV },
+
 #endif // if X265_ARCH_X86
     { "", 0 },
 };
@@ -404,6 +407,21 @@ uint32_t cpu_detect(bool benableavx512)
 
 #ifdef ENABLE_ASSEMBLY
     flags = aarch64_cpu_detect();
+#endif
+
+    return flags;
+}
+
+#elif X265_ARCH_RISCV64
+#include "riscv64/cpu.h"
+
+uint32_t cpu_detect(bool benableavx512)
+{
+    (void)benableavx512;
+    uint32_t flags = 0;
+
+#ifdef ENABLE_ASSEMBLY
+    flags = riscv64_cpu_detect();
 #endif
 
     return flags;

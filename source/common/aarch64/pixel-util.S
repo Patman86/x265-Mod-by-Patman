@@ -860,7 +860,7 @@ function PFX(scanPosLast_neon)
     lsl             w13, w13, w6
     lsl             w15, w15, w6
     extr            w14, w14, w13, #31
-    bfc             w15, #31, #1
+    bfm             w15, wzr, #1, #0
     cbnz            w15, .Loop_spl_1
 .Lpext_end:
     strh            w14, [x2], #2
