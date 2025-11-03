@@ -337,6 +337,18 @@ void setupRVVPrimitives(EncoderPrimitives &p)
     p.saoCuStatsE1 = PFX(saoCuStatsE1_rvv);
     p.saoCuStatsE2 = PFX(saoCuStatsE2_rvv);
     p.saoCuStatsE3 = PFX(saoCuStatsE3_rvv);
+
+    p.saoCuOrgE0 = PFX(processSaoCUE0_rvv);
+    p.saoCuOrgE1 = PFX(processSaoCUE1_rvv);
+    p.saoCuOrgE1_2Rows = PFX(processSaoCUE1_2Rows_rvv);
+    p.saoCuOrgE2[0] = PFX(processSaoCUE2_rvv);
+    p.saoCuOrgE2[1] = PFX(processSaoCUE2_rvv);
+    p.saoCuOrgE3[0] = PFX(processSaoCUE3_rvv);
+    p.saoCuOrgE3[1] = PFX(processSaoCUE3_rvv);
+    p.saoCuOrgB0 = PFX(processSaoCUB0_rvv);
+    p.sign = PFX(calSign_rvv);
+    p.pelFilterLumaStrong[0] = PFX(pelFilterLumaStrong_v_rvv);
+    p.pelFilterLumaStrong[1] = PFX(pelFilterLumaStrong_h_rvv);
 }
 
 void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask)

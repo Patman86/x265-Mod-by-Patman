@@ -32,14 +32,6 @@
 .align 4
 .text
 
-.macro SIGNOF_RVV  vd, va, vb
-    vmv.v.i         \vd, 0
-    vmsltu.vv       v0, \va, \vb
-    vmerge.vim      \vd, \vd, -1, v0
-    vmsgtu.vv       v0, \va, \vb
-    vmerge.vim      \vd, \vd, 1, v0
-.endm
-
 //void saoCuStatsE0_c(const int16_t *diff, const pixel *rec, intptr_t stride, int endX, int endY, int32_t *stats, int32_t *count)
 function PFX(saoCuStatsE0_rvv)
     addi            sp, sp, -64

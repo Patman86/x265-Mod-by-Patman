@@ -130,4 +130,12 @@ ELF     .size   \name, . - \name
     or              \x, \x, \t1
 .endm
 
+.macro SIGNOF_RVV  vd, va, vb
+    vmv.v.i         \vd, 0
+    vmsltu.vv       v0, \va, \vb
+    vmerge.vim      \vd, \vd, -1, v0
+    vmsgtu.vv       v0, \va, \vb
+    vmerge.vim      \vd, \vd, 1, v0
+.endm
+
 #endif

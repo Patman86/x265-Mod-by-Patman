@@ -160,4 +160,16 @@ void PFX(saoCuStatsE1_rvv)(const int16_t *diff, const pixel *rec, intptr_t strid
 void PFX(saoCuStatsE2_rvv)(const int16_t *diff, const pixel *rec, intptr_t stride, int8_t *upBuff1, int8_t *upBufft, int endX, int endY, int32_t *stats, int32_t *count);
 void PFX(saoCuStatsE3_rvv)(const int16_t *diff, const pixel *rec, intptr_t stride, int8_t *upBuff1, int endX, int endY, int32_t *stats, int32_t *count);
 
+void PFX(processSaoCUE0_rvv)(pixel * rec, int8_t * offsetEo, int width, int8_t* signLeft, intptr_t stride);
+void PFX(processSaoCUE1_rvv)(pixel* rec, int8_t* upBuff1, int8_t* offsetEo, intptr_t stride, int width);
+void PFX(processSaoCUE1_2Rows_rvv)(pixel* rec, int8_t* upBuff1, int8_t* offsetEo, intptr_t stride, int width);
+void PFX(processSaoCUE2_rvv)(pixel * rec, int8_t * bufft, int8_t * buff1, int8_t * offsetEo, int width, intptr_t stride);
+void PFX(processSaoCUE3_rvv)(pixel *rec, int8_t *upBuff1, int8_t *offsetEo, intptr_t stride, int startX, int endX);
+void PFX(processSaoCUB0_rvv)(pixel* rec, const int8_t* offset, int ctuWidth, int ctuHeight, intptr_t stride);
+void PFX(calSign_rvv)(int8_t *dst, const pixel *src1, const pixel *src2, const int endX);
+void PFX(pelFilterLumaStrong_v_rvv)(pixel* src, intptr_t srcStep, intptr_t offset, int32_t tcP, int32_t tcQ);
+void PFX(pelFilterLumaStrong_h_rvv)(pixel* src, intptr_t srcStep, intptr_t offset, int32_t tcP, int32_t tcQ);
+void PFX(pelFilterChroma_V_rvv)(pixel *src, intptr_t srcStep, intptr_t offset, int32_t tc, int32_t maskP, int32_t maskQ);
+void PFX(pelFilterChroma_H_rvv)(pixel *src, intptr_t srcStep, intptr_t offset, int32_t tc, int32_t maskP, int32_t maskQ);
+
 #endif
