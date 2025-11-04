@@ -173,7 +173,7 @@ if(ENABLE_ASSEMBLY AND (RISCV64 OR CROSS_COMPILE_RISCV64))
     set(ASM_PRIMITIVES ${ASM_PRIMITIVES} riscv64/asm-primitives.cpp)
 
     # Add riscv64 intrinsics files here.
-    set(INTRINSIC_SRCS_RVV pixel-prim.cpp sao-prim.cpp)
+    set(INTRINSIC_SRCS_RVV pixel-prim.cpp sao-prim.cpp filter-prim.cpp filter-prim.h)
     if(CPU_HAS_RVV_INTRINSIC)
         foreach(SRC ${INTRINSIC_SRCS_RVV})
             set(ASM_PRIMITIVES ${ASM_PRIMITIVES} riscv64/${SRC})

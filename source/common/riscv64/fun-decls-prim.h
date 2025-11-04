@@ -30,6 +30,7 @@ namespace X265_NS {
 
 void setupPixelPrimitives_rvv(EncoderPrimitives &p);
 void setupSaoPrimitives_rvv(EncoderPrimitives &p);
+void setupFilterPrimitives_rvv(EncoderPrimitives &p);
 
 }
 
