@@ -31,6 +31,29 @@ extern "C" {
 #include "fun-decls.h"
 }
 
+#define ALL_LUMA_TU_TYPED_S(prim, fncdef, fname, cpu) \
+    p.cu[BLOCK_4x4].prim   = fncdef PFX(fname ## _4_ ## cpu); \
+    p.cu[BLOCK_8x8].prim   = fncdef PFX(fname ## _8_ ## cpu); \
+    p.cu[BLOCK_16x16].prim = fncdef PFX(fname ## _16_ ## cpu); \
+    p.cu[BLOCK_32x32].prim = fncdef PFX(fname ## _32_ ## cpu);
+#define ALL_LUMA_TU_S(prim, fname, cpu)  ALL_LUMA_TU_TYPED_S(prim, , fname, cpu)
+
+#define ALL_LUMA_BLOCKS_TYPED_S(prim, fncdef, fname, cpu) \
+    p.cu[BLOCK_4x4].prim   = fncdef PFX(fname ## _4_ ## cpu); \
+    p.cu[BLOCK_8x8].prim   = fncdef PFX(fname ## _8_ ## cpu); \
+    p.cu[BLOCK_16x16].prim = fncdef PFX(fname ## _16_ ## cpu); \
+    p.cu[BLOCK_32x32].prim = fncdef PFX(fname ## _32_ ## cpu); \
+    p.cu[BLOCK_64x64].prim = fncdef PFX(fname ## _64_ ## cpu);
+#define ALL_LUMA_BLOCKS_S(prim, fname, cpu)  ALL_LUMA_BLOCKS_TYPED_S(prim, , fname, cpu)
+
+#define ALL_LUMA_BLOCKS_TYPED(prim, fncdef, fname, cpu) \
+    p.cu[BLOCK_4x4].prim   = fncdef PFX(fname ## _4x4_ ## cpu); \
+    p.cu[BLOCK_8x8].prim   = fncdef PFX(fname ## _8x8_ ## cpu); \
+    p.cu[BLOCK_16x16].prim = fncdef PFX(fname ## _16x16_ ## cpu); \
+    p.cu[BLOCK_32x32].prim = fncdef PFX(fname ## _32x32_ ## cpu); \
+    p.cu[BLOCK_64x64].prim = fncdef PFX(fname ## _64x64_ ## cpu);
+#define ALL_LUMA_BLOCKS(prim, fname, cpu)  ALL_LUMA_BLOCKS_TYPED(prim, , fname, cpu)
+
 #define ALL_LUMA_PU_TYPED(prim, fncdef, fname, cpu)                            \
   p.pu[LUMA_4x4].prim = fncdef PFX(fname##_4x4_##cpu);                         \
   p.pu[LUMA_8x8].prim = fncdef PFX(fname##_8x8_##cpu);                         \
@@ -58,6 +81,20 @@ extern "C" {
   p.pu[LUMA_64x16].prim = fncdef PFX(fname##_64x16_##cpu);                     \
   p.pu[LUMA_16x64].prim = fncdef PFX(fname##_16x64_##cpu)
 #define ALL_LUMA_PU(prim, fname, cpu) ALL_LUMA_PU_TYPED(prim, , fname, cpu)
+
+#define ALL_CHROMA_420_CU_TYPED(prim, fncdef, fname, cpu) \
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_4x4].prim   = fncdef PFX(fname ## _4x4_ ## cpu); \
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_8x8].prim   = fncdef PFX(fname ## _8x8_ ## cpu); \
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_16x16].prim = fncdef PFX(fname ## _16x16_ ## cpu); \
+    p.chroma[X265_CSP_I420].cu[BLOCK_420_32x32].prim = fncdef PFX(fname ## _32x32_ ## cpu)
+#define ALL_CHROMA_420_CU(prim, fname, cpu) ALL_CHROMA_420_CU_TYPED(prim, , fname, cpu)
+
+#define ALL_CHROMA_422_CU_TYPED(prim, fncdef, fname, cpu) \
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_4x8].prim   = fncdef PFX(fname ## _4x8_ ## cpu); \
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].prim  = fncdef PFX(fname ## _8x16_ ## cpu); \
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].prim = fncdef PFX(fname ## _16x32_ ## cpu); \
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].prim = fncdef PFX(fname ## _32x64_ ## cpu)
+#define ALL_CHROMA_422_CU(prim, fname, cpu) ALL_CHROMA_422_CU_TYPED(prim, , fname, cpu)
 
 #define ALL_CHROMA_420_PU_TYPED(prim, fncdef, fname, cpu)                                  \
     p.chroma[X265_CSP_I420].pu[CHROMA_420_4x4].prim   = fncdef PFX(fname ## _4x4_ ## cpu); \
@@ -163,15 +200,8 @@ void setupRVVPrimitives(EncoderPrimitives &p)
     ALL_LUMA_PU(convert_p2s[NONALIGNED], filterPixelToShort, rvv);
 
     // copy_count
-    p.cu[BLOCK_4x4].copy_cnt     = PFX(copy_cnt_4_v);
-    p.cu[BLOCK_8x8].copy_cnt     = PFX(copy_cnt_8_v);
-    p.cu[BLOCK_16x16].copy_cnt   = PFX(copy_cnt_16_v);
-    p.cu[BLOCK_32x32].copy_cnt   = PFX(copy_cnt_32_v);
-
-    p.cu[BLOCK_4x4].count_nonzero     = PFX(count_nonzero_4_v);
-    p.cu[BLOCK_8x8].count_nonzero     = PFX(count_nonzero_8_v);
-    p.cu[BLOCK_16x16].count_nonzero   = PFX(count_nonzero_16_v);
-    p.cu[BLOCK_32x32].count_nonzero   = PFX(count_nonzero_32_v);
+    ALL_LUMA_TU_S(copy_cnt, copy_cnt, v);
+    ALL_LUMA_TU_S(count_nonzero, count_nonzero, v);
 
     p.idst4x4               = PFX(idst4_v);
     p.cu[BLOCK_4x4].idct    = PFX(idct4_v);
@@ -349,6 +379,39 @@ void setupRVVPrimitives(EncoderPrimitives &p)
     p.sign = PFX(calSign_rvv);
     p.pelFilterLumaStrong[0] = PFX(pelFilterLumaStrong_v_rvv);
     p.pelFilterLumaStrong[1] = PFX(pelFilterLumaStrong_h_rvv);
+    //p.pelFilterChroma[0]     = PFX(pelFilterChroma_V_rvv);
+    //p.pelFilterChroma[1]     = PFX(pelFilterChroma_H_rvv);
+
+    p.weight_pp = PFX(weight_pp_v);
+    p.weight_sp = PFX(weight_sp_v);
+
+    p.planecopy_cp = PFX(planecopy_cp_v);
+    p.planecopy_sp = PFX(planecopy_sp_v);
+    p.planecopy_sp_shl = PFX(planecopy_sp_shl_v);
+    p.planecopy_pp_shr = PFX(planecopy_pp_shr_v);
+
+    ALL_LUMA_PU(addAvg[NONALIGNED], addAvg, v);
+    ALL_LUMA_PU(addAvg[ALIGNED], addAvg, v);
+    ALL_CHROMA_420_PU(addAvg[NONALIGNED], addAvg, v);
+    ALL_CHROMA_420_PU(addAvg[ALIGNED], addAvg, v);
+    ALL_CHROMA_422_PU(addAvg[NONALIGNED], addAvg, v);
+    ALL_CHROMA_422_PU(addAvg[ALIGNED], addAvg, v);
+
+    ALL_LUMA_PU(copy_pp, blockcopy_pp, v);
+    ALL_CHROMA_420_PU(copy_pp, blockcopy_pp, v);
+    ALL_CHROMA_422_PU(copy_pp, blockcopy_pp, v);
+
+    ALL_LUMA_BLOCKS(copy_ss, blockcopy_ss, v);
+    ALL_CHROMA_420_CU(copy_ss, blockcopy_ss, v);
+    ALL_CHROMA_422_CU(copy_ss, blockcopy_ss, v);
+
+    ALL_LUMA_BLOCKS_S(blockfill_s[NONALIGNED], blockfill_s, v);
+    ALL_LUMA_BLOCKS_S(blockfill_s[NONALIGNED], blockfill_s, v);
+    ALL_LUMA_BLOCKS_S(cpy2Dto1D_shl, cpy2Dto1D_shl, v);
+    ALL_LUMA_BLOCKS_S(cpy2Dto1D_shr, cpy2Dto1D_shr, v);
+    ALL_LUMA_BLOCKS_S(cpy1Dto2D_shl[NONALIGNED], cpy1Dto2D_shl, v);
+    ALL_LUMA_BLOCKS_S(cpy1Dto2D_shl[ALIGNED], cpy1Dto2D_shl, v);
+    ALL_LUMA_BLOCKS_S(cpy1Dto2D_shr, cpy1Dto2D_shr, v);
 }
 
 void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask)

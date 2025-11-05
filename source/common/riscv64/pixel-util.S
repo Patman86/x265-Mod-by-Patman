@@ -235,6 +235,11 @@ function PFX(pixel_add_ps_\xsize\()x\ysize\()_v)
     slli            a1, a1, 1
     slli            a4, a4, 1
 #endif
+    vsetvli         zero, t0, e16, m\lmul2, ta, ma
+    vmv.v.i         v24, 0
+.if \lmul2 <= 4
+    vmv.v.x         v28, t2
+.endif
 
 loop_addps_\xsize\()x\ysize\():
     vsetvli         zero, t0, e16, m\lmul2, ta, ma
@@ -248,16 +253,19 @@ loop_addps_\xsize\()x\ysize\():
     vwaddu.wv       v16, v8, v0
     vsetvli         zero, t0, e16, m\lmul2, ta, ma
 #endif
-    vmslt.vi        v0, v16, 0
-    vmerge.vim      v8, v16, 0, v0
+    vmax.vv         v8, v16, v24
+.if \lmul2 <= 4
+    vminu.vv        v16, v8, v28
+.else
+    vmv.v.x         v0, t2
+    vminu.vv        v16, v8, v0
+.endif
 #if HIGH_BIT_DEPTH
-    vmsgtu.vx       v0, v8, t2
-    vmerge.vxm      v16, v8, t2, v0
     vse16.v         v16, (a0)
 #else
     vsetvli         zero, t0, e8, m\lmul, ta, ma
-    vnclipu.wi      v16, v8, 0
-    vse8.v          v16, (a0)
+    vnsrl.wi        v8, v16, 0
+    vse8.v          v8, (a0)
 #endif
     addi            t1, t1, -1
     add             a0, a0, a1
@@ -778,5 +786,739 @@ finish_scanPosLast:
     sh              t5, (a3)
     sb              a5, (a4)
     add             a0, t6, t1
+    ret
+endfunc
+
+//void weight_pp_c(const pixel* src, pixel* dst, intptr_t stride, int width, int height, int w0, int round, int shift, int offset)
+function PFX(weight_pp_v)
+    ld              t0, (sp)
+    li              t6, (1 << BIT_DEPTH) - 1
+    addi            a7, a7, BIT_DEPTH - 14
+    addi            t1, a7, -1
+    li              t2, 1
+    sll             a6, t2, t1
+#if HIGH_BIT_DEPTH
+    slli            a2, a2, 1
+    vsetvli         zero, a3, e16, m1, ta, ma
+    vmv.v.x         v1, a5
+    vsetvli         zero, a3, e32, m2, ta, ma
+#else
+    sll             t3, t2, a7
+    addi            t3, t3, -1
+    and             t3, t3, a5
+    beqz            t3, fast_weight_pp
+    vsetvli         zero, a3, e8, m1, ta, ma
+    vmv.v.x         v1, a5
+    vsetvli         zero, a3, e32, m4, ta, ma
+#endif
+    vmv.v.i         v12, 0
+    vmv.v.x         v16, t6
+    vmv.v.x         v20, a6
+    vmv.v.x         v24, a7
+    vmv.v.x         v28, t0
+loop_weight_pp_h:
+    mv              t1, a0
+    mv              t2, a1
+    mv              t3, a3
+loop_weight_pp_w:
+#if HIGH_BIT_DEPTH
+    vsetvli         t4, t3, e16, m1, ta, ma
+    vle16.v         v0, (t1)
+    vwmul.vv        v4, v0, v1
+    vsetvli         zero, t4, e32, m2, ta, ma
+#else
+    vsetvli         t4, t3, e8, m1, ta, ma
+    vle8.v          v0, (t1)
+    vwmulu.vv       v2, v0, v1
+    vsetvli         zero, t4, e32, m4, ta, ma
+    vzext.vf2       v4, v2
+#endif
+    vadd.vv         v4, v4, v20
+    vsra.vv         v4, v4, v24
+    vadd.vv         v4, v4, v28
+    vmax.vv         v4, v4, v12
+    vmin.vv         v4, v4, v16
+#if HIGH_BIT_DEPTH
+    vsetvli         zero, t4, e16, m1, ta, ma
+    vnsrl.wi        v8, v4, 0
+    vse16.v         v8, (t2)
+#else
+    vsetvli         zero, t4, e16, m2, ta, ma
+    vnsrl.wi        v8, v4, 0
+    vsetvli         zero, t4, e8, m1, ta, ma
+    vnsrl.wi        v4, v8, 0
+    vse8.v          v4, (t2)
+#endif
+    sub             t3, t3, t4
+#if HIGH_BIT_DEPTH
+    slli            t4, t4, 1
+#endif
+    add             t1, t1, t4
+    add             t2, t2, t4
+    bgtz            t3, loop_weight_pp_w
+    addi            a4, a4, -1
+    add             a0, a0, a2
+    add             a1, a1, a2
+    bgtz            a4, loop_weight_pp_h
+    ret
+fast_weight_pp:
+    add             a5, a5, a6
+    sra             a5, a5, a7
+    vsetvli         zero, a3, e8, m1, ta, ma
+    vmv.v.x         v1, a5
+    vsetvli         zero, a3, e16, m2, ta, ma
+    vmv.v.i         v12, 0
+    vmv.v.x         v14, t6
+    vmv.v.x         v16, t0
+loop_weight_pp_fh:
+    mv              t1, a0
+    mv              t2, a1
+    mv              t3, a3
+loop_weight_pp_fw:
+    vsetvli         t4, t3, e8, m1, ta, ma
+    vle8.v          v0, (t1)
+    vwmulu.vv       v2, v0, v1
+    vsetvli         zero, t4, e16, m2, ta, ma
+    vadd.vv         v2, v2, v16
+    vmax.vv         v2, v2, v12
+    vmin.vv         v2, v2, v14
+    vsetvli         zero, t4, e8, m1, ta, ma
+    vnsrl.wi        v4, v2, 0
+    vse8.v          v4, (t2)
+    sub             t3, t3, t4
+    add             t1, t1, t4
+    add             t2, t2, t4
+    bgtz            t3, loop_weight_pp_fw
+    addi            a4, a4, -1
+    add             a0, a0, a2
+    add             a1, a1, a2
+    bgtz            a4, loop_weight_pp_fh
+    ret
+endfunc
+
+//void weight_sp_c(const int16_t* src, pixel* dst, intptr_t srcStride, intptr_t dstStride, int width, int height, int w0, int round, int shift, int offset)
+function PFX(weight_sp_v)
+    ld              t0, (sp)
+    ld              t1, 8(sp)
+    li              t6, (1 << BIT_DEPTH) - 1
+    li              t2, 1 << 13
+    mul             t2, t2, a6
+    add             a7, a7, t2
+    slli            a2, a2, 1
+#if HIGH_BIT_DEPTH
+    slli            a3, a3, 1
+#endif
+    vsetvli         zero, a3, e16, m1, ta, ma
+    vmv.v.x         v1, a6
+    vsetvli         zero, a3, e32, m2, ta, ma
+    vmv.v.i         v12, 0
+    vmv.v.x         v16, t6
+    vmv.v.x         v20, a7
+    vmv.v.x         v24, t0
+    vmv.v.x         v28, t1
+loop_weight_sp_h:
+    mv              t1, a0
+    mv              t2, a1
+    mv              t3, a4
+loop_weight_sp_w:
+    vsetvli         t4, t3, e16, m1, ta, ma
+    vle16.v         v0, (t1)
+    vwmul.vv        v4, v0, v1
+    vsetvli         zero, t4, e32, m2, ta, ma
+    vadd.vv         v4, v4, v20
+    vsra.vv         v4, v4, v24
+    vadd.vv         v4, v4, v28
+    vmax.vv         v4, v4, v12
+    vmin.vv         v4, v4, v16
+    vsetvli         zero, t4, e16, m1, ta, ma
+    vnsrl.wi        v8, v4, 0
+#if HIGH_BIT_DEPTH
+    vse16.v         v8, (t2)
+#else
+    vsetvli         zero, t4, e8, m1, ta, ma
+    vnsrl.wi        v4, v8, 0
+    vse8.v          v4, (t2)
+#endif
+    sub             t3, t3, t4
+    slli            t5, t4, 1
+#if HIGH_BIT_DEPTH
+    add             t2, t2, t5
+#else
+    add             t2, t2, t4
+#endif
+    add             t1, t1, t5
+    bgtz            t3, loop_weight_sp_w
+    addi            a5, a5, -1
+    add             a0, a0, a2
+    add             a1, a1, a3
+    bgtz            a5, loop_weight_sp_h
+    ret
+endfunc
+
+//void addAvg(const int16_t* src0, const int16_t* src1, pixel* dst, intptr_t src0Stride, intptr_t src1Stride, intptr_t dstStride)
+.macro ADDAVG_X_Y bx, by, lmul1, lmul2, lmul3
+function PFX(addAvg_\bx\()x\by\()_v)
+#if HIGH_BIT_DEPTH
+    slli            a5, a5, 1
+#endif
+    slli            a3, a3, 1
+    slli            a4, a4, 1
+    li              a6, \by
+    li              a7, (1 << (14 - BIT_DEPTH)) + 2 * (1 << 13)
+    li              t6, (1 << BIT_DEPTH) - 1
+    li              t1, \bx
+    vsetvli         zero, t1, e32, m\lmul3, ta, ma
+    vmv.v.i         v28, 0
+    vmv.v.x         v24, t6
+    vmv.v.x         v20, a7
+loop_addAvg_\bx\()_\by\()_y:
+    li              t1, \bx
+    mv              t2, a0
+    mv              t3, a1
+    mv              t4, a2
+loop_addAvg_\bx\()_\by\()_x:
+    vsetvli         t5, t1, e16, m\lmul2, ta, ma
+    vle16.v         v0, (t2)
+    vle16.v         v8, (t3)
+    vwadd.vv        v4, v0, v8
+    vsetvli         zero, t5, e32, m\lmul3, ta, ma
+    vadd.vv         v4, v4, v20
+    vsra.vi         v4, v4, (15 - BIT_DEPTH)
+    vmax.vv         v4, v4, v28
+    vmin.vv         v4, v4, v24
+    vsetvli         zero, t5, e16, m\lmul2, ta, ma
+    vnsrl.wi        v8, v4, 0
+#if HIGH_BIT_DEPTH
+    vse16.v         v8, (t4)
+#else
+    vsetvli         zero, t5, e8, m\lmul1, ta, ma
+    vnsrl.wi        v4, v8, 0
+    vse8.v          v4, (t4)
+#endif
+    slli            t6, t5, 1
+    sub             t1, t1, t5
+    add             t2, t2, t6
+    add             t3, t3, t6
+#if HIGH_BIT_DEPTH
+    add             t4, t4, t6
+#else
+    add             t4, t4, t5
+#endif
+    bgtz            t1, loop_addAvg_\bx\()_\by\()_x
+    add             a0, a0, a3
+    add             a1, a1, a4
+    add             a2, a2, a5
+    addi            a6, a6, -1
+    bgtz            a6, loop_addAvg_\bx\()_\by\()_y
+    ret
+endfunc
+.endm
+
+.macro ADDAVG_X_Y2 bx, by, lmul1, lmul2, lmul3
+function PFX(addAvg_\bx\()x\by\()_v)
+#if HIGH_BIT_DEPTH
+    slli            a5, a5, 1
+#endif
+    slli            a3, a3, 1
+    slli            a4, a4, 1
+    li              a6, \by
+    li              a7, (1 << (14 - BIT_DEPTH)) + 2 * (1 << 13)
+    li              t6, (1 << BIT_DEPTH) - 1
+    li              t1, \bx
+    vsetvli         zero, t1, e32, m\lmul3, ta, ma
+    vmv.v.i         v28, 0
+    vmv.v.x         v24, t6
+    vmv.v.x         v20, a7
+loop_addAvg_\bx\()_\by\()_y:
+    vsetvli         t5, t1, e16, m\lmul2, ta, ma
+    vle16.v         v0, (a0)
+    vle16.v         v8, (a1)
+    vwadd.vv        v4, v0, v8
+    vsetvli         zero, t5, e32, m\lmul3, ta, ma
+    vadd.vv         v4, v4, v20
+    vsra.vi         v4, v4, (15 - BIT_DEPTH)
+    vmax.vv         v4, v4, v28
+    vmin.vv         v4, v4, v24
+    vsetvli         zero, t5, e16, m\lmul2, ta, ma
+    vnsrl.wi        v8, v4, 0
+#if HIGH_BIT_DEPTH
+    vse16.v         v8, (a2)
+#else
+    vsetvli         zero, t5, e8, m\lmul1, ta, ma
+    vnsrl.wi        v4, v8, 0
+    vse8.v          v4, (a2)
+#endif
+    add             a0, a0, a3
+    add             a1, a1, a4
+    add             a2, a2, a5
+    addi            a6, a6, -1
+    bgtz            a6, loop_addAvg_\bx\()_\by\()_y
+    ret
+endfunc
+.endm
+
+ADDAVG_X_Y2  4, 2, 1, 1, 1
+ADDAVG_X_Y2  4, 4, 1, 1, 1
+ADDAVG_X_Y2  4, 8, 1, 1, 1
+ADDAVG_X_Y2  4, 16, 1, 1, 1
+ADDAVG_X_Y2  4, 32, 1, 1, 1
+ADDAVG_X_Y2  6, 8, 1, 1, 2
+ADDAVG_X_Y2  6, 16, 1, 1, 2
+ADDAVG_X_Y2  8, 2, 1, 1, 2
+ADDAVG_X_Y2  8, 4, 1, 1, 2
+ADDAVG_X_Y2  8, 6, 1, 1, 2
+ADDAVG_X_Y2  8, 8, 1, 1, 2
+ADDAVG_X_Y2  8, 12, 1, 1, 2
+ADDAVG_X_Y2  8, 16, 1, 1, 2
+ADDAVG_X_Y2  8, 32, 1, 1, 2
+ADDAVG_X_Y2  8, 64, 1, 1, 2
+ADDAVG_X_Y2  12, 16, 1, 2, 4
+ADDAVG_X_Y2  12, 32, 1, 2, 4
+ADDAVG_X_Y2  16, 4, 1, 2, 4
+ADDAVG_X_Y2  16, 8, 1, 2, 4
+ADDAVG_X_Y2  16, 12, 1, 2, 4
+ADDAVG_X_Y2  16, 16, 1, 2, 4
+ADDAVG_X_Y2  16, 24, 1, 2, 4
+ADDAVG_X_Y2  16, 32, 1, 2, 4
+ADDAVG_X_Y2  16, 64, 1, 2, 4
+ADDAVG_X_Y  24, 32, 1, 2, 4
+ADDAVG_X_Y  24, 64, 1, 2, 4
+ADDAVG_X_Y  32, 8, 1, 2, 4
+ADDAVG_X_Y  32, 12, 1, 2, 4
+ADDAVG_X_Y  32, 16, 1, 2, 4
+ADDAVG_X_Y  32, 24, 1, 2, 4
+ADDAVG_X_Y  32, 32, 1, 2, 4
+ADDAVG_X_Y  32, 48, 1, 2, 4
+ADDAVG_X_Y  32, 64, 1, 2, 4
+ADDAVG_X_Y  48, 64, 1, 2, 4
+ADDAVG_X_Y  64, 16, 1, 2, 4
+ADDAVG_X_Y  64, 32, 1, 2, 4
+ADDAVG_X_Y  64, 48, 1, 2, 4
+ADDAVG_X_Y  64, 64, 1, 2, 4
+
+//void blockfill_s_c(int16_t* dst, intptr_t dstride, int16_t val)
+.macro BLOCKFILL_S size, lmul
+function PFX(blockfill_s_\size\()_v)
+    slli            a1, a1, 1
+    li              t1, \size
+    vsetvli         zero, t1, e16, m\lmul, ta, ma
+    vmv.v.x         v0, a2
+loop_blockfill_s_\size:
+    vse16.v         v0, (a0)
+    add             a0, a0, a1
+    addi            t1, t1, -1
+    bgtz            t1, loop_blockfill_s_\size
+    ret
+endfunc
+.endm
+
+BLOCKFILL_S 4, 1
+BLOCKFILL_S 8, 1
+BLOCKFILL_S 16, 2
+BLOCKFILL_S 32, 4
+BLOCKFILL_S 64, 8
+
+//void cpy2Dto1D_shl(int16_t* dst, const int16_t* src, intptr_t srcStride, int shift)
+.macro CPY2DTO1D_SHL size, lmul
+function PFX(cpy2Dto1D_shl_\size\()_v)
+    slli            a2, a2, 1
+    li              t1, \size
+    vsetvli         zero, t1, e16, m\lmul, ta, ma
+    vmv.v.x         v0, a3
+cpy2Dto1D_shl_\size:
+    vle16.v         v8, (a1)
+    vsll.vv         v8, v8, v0
+    vse16.v         v8, (a0)
+    addi            a0, a0, 2 * \size
+    add             a1, a1, a2
+    addi            t1, t1, -1
+    bgtz            t1, cpy2Dto1D_shl_\size
+    ret
+endfunc
+.endm
+
+CPY2DTO1D_SHL 4, 1
+CPY2DTO1D_SHL 8, 1
+CPY2DTO1D_SHL 16, 2
+CPY2DTO1D_SHL 32, 4
+CPY2DTO1D_SHL 64, 8
+
+//void cpy2Dto1D_shr(int16_t* dst, const int16_t* src, intptr_t srcStride, int shift)
+.macro CPY2DTO1D_SHR size, lmul
+function PFX(cpy2Dto1D_shr_\size\()_v)
+    slli            a2, a2, 1
+    li              t1, \size
+    addi            t2, a3, -1
+    li              t3, 1
+    sll             t3, t3, t2
+    vsetvli         zero, t1, e16, m\lmul, ta, ma
+    vmv.v.x         v0, a3
+    vmv.v.x         v24, t3
+cpy2Dto1D_shr_\size:
+    vle16.v         v8, (a1)
+    vadd.vv         v8, v8, v24
+    vsra.vv         v8, v8, v0
+    vse16.v         v8, (a0)
+    addi            a0, a0, 2 * \size
+    add             a1, a1, a2
+    addi            t1, t1, -1
+    bgtz            t1, cpy2Dto1D_shr_\size
+    ret
+endfunc
+.endm
+
+CPY2DTO1D_SHR 4, 1
+CPY2DTO1D_SHR 8, 1
+CPY2DTO1D_SHR 16, 2
+CPY2DTO1D_SHR 32, 4
+CPY2DTO1D_SHR 64, 8
+
+//void cpy1Dto2D_shl(int16_t* dst, const int16_t* src, intptr_t dstStride, int shift)
+.macro CPY1DTO2D_SHL size, lmul
+function PFX(cpy1Dto2D_shl_\size\()_v)
+    slli            a2, a2, 1
+    li              t1, \size
+    vsetvli         zero, t1, e16, m\lmul, ta, ma
+    vmv.v.x         v0, a3
+cpy1Dto2D_shl_\size:
+    vle16.v         v8, (a1)
+    vsll.vv         v8, v8, v0
+    vse16.v         v8, (a0)
+    addi            a1, a1, 2 * \size
+    add             a0, a0, a2
+    addi            t1, t1, -1
+    bgtz            t1, cpy1Dto2D_shl_\size
+    ret
+endfunc
+.endm
+
+CPY1DTO2D_SHL 4, 1
+CPY1DTO2D_SHL 8, 1
+CPY1DTO2D_SHL 16, 2
+CPY1DTO2D_SHL 32, 4
+CPY1DTO2D_SHL 64, 8
+
+//void cpy1Dto2D_shr(int16_t* dst, const int16_t* src, intptr_t dstStride, int shift)
+.macro CPY1DTO2D_SHR size, lmul
+function PFX(cpy1Dto2D_shr_\size\()_v)
+    slli            a2, a2, 1
+    li              t1, \size
+    addi            t2, a3, -1
+    li              t3, 1
+    sll             t3, t3, t2
+    vsetvli         zero, t1, e16, m\lmul, ta, ma
+    vmv.v.x         v0, a3
+    vmv.v.x         v24, t3
+cpy1Dto2D_shr_\size:
+    vle16.v         v8, (a1)
+    vadd.vv         v8, v8, v24
+    vsra.vv         v8, v8, v0
+    vse16.v         v8, (a0)
+    addi            a1, a1, 2 * \size
+    add             a0, a0, a2
+    addi            t1, t1, -1
+    bgtz            t1, cpy1Dto2D_shr_\size
+    ret
+endfunc
+.endm
+
+CPY1DTO2D_SHR 4, 1
+CPY1DTO2D_SHR 8, 1
+CPY1DTO2D_SHR 16, 2
+CPY1DTO2D_SHR 32, 4
+CPY1DTO2D_SHR 64, 8
+
+//void blockcopy_pp_c(pixel* a, intptr_t stridea, const pixel* b, intptr_t strideb)
+.macro BLOCKCOPY_PP bx, by, lmul
+function PFX(blockcopy_pp_\bx\()x\by\()_v)
+    li              t1, \by
+    li              t2, \bx
+#if HIGH_BIT_DEPTH
+    slli            a1, a1, 1
+    slli            a3, a3, 1
+    vsetvli         zero, t2, e16, m\lmul, ta, ma
+#else
+    vsetvli         zero, t2, e8, m\lmul, ta, ma
+#endif
+loop_blockcopy_pp_\bx\()x\by:
+#if HIGH_BIT_DEPTH
+    vle16.v         v0, (a2)
+    vse16.v         v0, (a0)
+#else
+    vle8.v          v0, (a2)
+    vse8.v          v0, (a0)
+#endif
+    add             a0, a0, a1
+    add             a2, a2, a3
+    addi            t1, t1, -1
+    bgtz            t1, loop_blockcopy_pp_\bx\()x\by
+    ret
+endfunc
+.endm
+
+BLOCKCOPY_PP  4, 2, 1
+BLOCKCOPY_PP  4, 4, 1
+BLOCKCOPY_PP  4, 8, 1
+BLOCKCOPY_PP  4, 16, 1
+BLOCKCOPY_PP  4, 32, 1
+BLOCKCOPY_PP  6, 8, 1
+BLOCKCOPY_PP  6, 16, 1
+BLOCKCOPY_PP  8, 2, 1
+BLOCKCOPY_PP  8, 4, 1
+BLOCKCOPY_PP  8, 6, 1
+BLOCKCOPY_PP  8, 8, 1
+BLOCKCOPY_PP  8, 12, 1
+BLOCKCOPY_PP  8, 16, 1
+BLOCKCOPY_PP  8, 32, 1
+BLOCKCOPY_PP  8, 64, 1
+#if HIGH_BIT_DEPTH
+BLOCKCOPY_PP  12, 16, 2
+BLOCKCOPY_PP  12, 32, 2
+BLOCKCOPY_PP  16, 4, 2
+BLOCKCOPY_PP  16, 8, 2
+BLOCKCOPY_PP  16, 12, 2
+BLOCKCOPY_PP  16, 16, 2
+BLOCKCOPY_PP  16, 24, 2
+BLOCKCOPY_PP  16, 32, 2
+BLOCKCOPY_PP  16, 64, 2
+BLOCKCOPY_PP  24, 32, 4
+BLOCKCOPY_PP  24, 64, 4
+BLOCKCOPY_PP  32, 8, 4
+BLOCKCOPY_PP  32, 12, 4
+BLOCKCOPY_PP  32, 16, 4
+BLOCKCOPY_PP  32, 24, 4
+BLOCKCOPY_PP  32, 32, 4
+BLOCKCOPY_PP  32, 48, 4
+BLOCKCOPY_PP  32, 64, 4
+BLOCKCOPY_PP  48, 64, 8
+BLOCKCOPY_PP  64, 16, 8
+BLOCKCOPY_PP  64, 32, 8
+BLOCKCOPY_PP  64, 48, 8
+BLOCKCOPY_PP  64, 64, 8
+#else
+BLOCKCOPY_PP  12, 16, 1
+BLOCKCOPY_PP  12, 32, 1
+BLOCKCOPY_PP  16, 4, 1
+BLOCKCOPY_PP  16, 8, 1
+BLOCKCOPY_PP  16, 12, 1
+BLOCKCOPY_PP  16, 16, 1
+BLOCKCOPY_PP  16, 24, 1
+BLOCKCOPY_PP  16, 32, 1
+BLOCKCOPY_PP  16, 64, 1
+BLOCKCOPY_PP  24, 32, 2
+BLOCKCOPY_PP  24, 64, 2
+BLOCKCOPY_PP  32, 8, 2
+BLOCKCOPY_PP  32, 12, 2
+BLOCKCOPY_PP  32, 16, 2
+BLOCKCOPY_PP  32, 24, 2
+BLOCKCOPY_PP  32, 32, 2
+BLOCKCOPY_PP  32, 48, 2
+BLOCKCOPY_PP  32, 64, 2
+BLOCKCOPY_PP  48, 64, 4
+BLOCKCOPY_PP  64, 16, 4
+BLOCKCOPY_PP  64, 32, 4
+BLOCKCOPY_PP  64, 48, 4
+BLOCKCOPY_PP  64, 64, 4
+#endif
+
+//void blockcopy_ss_c(int16_t* a, intptr_t stridea, const int16_t* b, intptr_t strideb)
+.macro BLOCKCOPY_SS bx, by, lmul
+function PFX(blockcopy_ss_\bx\()x\by\()_v)
+    li              t1, \by
+    li              t2, \bx
+    slli            a1, a1, 1
+    slli            a3, a3, 1
+    vsetvli         zero, t2, e16, m\lmul, ta, ma
+loop_blockcopy_ss_\bx\()x\by:
+    vle16.v         v0, (a2)
+    vse16.v         v0, (a0)
+    add             a0, a0, a1
+    add             a2, a2, a3
+    addi            t1, t1, -1
+    bgtz            t1, loop_blockcopy_ss_\bx\()x\by
+    ret
+endfunc
+.endm
+
+BLOCKCOPY_SS  4, 4, 1
+BLOCKCOPY_SS  4, 8, 1
+BLOCKCOPY_SS  8, 8, 1
+BLOCKCOPY_SS  8, 16, 1
+BLOCKCOPY_SS  16, 16, 2
+BLOCKCOPY_SS  16, 24, 2
+BLOCKCOPY_SS  16, 32, 2
+BLOCKCOPY_SS  32, 32, 4
+BLOCKCOPY_SS  32, 64, 4
+BLOCKCOPY_SS  64, 64, 8
+
+//void planecopy_cp_c(const uint8_t* src, intptr_t srcStride, pixel* dst, intptr_t dstStride, int width, int height, int shift)
+function PFX(planecopy_cp_v)
+#if HIGH_BIT_DEPTH
+    slli            a3, a3, 1
+    vsetvli         zero, a4, e16, m2, ta, ma
+#else
+    vsetvli         zero, a4, e8, m1, ta, ma
+#endif
+    vmv.v.x         v30, a6
+
+loop_planecopy_cp_y:
+    mv              t0, a0
+    mv              t1, a2
+    mv              t2, a4
+loop_planecopy_cp_x:
+#if HIGH_BIT_DEPTH
+    vsetvli         t3, t2, e8, m1, ta, ma
+    slli            t4, t3, 1
+    vle8.v          v0, (t0)
+    vsetvli         zero, t3, e16, m2, ta, ma
+    vzext.vf2       v2, v0
+    vsll.vv         v2, v2, v30
+    vse16.v         v2, (t1)
+#else
+    vsetvli         t3, t2, e8, m1, ta, ma
+    vle8.v          v0, (t0)
+    vsll.vv         v2, v0, v30
+    vse8.v          v2, (t1)
+#endif
+    sub             t2, t2, t3
+    add             t0, t0, t3
+#if HIGH_BIT_DEPTH
+    add             t1, t1, t4
+#else
+    add             t1, t1, t3
+#endif
+    bgtz            t2, loop_planecopy_cp_x
+    add             a0, a0, a1
+    add             a2, a2, a3
+    addi            a5, a5, -1
+    bgtz            a5, loop_planecopy_cp_y
+    ret
+endfunc
+
+//void planecopy_sp_c(const uint16_t* src, intptr_t srcStride, pixel* dst, intptr_t dstStride, int width, int height, int shift, uint16_t mask)
+function PFX(planecopy_sp_v)
+    slli            a1, a1, 1
+#if HIGH_BIT_DEPTH
+    slli            a3, a3, 1
+#endif
+    vsetvli         zero, a4, e16, m1, ta, ma
+    vmv.v.x         v30, a6
+    vmv.v.x         v28, a7
+
+loop_planecopy_sp_y:
+    mv              t0, a0
+    mv              t1, a2
+    mv              t2, a4
+loop_planecopy_sp_x:
+    vsetvli         t3, t2, e16, m1, ta, ma
+    slli            t4, t3, 1
+    vle16.v         v0, (t0)
+    vsrl.vv         v0, v0, v30
+    vand.vv         v0, v0, v28
+#if HIGH_BIT_DEPTH
+    vse16.v         v0, (t1)
+#else
+    vsetvli         zero, t3, e8, m1, ta, ma
+    vnsrl.wi        v2, v0, 0
+    vse8.v          v2, (t1)
+#endif
+    sub             t2, t2, t3
+    add             t0, t0, t4
+#if HIGH_BIT_DEPTH
+    add             t1, t1, t4
+#else
+    add             t1, t1, t3
+#endif
+    bgtz            t2, loop_planecopy_sp_x
+    add             a0, a0, a1
+    add             a2, a2, a3
+    addi            a5, a5, -1
+    bgtz            a5, loop_planecopy_sp_y
+    ret
+endfunc
+
+//void planecopy_pp_shr_c(const pixel* src, intptr_t srcStride, pixel* dst, intptr_t dstStride, int width, int height, int shift)
+function PFX(planecopy_pp_shr_v)
+#if HIGH_BIT_DEPTH
+    slli            a1, a1, 1
+    slli            a3, a3, 1
+    vsetvli         zero, a4, e16, m1, ta, ma
+#else
+    vsetvli         zero, a4, e8, m1, ta, ma
+#endif
+    vmv.v.x         v30, a6
+
+loop_planecopy_pp_shr_y:
+    mv              t0, a0
+    mv              t1, a2
+    mv              t2, a4
+loop_planecopy_pp_shr_x:
+#if HIGH_BIT_DEPTH
+    vsetvli         t3, t2, e16, m1, ta, ma
+    slli            t4, t3, 1
+    vle16.v         v0, (t0)
+    vsrl.vv         v0, v0, v30
+    vse16.v         v0, (t1)
+#else
+    vsetvli         t3, t2, e8, m1, ta, ma
+    vle8.v          v0, (t0)
+    vsrl.vv         v0, v0, v30
+    vse8.v          v0, (t1)
+#endif
+    sub             t2, t2, t3
+#if HIGH_BIT_DEPTH
+    add             t0, t0, t4
+    add             t1, t1, t4
+#else
+    add             t0, t0, t3
+    add             t1, t1, t3
+#endif
+    bgtz            t2, loop_planecopy_pp_shr_x
+    add             a0, a0, a1
+    add             a2, a2, a3
+    addi            a5, a5, -1
+    bgtz            a5, loop_planecopy_pp_shr_y
+    ret
+endfunc
+
+//void planecopy_sp_shl_c(const uint16_t* src, intptr_t srcStride, pixel* dst, intptr_t dstStride, int width, int height, int shift, uint16_t mask)
+function PFX(planecopy_sp_shl_v)
+    slli            a1, a1, 1
+#if HIGH_BIT_DEPTH
+    slli            a3, a3, 1
+#endif
+    vsetvli         zero, a4, e16, m1, ta, ma
+    vmv.v.x         v30, a6
+    vmv.v.x         v28, a7
+
+loop_planecopy_sp_shl_y:
+    mv              t0, a0
+    mv              t1, a2
+    mv              t2, a4
+loop_planecopy_sp_shl_x:
+    vsetvli         t3, t2, e16, m1, ta, ma
+    slli            t4, t3, 1
+    vle16.v         v0, (t0)
+    vsll.vv         v0, v0, v30
+    vand.vv         v0, v0, v28
+#if HIGH_BIT_DEPTH
+    vse16.v         v0, (t1)
+#else
+    vsetvli         zero, t3, e8, m1, ta, ma
+    vnsrl.wi        v2, v0, 0
+    vse8.v          v2, (t1)
+#endif
+    sub             t2, t2, t3
+    add             t0, t0, t4
+#if HIGH_BIT_DEPTH
+    add             t1, t1, t4
+#else
+    add             t1, t1, t3
+#endif
+    bgtz            t2, loop_planecopy_sp_shl_x
+    add             a0, a0, a1
+    add             a2, a2, a3
+    addi            a5, a5, -1
+    bgtz            a5, loop_planecopy_sp_shl_y
     ret
 endfunc
