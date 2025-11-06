@@ -80,9 +80,89 @@ loop_pixelvar\size:
 endfunc
 .endm
 
-PIXEL_VAR 8, 1, 1, 2
-PIXEL_VAR 16, 1, 2, 4
-PIXEL_VAR 32, 2, 4, 8
+.macro PIXEL_VAR2 size, lmul, lmul2, lmul4
+function PFX(pixel_var_\size\()x\size\()_v)
+    li              t1, \size
+    li              t3, \size
+    slli            a2, a1, 1
+    slli            a3, a2, 1
+    add             a4, a3, a2
+    add             a5, a2, a1
+    vsetvli         zero, t3, e32, m\lmul4, ta, ma
+    vmv.v.i         v8, 0
+    vmv.v.i         v16, 0
+
+loop_pixelvar\size:
+#if HIGH_BIT_DEPTH
+    add             t4, a0, a2
+    add             t5, a0, a3
+    add             t6, a0, a4
+    vsetvli         zero, t3, e16, m\lmul2, ta, ma
+    vle16.v         v0, (a0)
+    vle16.v         v2, (t4)
+    vle16.v         v4, (t5)
+    vle16.v         v6, (t6)
+    add             a0, t6, a2
+    vwaddu.wv       v8, v8, v0
+    vwaddu.wv       v8, v8, v2
+    vwaddu.wv       v8, v8, v4
+    vwaddu.wv       v8, v8, v6
+    vwmulu.vv       v24, v0, v0
+    vwmulu.vv       v12, v2, v2
+    vwmulu.vv       v20, v4, v4
+    vwmulu.vv       v28, v6, v6
+    vsetvli         zero, t3, e32, m\lmul4, ta, ma
+    vadd.vv         v16, v16, v24
+    vadd.vv         v16, v16, v12
+    vadd.vv         v16, v16, v20
+    vadd.vv         v16, v16, v28
+#else
+    add             t4, a0, a1
+    add             t5, a0, a2
+    add             t6, a0, a5
+    vsetvli         zero, t3, e8, m\lmul, ta, ma
+    vle8.v          v20, (a0)
+    vle8.v          v21, (t4)
+    vle8.v          v22, (t5)
+    vle8.v          v23, (t6)
+    add             a0, t6, a1
+    vwmulu.vv       v24, v20, v20
+    vwmulu.vv       v26, v21, v21
+    vwmulu.vv       v28, v22, v22
+    vwmulu.vv       v30, v23, v23
+    vsetvli         zero, t3, e16, m\lmul2, ta, ma
+    vzext.vf2       v0, v20
+    vzext.vf2       v2, v21
+    vzext.vf2       v4, v22
+    vzext.vf2       v6, v23
+    vwaddu.wv       v8, v8, v0
+    vwaddu.wv       v8, v8, v2
+    vwaddu.wv       v8, v8, v4
+    vwaddu.wv       v8, v8, v6
+    vwaddu.wv       v16, v16, v24
+    vwaddu.wv       v16, v16, v26
+    vwaddu.wv       v16, v16, v28
+    vwaddu.wv       v16, v16, v30
+#endif
+    addi            t1, t1, -4
+    bgtz            t1, loop_pixelvar\size
+
+    vsetvli         zero, t3, e32, m1, ta, ma
+    vmv.v.i         v0, 0
+    vsetvli         zero, t3, e32, m\lmul4, ta, ma
+    vredsum.vs      v1, v8, v0
+    vredsum.vs      v2, v16, v0
+    vmv.x.s         t1, v1
+    vmv.x.s         t2, v2
+    slli            t2, t2, 32
+    add             a0, t1, t2
+    ret
+endfunc
+.endm
+
+PIXEL_VAR2 8, 1, 1, 2
+PIXEL_VAR2 16, 1, 2, 4
+PIXEL_VAR  32, 2, 4, 8
 
 // uint64_t pixel_var(const pixel* pix, intptr_t i_stride)
 function PFX(pixel_var_64x64_v)
@@ -142,41 +222,120 @@ endfunc
 .macro GET_RESIDUAL blocksize, lmul, lmul2
 function PFX(getResidual\blocksize\()_v)
     li              t1, \blocksize
-    slli            t3, a3, 1
+    slli            a4, a3, 1
 #if HIGH_BIT_DEPTH
     vsetvli         zero, t1, e16, m\lmul2, ta, ma
-    slli            t2, a3, 1
 #else
     vsetvli         zero, t1, e8, m\lmul, ta, ma
-    mv              t2, a3
 #endif
-
 loop_residual\blocksize:
+    add             t4, a2, a4
 #if HIGH_BIT_DEPTH
+    add             t2, a0, a4
+    add             t3, a1, a4
     vle16.v         v0, (a0)
+    vle16.v         v12, (t2)
     vle16.v         v4, (a1)
+    vle16.v         v16, (t3)
+    add             a0, t2, a4
+    add             a1, t3, a4
     vsub.vv         v8, v0, v4
+    vsub.vv         v20, v12, v16
 #else
+    add             t2, a0, a3
+    add             t3, a1, a3
     vle8.v          v0, (a0)
+    vle8.v          v12, (t2)
     vle8.v          v4, (a1)
+    vle8.v          v16, (t3)
+    add             a0, t2, a3
+    add             a1, t3, a3
     vwsubu.vv       v8, v0, v4
+    vwsubu.vv       v20, v12, v16
 #endif
     vse16.v         v8, (a2)
-
-    addi            t1, t1, -1
-    add             a0, a0, t2
-    add             a1, a1, t2
-    add             a2, a2, t3
+    vse16.v         v20, (t4)
+    add             a2, t4, a4
+    addi            t1, t1, -2
     bgtz            t1, loop_residual\blocksize
-
     ret
 endfunc
 .endm
 
-GET_RESIDUAL 4,  1, 1
-GET_RESIDUAL 8,  1, 1
-GET_RESIDUAL 16, 1, 2
-GET_RESIDUAL 32, 2, 4
+.macro GET_RESIDUAL2 blocksize, lmul, lmul2
+function PFX(getResidual\blocksize\()_v)
+    li              t1, \blocksize
+    slli            a4, a3, 1
+    slli            a5, a4, 1
+    add             a6, a5, a4
+    add             a7, a4, a3
+#if HIGH_BIT_DEPTH
+    vsetvli         zero, t1, e16, m\lmul2, ta, ma
+#else
+    vsetvli         zero, t1, e8, m\lmul, ta, ma
+#endif
+loop_residual\blocksize:
+#if HIGH_BIT_DEPTH
+    add             t2, a0, a4
+    add             t3, a1, a4
+    add             t4, a0, a5
+    add             t5, a1, a5
+    add             t0, a0, a6
+    add             t6, a1, a6
+    vle16.v         v0, (a0)
+    vle16.v         v12, (t2)
+    vle16.v         v2, (t4)
+    vle16.v         v14, (t0)
+    vle16.v         v4, (a1)
+    vle16.v         v16, (t3)
+    vle16.v         v6, (t5)
+    vle16.v         v18, (t6)
+    add             a0, t0, a4
+    add             a1, t6, a4
+    vsub.vv         v8, v0, v4
+    vsub.vv         v20, v12, v16
+    vsub.vv         v10, v2, v6
+    vsub.vv         v22, v14, v18
+#else
+    add             t2, a0, a3
+    add             t3, a1, a3
+    add             t4, a0, a4
+    add             t5, a1, a4
+    add             t0, a0, a7
+    add             t6, a1, a7
+    vle8.v          v0, (a0)
+    vle8.v          v12, (t2)
+    vle8.v          v2, (t4)
+    vle8.v          v14, (t0)
+    vle8.v          v4, (a1)
+    vle8.v          v16, (t3)
+    vle8.v          v6, (t5)
+    vle8.v          v18, (t6)
+    add             a0, t0, a3
+    add             a1, t6, a3
+    vwsubu.vv       v8, v0, v4
+    vwsubu.vv       v20, v12, v16
+    vwsubu.vv       v10, v2, v6
+    vwsubu.vv       v22, v14, v18
+#endif
+    add             t2, a2, a4
+    add             t3, a2, a5
+    add             t4, a2, a6
+    vse16.v         v8, (a2)
+    vse16.v         v20, (t2)
+    vse16.v         v10, (t3)
+    vse16.v         v22, (t4)
+    add             a2, t4, a4
+    addi            t1, t1, -4
+    bgtz            t1, loop_residual\blocksize
+    ret
+endfunc
+.endm
+
+GET_RESIDUAL2 4,  1, 1
+GET_RESIDUAL2 8,  1, 1
+GET_RESIDUAL2 16, 1, 2
+GET_RESIDUAL  32, 2, 4
 
 // void pixel_sub_ps_c(int16_t* a, intptr_t dstride, const pixel* b0, const pixel* b1, intptr_t sstride0, intptr_t sstride1)
 .macro SUB_PS xsize, ysize, lmul, lmul2
@@ -188,7 +347,6 @@ function PFX(pixel_sub_ps_\xsize\()x\ysize\()_v)
     slli            a4, a4, 1
     slli            a5, a5, 1
 #endif
-
 loop_subps_\xsize\()x\ysize\():
 #if HIGH_BIT_DEPTH
     vsetvli         zero, t0, e16, m\lmul2, ta, ma
@@ -203,26 +361,66 @@ loop_subps_\xsize\()x\ysize\():
     vsetvli         zero, t0, e16, m\lmul2, ta, ma
 #endif
     vse16.v         v16, (a0)
-    
     add             a0, a0, a1
     add             a2, a2, a4
     add             a3, a3, a5
     addi            t1, t1, -1
     bgtz            t1, loop_subps_\xsize\()x\ysize\()
-
     ret
 endfunc
 .endm
 
-SUB_PS  4,  4,  1, 1
-SUB_PS  4,  8,  1, 1
-SUB_PS  8,  8,  1, 1
-SUB_PS  8,  16, 1, 1
-SUB_PS  16, 16, 1, 2
-SUB_PS  16, 32, 1, 2
-SUB_PS  32, 32, 2, 4
-SUB_PS  32, 64, 2, 4
-SUB_PS  64, 64, 4, 8
+.macro SUB_PS2 xsize, ysize, lmul, lmul2
+function PFX(pixel_sub_ps_\xsize\()x\ysize\()_v)
+    li              t0, \xsize
+    li              t1, \ysize
+    slli            a1, a1, 1
+#if HIGH_BIT_DEPTH
+    slli            a4, a4, 1
+    slli            a5, a5, 1
+#endif
+loop_subps_\xsize\()x\ysize\():
+    add             t3, a2, a4
+    add             t4, a3, a5
+#if HIGH_BIT_DEPTH
+    vsetvli         zero, t0, e16, m\lmul2, ta, ma
+    vle16.v         v0, (a2)
+    vle16.v         v4, (t3)
+    vle16.v         v8, (a3)
+    vle16.v         v12, (t4)
+    vsub.vv         v16, v0, v8
+    vsub.vv         v20, v4, v12
+#else
+    vsetvli         zero, t0, e8, m\lmul, ta, ma
+    vle8.v          v0, (a2)
+    vle8.v          v2, (t3)
+    vle8.v          v4, (a3)
+    vle8.v          v6, (t4)
+    vwsubu.vv       v16, v0, v4
+    vwsubu.vv       v20, v2, v6
+    vsetvli         zero, t0, e16, m\lmul2, ta, ma
+#endif
+    add             a2, t3, a4
+    add             a3, t4, a5
+    add             t5, a0, a1
+    vse16.v         v16, (a0)
+    vse16.v         v20, (t5)
+    add             a0, t5, a1
+    addi            t1, t1, -2
+    bgtz            t1, loop_subps_\xsize\()x\ysize\()
+    ret
+endfunc
+.endm
+
+SUB_PS2  4,  4,  1, 1
+SUB_PS2  4,  8,  1, 1
+SUB_PS2  8,  8,  1, 1
+SUB_PS2  8,  16, 1, 1
+SUB_PS2  16, 16, 1, 2
+SUB_PS2  16, 32, 1, 2
+SUB_PS2  32, 32, 2, 4
+SUB_PS2  32, 64, 2, 4
+SUB_PS   64, 64, 4, 8
 
 // void pixel_add_ps_c(pixel* a, intptr_t dstride, const pixel* b0, const int16_t* b1, intptr_t sstride0, intptr_t sstride1)
 .macro ADD_PS xsize, ysize, lmul, lmul2
@@ -240,7 +438,6 @@ function PFX(pixel_add_ps_\xsize\()x\ysize\()_v)
 .if \lmul2 <= 4
     vmv.v.x         v28, t2
 .endif
-
 loop_addps_\xsize\()x\ysize\():
     vsetvli         zero, t0, e16, m\lmul2, ta, ma
     vle16.v         v8, (a3)
@@ -272,20 +469,75 @@ loop_addps_\xsize\()x\ysize\():
     add             a2, a2, a4
     add             a3, a3, a5
     bgtz            t1, loop_addps_\xsize\()x\ysize\()
-
     ret
 endfunc
 .endm
 
-ADD_PS 4,  4,  1, 1
-ADD_PS 4,  8,  1, 1
-ADD_PS 8,  8,  1, 1
-ADD_PS 8,  16, 1, 1
-ADD_PS 16, 16, 1, 2
-ADD_PS 16, 32, 1, 2
-ADD_PS 32, 64, 2, 4
-ADD_PS 32, 32, 2, 4
-ADD_PS 64, 64, 4, 8
+.macro ADD_PS2 xsize, ysize, lmul, lmul2
+function PFX(pixel_add_ps_\xsize\()x\ysize\()_v)
+    li              t0, \xsize
+    li              t1, \ysize
+    li              t2, (1 << BIT_DEPTH) - 1
+    slli            a5, a5, 1
+#if HIGH_BIT_DEPTH
+    slli            a1, a1, 1
+    slli            a4, a4, 1
+#endif
+    vsetvli         zero, t0, e16, m\lmul2, ta, ma
+    vmv.v.i         v24, 0
+    vmv.v.x         v28, t2
+loop_addps_\xsize\()x\ysize\():
+    vsetvli         zero, t0, e16, m\lmul2, ta, ma
+    add             t3, a3, a5
+    add             t4, a2, a4
+    vle16.v         v8, (a3)
+    vle16.v         v12, (t3)
+#if HIGH_BIT_DEPTH
+    vle16.v         v0, (a2)
+    vle16.v         v4, (t4)
+    vadd.vv         v16, v0, v8
+    vadd.vv         v20, v4, v12
+#else
+    vsetvli         zero, t0, e8, m\lmul, ta, ma
+    vle8.v          v0, (a2)
+    vle8.v          v4, (t4)
+    vwaddu.wv       v16, v8, v0
+    vwaddu.wv       v20, v12, v4
+    vsetvli         zero, t0, e16, m\lmul2, ta, ma
+#endif
+    add             a2, t4, a4
+    add             a3, t3, a5
+    vmax.vv         v16, v16, v24
+    vmax.vv         v20, v20, v24
+    vminu.vv        v16, v16, v28
+    vminu.vv        v20, v20, v28
+    add             t3, a0, a1
+#if HIGH_BIT_DEPTH
+    vse16.v         v16, (a0)
+    vse16.v         v20, (t3)
+#else
+    vsetvli         zero, t0, e8, m\lmul, ta, ma
+    vnsrl.wi        v0, v16, 0
+    vnsrl.wi        v4, v20, 0
+    vse8.v          v0, (a0)
+    vse8.v          v4, (t3)
+#endif
+    addi            t1, t1, -2
+    add             a0, t3, a1
+    bgtz            t1, loop_addps_\xsize\()x\ysize\()
+    ret
+endfunc
+.endm
+
+ADD_PS2 4,  4,  1, 1
+ADD_PS2 4,  8,  1, 1
+ADD_PS2 8,  8,  1, 1
+ADD_PS2 8,  16, 1, 1
+ADD_PS2 16, 16, 1, 2
+ADD_PS2 16, 32, 1, 2
+ADD_PS2 32, 64, 2, 4
+ADD_PS2 32, 32, 2, 4
+ADD_PS  64, 64, 4, 8
 
 // void scale1D_128to64(pixel *dst, const pixel *src)
 function PFX(scale1D_128to64_v)
@@ -630,13 +882,15 @@ function PFX(ssimDist\size\()_v)
     vsetvli         zero, t2, e32, m\lmul4, ta, ma
     vmv.v.i         v8, 0
     vmv.v.i         v16, 0
+    vsetvli         zero, t2, e8, m\lmul, ta, ma
+    vmv.v.x         v28, a5
     vmv1r.v         v31, v8
 loop_ssimDist\size\():
     vsetvli         zero, t2, e8, m\lmul, ta, ma
     vle8.v          v0, (a0)
     vle8.v          v2, (a2)
     vwsubu.vv       v4, v0, v2
-    vsrl.vx         v0, v0, a5
+    vsrl.vv         v0, v0, v28
     vsetvli         zero, t2, e16, m\lmul2, ta, ma
     vwmacc.vv       v8, v4, v4
     vzext.vf2       v4, v0
@@ -656,10 +910,54 @@ loop_ssimDist\size\():
 endfunc
 .endm
 
-SSIM_DIST 4,  1, 1, 1
-SSIM_DIST 8,  1, 1, 2
-SSIM_DIST 16, 1, 2, 4
-SSIM_DIST 32, 2, 4, 8
+.macro SSIM_DIST2 size, lmul, lmul2, lmul4
+function PFX(ssimDist\size\()_v)
+    li              t1, \size
+    li              t2, \size
+    vsetvli         zero, t2, e32, m\lmul4, ta, ma
+    vmv.v.i         v8, 0
+    vmv.v.i         v16, 0
+    vsetvli         zero, t2, e8, m\lmul, ta, ma
+    vmv.v.x         v30, a5
+    vmv1r.v         v31, v8
+loop_ssimDist\size\():
+    vsetvli         zero, t2, e8, m\lmul, ta, ma
+    add             t3, a0, a1
+    add             t4, a2, a3
+    vle8.v          v0, (a0)
+    vle8.v          v4, (t3)
+    vle8.v          v2, (a2)
+    vle8.v          v6, (t4)
+    add             a0, t3, a1
+    add             a2, t4, a3
+    vwsubu.vv       v12, v0, v2
+    vwsubu.vv       v20, v4, v6
+    vsrl.vv         v0, v0, v30
+    vsrl.vv         v2, v4, v30
+    vsetvli         zero, t2, e16, m\lmul2, ta, ma
+    vwmacc.vv       v8, v12, v12
+    vwmacc.vv       v8, v20, v20
+    vzext.vf2       v4, v0
+    vzext.vf2       v24, v2
+    vwmacc.vv       v16, v4, v4
+    vwmacc.vv       v16, v24, v24
+    addi            t1, t1, -2
+    bgtz            t1, loop_ssimDist\size
+    vsetvli         zero, t2, e32, m\lmul4, ta, ma
+    vredsum.vs      v0, v8, v31
+    vredsum.vs      v1, v16, v31
+    vmv.x.s         t1, v0
+    vmv.x.s         t2, v1
+    sd              t1, (a4)
+    sd              t2, (a6)
+    ret
+endfunc
+.endm
+
+SSIM_DIST2 4,  1, 1, 1
+SSIM_DIST2 8,  1, 1, 2
+SSIM_DIST2 16, 1, 2, 4
+SSIM_DIST  32, 2, 4, 8
 
 // void ssimDist_c(const pixel* fenc, uint32_t fStride, const pixel* recon, intptr_t rstride, uint64_t *ssBlock, int shift, uint64_t *ac_k)
 function PFX(ssimDist64_v)
@@ -1031,27 +1329,41 @@ function PFX(addAvg_\bx\()x\by\()_v)
     vmv.v.x         v20, a7
 loop_addAvg_\bx\()_\by\()_y:
     vsetvli         t5, t1, e16, m\lmul2, ta, ma
+    add             t2, a0, a3
+    add             t3, a1, a4
     vle16.v         v0, (a0)
+    vle16.v         v4, (t2)
     vle16.v         v8, (a1)
-    vwadd.vv        v4, v0, v8
+    vle16.v         v12, (t3)
+    add             a0, t2, a3
+    add             a1, t3, a4
+    vwadd.vv        v16, v0, v8
+    vwadd.vv        v8, v4, v12
     vsetvli         zero, t5, e32, m\lmul3, ta, ma
-    vadd.vv         v4, v4, v20
-    vsra.vi         v4, v4, (15 - BIT_DEPTH)
-    vmax.vv         v4, v4, v28
-    vmin.vv         v4, v4, v24
+    vadd.vv         v16, v16, v20
+    vadd.vv         v8, v8, v20
+    vsra.vi         v16, v16, (15 - BIT_DEPTH)
+    vsra.vi         v8, v8, (15 - BIT_DEPTH)
+    vmax.vv         v16, v16, v28
+    vmax.vv         v8, v8, v28
+    vmin.vv         v16, v16, v24
+    vmin.vv         v8, v8, v24
     vsetvli         zero, t5, e16, m\lmul2, ta, ma
-    vnsrl.wi        v8, v4, 0
+    vnsrl.wi        v0, v16, 0
+    vnsrl.wi        v4, v8, 0
+    add             t3, a2, a5
 #if HIGH_BIT_DEPTH
-    vse16.v         v8, (a2)
+    vse16.v         v0, (a2)
+    vse16.v         v4, (t3)
 #else
     vsetvli         zero, t5, e8, m\lmul1, ta, ma
-    vnsrl.wi        v4, v8, 0
-    vse8.v          v4, (a2)
+    vnsrl.wi        v8, v0, 0
+    vnsrl.wi        v12, v4, 0
+    vse8.v          v8, (a2)
+    vse8.v          v12, (t3)
 #endif
-    add             a0, a0, a3
-    add             a1, a1, a4
-    add             a2, a2, a5
-    addi            a6, a6, -1
+    add             a2, t3, a5
+    addi            a6, a6, -2
     bgtz            a6, loop_addAvg_\bx\()_\by\()_y
     ret
 endfunc
@@ -1101,12 +1413,20 @@ ADDAVG_X_Y  64, 64, 1, 2, 4
 function PFX(blockfill_s_\size\()_v)
     slli            a1, a1, 1
     li              t1, \size
+    slli            a4, a1, 1
+    add             a5, a4, a1
     vsetvli         zero, t1, e16, m\lmul, ta, ma
     vmv.v.x         v0, a2
 loop_blockfill_s_\size:
+    add             t3, a0, a1
+    add             t4, a0, a4
+    add             t5, a0, a5
     vse16.v         v0, (a0)
-    add             a0, a0, a1
-    addi            t1, t1, -1
+    vse16.v         v0, (t3)
+    vse16.v         v0, (t4)
+    vse16.v         v0, (t5)
+    add             a0, t5, a1
+    addi            t1, t1, -4
     bgtz            t1, loop_blockfill_s_\size
     ret
 endfunc
@@ -1137,11 +1457,46 @@ cpy2Dto1D_shl_\size:
 endfunc
 .endm
 
-CPY2DTO1D_SHL 4, 1
-CPY2DTO1D_SHL 8, 1
-CPY2DTO1D_SHL 16, 2
-CPY2DTO1D_SHL 32, 4
-CPY2DTO1D_SHL 64, 8
+.macro CPY2DTO1D_SHL2 size, lmul
+function PFX(cpy2Dto1D_shl_\size\()_v)
+    slli            a2, a2, 1
+    li              t1, \size
+    slli            a4, a2, 1
+    add             a5, a4, a2
+    vsetvli         zero, t1, e16, m\lmul, ta, ma
+    vmv.v.x         v0, a3
+cpy2Dto1D_shl_\size:
+    add             t3, a1, a2
+    add             t4, a1, a4
+    add             t5, a1, a5
+    vle16.v         v4, (a1)
+    vle16.v         v8, (t3)
+    vle16.v         v12, (t4)
+    vle16.v         v16, (t5)
+    add             a1, t5, a2
+    vsll.vv         v4, v4, v0
+    vsll.vv         v8, v8, v0
+    vsll.vv         v12, v12, v0
+    vsll.vv         v16, v16, v0
+    addi            t3, a0, 2 * \size
+    addi            t4, a0, 4 * \size
+    addi            t5, a0, 6 * \size
+    vse16.v         v4, (a0)
+    vse16.v         v8, (t3)
+    vse16.v         v12, (t4)
+    vse16.v         v16, (t5)
+    addi            a0, t5, 2 * \size
+    addi            t1, t1, -4
+    bgtz            t1, cpy2Dto1D_shl_\size
+    ret
+endfunc
+.endm
+
+CPY2DTO1D_SHL2 4, 1
+CPY2DTO1D_SHL2 8, 1
+CPY2DTO1D_SHL2 16, 2
+CPY2DTO1D_SHL2 32, 4
+CPY2DTO1D_SHL  64, 8
 
 //void cpy2Dto1D_shr(int16_t* dst, const int16_t* src, intptr_t srcStride, int shift)
 .macro CPY2DTO1D_SHR size, lmul
@@ -1167,11 +1522,54 @@ cpy2Dto1D_shr_\size:
 endfunc
 .endm
 
-CPY2DTO1D_SHR 4, 1
-CPY2DTO1D_SHR 8, 1
-CPY2DTO1D_SHR 16, 2
-CPY2DTO1D_SHR 32, 4
-CPY2DTO1D_SHR 64, 8
+.macro CPY2DTO1D_SHR2 size, lmul
+function PFX(cpy2Dto1D_shr_\size\()_v)
+    slli            a2, a2, 1
+    li              t1, \size
+    addi            t2, a3, -1
+    li              t3, 1
+    sll             t3, t3, t2
+    slli            a4, a2, 1
+    vsetvli         zero, t1, e16, m\lmul, ta, ma
+    vmv.v.x         v0, a3
+    vmv.v.x         v24, t3
+    add             a5, a4, a2
+cpy2Dto1D_shr_\size:
+    add             t3, a1, a2
+    add             t4, a1, a4
+    add             t5, a1, a5
+    vle16.v         v4, (a1)
+    vle16.v         v8, (t3)
+    vle16.v         v12, (t4)
+    vle16.v         v16, (t5)
+    add             a1, t5, a2
+    vadd.vv         v4, v4, v24
+    vadd.vv         v8, v8, v24
+    vadd.vv         v12, v12, v24
+    vadd.vv         v16, v16, v24
+    vsra.vv         v4, v4, v0
+    vsra.vv         v8, v8, v0
+    vsra.vv         v12, v12, v0
+    vsra.vv         v16, v16, v0
+    addi            t3, a0, 2 * \size
+    addi            t4, a0, 4 * \size
+    addi            t5, a0, 6 * \size
+    vse16.v         v4, (a0)
+    vse16.v         v8, (t3)
+    vse16.v         v12, (t4)
+    vse16.v         v16, (t5)
+    addi            a0, t5, 2 * \size
+    addi            t1, t1, -4
+    bgtz            t1, cpy2Dto1D_shr_\size
+    ret
+endfunc
+.endm
+
+CPY2DTO1D_SHR2 4, 1
+CPY2DTO1D_SHR2 8, 1
+CPY2DTO1D_SHR2 16, 2
+CPY2DTO1D_SHR2 32, 4
+CPY2DTO1D_SHR  64, 8
 
 //void cpy1Dto2D_shl(int16_t* dst, const int16_t* src, intptr_t dstStride, int shift)
 .macro CPY1DTO2D_SHL size, lmul
@@ -1192,11 +1590,46 @@ cpy1Dto2D_shl_\size:
 endfunc
 .endm
 
-CPY1DTO2D_SHL 4, 1
-CPY1DTO2D_SHL 8, 1
-CPY1DTO2D_SHL 16, 2
-CPY1DTO2D_SHL 32, 4
-CPY1DTO2D_SHL 64, 8
+.macro CPY1DTO2D_SHL2 size, lmul
+function PFX(cpy1Dto2D_shl_\size\()_v)
+    slli            a2, a2, 1
+    li              t1, \size
+    slli            a4, a2, 1
+    add             a5, a4, a2
+    vsetvli         zero, t1, e16, m\lmul, ta, ma
+    vmv.v.x         v0, a3
+cpy1Dto2D_shl_\size:
+    addi            t3, a1, 2 * \size
+    addi            t4, a1, 4 * \size
+    addi            t5, a1, 6 * \size
+    vle16.v         v4, (a1)
+    vle16.v         v8, (t3)
+    vle16.v         v12, (t4)
+    vle16.v         v16, (t5)
+    addi            a1, t5, 2 * \size
+    vsll.vv         v4, v4, v0
+    vsll.vv         v8, v8, v0
+    vsll.vv         v12, v12, v0
+    vsll.vv         v16, v16, v0
+    add             t3, a0, a2
+    add             t4, a0, a4
+    add             t5, a0, a5
+    vse16.v         v4, (a0)
+    vse16.v         v8, (t3)
+    vse16.v         v12, (t4)
+    vse16.v         v16, (t5)
+    add             a0, t5, a2
+    addi            t1, t1, -4
+    bgtz            t1, cpy1Dto2D_shl_\size
+    ret
+endfunc
+.endm
+
+CPY1DTO2D_SHL2 4, 1
+CPY1DTO2D_SHL2 8, 1
+CPY1DTO2D_SHL2 16, 2
+CPY1DTO2D_SHL2 32, 4
+CPY1DTO2D_SHL  64, 8
 
 //void cpy1Dto2D_shr(int16_t* dst, const int16_t* src, intptr_t dstStride, int shift)
 .macro CPY1DTO2D_SHR size, lmul
@@ -1222,11 +1655,54 @@ cpy1Dto2D_shr_\size:
 endfunc
 .endm
 
-CPY1DTO2D_SHR 4, 1
-CPY1DTO2D_SHR 8, 1
-CPY1DTO2D_SHR 16, 2
-CPY1DTO2D_SHR 32, 4
-CPY1DTO2D_SHR 64, 8
+.macro CPY1DTO2D_SHR2 size, lmul
+function PFX(cpy1Dto2D_shr_\size\()_v)
+    slli            a2, a2, 1
+    li              t1, \size
+    addi            t2, a3, -1
+    li              t3, 1
+    sll             t3, t3, t2
+    slli            a4, a2, 1
+    vsetvli         zero, t1, e16, m\lmul, ta, ma
+    vmv.v.x         v0, a3
+    vmv.v.x         v24, t3
+    add             a5, a4, a2
+cpy1Dto2D_shr_\size:
+    addi            t3, a1, 2 * \size
+    addi            t4, a1, 4 * \size
+    addi            t5, a1, 6 * \size
+    vle16.v         v4, (a1)
+    vle16.v         v8, (t3)
+    vle16.v         v12, (t4)
+    vle16.v         v16, (t5)
+    addi            a1, t5, 2 * \size
+    vadd.vv         v4, v4, v24
+    vadd.vv         v8, v8, v24
+    vadd.vv         v12, v12, v24
+    vadd.vv         v16, v16, v24
+    vsra.vv         v4, v4, v0
+    vsra.vv         v8, v8, v0
+    vsra.vv         v12, v12, v0
+    vsra.vv         v16, v16, v0
+    add             t3, a0, a2
+    add             t4, a0, a4
+    add             t5, a0, a5
+    vse16.v         v4, (a0)
+    vse16.v         v8, (t3)
+    vse16.v         v12, (t4)
+    vse16.v         v16, (t5)
+    add             a0, t5, a2
+    addi            t1, t1, -4
+    bgtz            t1, cpy1Dto2D_shr_\size
+    ret
+endfunc
+.endm
+
+CPY1DTO2D_SHR2 4, 1
+CPY1DTO2D_SHR2 8, 1
+CPY1DTO2D_SHR2 16, 2
+CPY1DTO2D_SHR2 32, 4
+CPY1DTO2D_SHR  64, 8
 
 //void blockcopy_pp_c(pixel* a, intptr_t stridea, const pixel* b, intptr_t strideb)
 .macro BLOCKCOPY_PP bx, by, lmul
@@ -1256,69 +1732,157 @@ loop_blockcopy_pp_\bx\()x\by:
 endfunc
 .endm
 
-BLOCKCOPY_PP  4, 2, 1
-BLOCKCOPY_PP  4, 4, 1
-BLOCKCOPY_PP  4, 8, 1
-BLOCKCOPY_PP  4, 16, 1
-BLOCKCOPY_PP  4, 32, 1
-BLOCKCOPY_PP  6, 8, 1
-BLOCKCOPY_PP  6, 16, 1
-BLOCKCOPY_PP  8, 2, 1
-BLOCKCOPY_PP  8, 4, 1
-BLOCKCOPY_PP  8, 6, 1
-BLOCKCOPY_PP  8, 8, 1
-BLOCKCOPY_PP  8, 12, 1
-BLOCKCOPY_PP  8, 16, 1
-BLOCKCOPY_PP  8, 32, 1
-BLOCKCOPY_PP  8, 64, 1
+.macro BLOCKCOPY_PP2 bx, by, lmul
+function PFX(blockcopy_pp_\bx\()x\by\()_v)
+    li              t1, \by
+    li              t2, \bx
 #if HIGH_BIT_DEPTH
-BLOCKCOPY_PP  12, 16, 2
-BLOCKCOPY_PP  12, 32, 2
-BLOCKCOPY_PP  16, 4, 2
-BLOCKCOPY_PP  16, 8, 2
-BLOCKCOPY_PP  16, 12, 2
-BLOCKCOPY_PP  16, 16, 2
-BLOCKCOPY_PP  16, 24, 2
-BLOCKCOPY_PP  16, 32, 2
-BLOCKCOPY_PP  16, 64, 2
-BLOCKCOPY_PP  24, 32, 4
-BLOCKCOPY_PP  24, 64, 4
-BLOCKCOPY_PP  32, 8, 4
-BLOCKCOPY_PP  32, 12, 4
-BLOCKCOPY_PP  32, 16, 4
-BLOCKCOPY_PP  32, 24, 4
-BLOCKCOPY_PP  32, 32, 4
-BLOCKCOPY_PP  32, 48, 4
-BLOCKCOPY_PP  32, 64, 4
-BLOCKCOPY_PP  48, 64, 8
-BLOCKCOPY_PP  64, 16, 8
-BLOCKCOPY_PP  64, 32, 8
-BLOCKCOPY_PP  64, 48, 8
-BLOCKCOPY_PP  64, 64, 8
+    slli            a1, a1, 1
+    slli            a3, a3, 1
+    vsetvli         zero, t2, e16, m\lmul, ta, ma
 #else
-BLOCKCOPY_PP  12, 16, 1
-BLOCKCOPY_PP  12, 32, 1
-BLOCKCOPY_PP  16, 4, 1
-BLOCKCOPY_PP  16, 8, 1
-BLOCKCOPY_PP  16, 12, 1
-BLOCKCOPY_PP  16, 16, 1
-BLOCKCOPY_PP  16, 24, 1
-BLOCKCOPY_PP  16, 32, 1
-BLOCKCOPY_PP  16, 64, 1
-BLOCKCOPY_PP  24, 32, 2
-BLOCKCOPY_PP  24, 64, 2
-BLOCKCOPY_PP  32, 8, 2
-BLOCKCOPY_PP  32, 12, 2
-BLOCKCOPY_PP  32, 16, 2
-BLOCKCOPY_PP  32, 24, 2
-BLOCKCOPY_PP  32, 32, 2
-BLOCKCOPY_PP  32, 48, 2
-BLOCKCOPY_PP  32, 64, 2
-BLOCKCOPY_PP  48, 64, 4
-BLOCKCOPY_PP  64, 16, 4
-BLOCKCOPY_PP  64, 32, 4
-BLOCKCOPY_PP  64, 48, 4
-BLOCKCOPY_PP  64, 64, 4
+    vsetvli         zero, t2, e8, m\lmul, ta, ma
+#endif
+    slli            a4, a1, 1
+    slli            a6, a3, 1
+    add             a5, a4, a1
+    add             a7, a6, a3
+loop_blockcopy_pp_\bx\()x\by:
+    add             t3, a2, a3
+    add             t4, a2, a6
+    add             t5, a2, a7
+#if HIGH_BIT_DEPTH
+    vle16.v         v0, (a2)
+    vle16.v         v4, (t3)
+    vle16.v         v8, (t4)
+    vle16.v         v12, (t5)
+#else
+    vle8.v          v0, (a2)
+    vle8.v          v4, (t3)
+    vle8.v          v8, (t4)
+    vle8.v          v12, (t5)
+#endif
+    add             a2, t5, a3
+    add             t3, a0, a1
+    add             t4, a0, a4
+    add             t5, a0, a5
+#if HIGH_BIT_DEPTH
+    vse16.v         v0, (a0)
+    vse16.v         v4, (t3)
+    vse16.v         v8, (t4)
+    vse16.v         v12, (t5)
+#else
+    vse8.v          v0, (a0)
+    vse8.v          v4, (t3)
+    vse8.v          v8, (t4)
+    vse8.v          v12, (t5)
+#endif
+    add             a0, t5, a1
+    addi            t1, t1, -4
+    bgtz            t1, loop_blockcopy_pp_\bx\()x\by
+    ret
+endfunc
+.endm
+
+.macro BLOCKCOPY_PP3 bx, by, lmul
+function PFX(blockcopy_pp_\bx\()x\by\()_v)
+    li              t1, \by
+    li              t2, \bx
+#if HIGH_BIT_DEPTH
+    slli            a1, a1, 1
+    slli            a3, a3, 1
+    vsetvli         zero, t2, e16, m\lmul, ta, ma
+#else
+    vsetvli         zero, t2, e8, m\lmul, ta, ma
+#endif
+loop_blockcopy_pp_\bx\()x\by:
+    add             t3, a2, a3
+#if HIGH_BIT_DEPTH
+    vle16.v         v0, (a2)
+    vle16.v         v4, (t3)
+#else
+    vle8.v          v0, (a2)
+    vle8.v          v4, (t3)
+#endif
+    add             a2, t3, a3
+    add             t4, a0, a1
+#if HIGH_BIT_DEPTH
+    vse16.v         v0, (a0)
+    vse16.v         v4, (t4)
+#else
+    vse8.v          v0, (a0)
+    vse8.v          v4, (t4)
+#endif
+    add             a0, t4, a1
+    addi            t1, t1, -2
+    bgtz            t1, loop_blockcopy_pp_\bx\()x\by
+    ret
+endfunc
+.endm
+
+BLOCKCOPY_PP3  4, 2, 1
+BLOCKCOPY_PP2  4, 4, 1
+BLOCKCOPY_PP2  4, 8, 1
+BLOCKCOPY_PP2  4, 16, 1
+BLOCKCOPY_PP2  4, 32, 1
+BLOCKCOPY_PP2  6, 8, 1
+BLOCKCOPY_PP2  6, 16, 1
+BLOCKCOPY_PP3  8, 2, 1
+BLOCKCOPY_PP2  8, 4, 1
+BLOCKCOPY_PP3  8, 6, 1
+BLOCKCOPY_PP2  8, 8, 1
+BLOCKCOPY_PP2  8, 12, 1
+BLOCKCOPY_PP2  8, 16, 1
+BLOCKCOPY_PP2  8, 32, 1
+BLOCKCOPY_PP2  8, 64, 1
+#if HIGH_BIT_DEPTH
+BLOCKCOPY_PP2  12, 16, 2
+BLOCKCOPY_PP2  12, 32, 2
+BLOCKCOPY_PP2  16, 4, 2
+BLOCKCOPY_PP2  16, 8, 2
+BLOCKCOPY_PP2  16, 12, 2
+BLOCKCOPY_PP2  16, 16, 2
+BLOCKCOPY_PP2  16, 24, 2
+BLOCKCOPY_PP2  16, 32, 2
+BLOCKCOPY_PP2  16, 64, 2
+BLOCKCOPY_PP2  24, 32, 4
+BLOCKCOPY_PP2  24, 64, 4
+BLOCKCOPY_PP2  32, 8, 4
+BLOCKCOPY_PP2  32, 12, 4
+BLOCKCOPY_PP2  32, 16, 4
+BLOCKCOPY_PP2  32, 24, 4
+BLOCKCOPY_PP2  32, 32, 4
+BLOCKCOPY_PP2  32, 48, 4
+BLOCKCOPY_PP2  32, 64, 4
+BLOCKCOPY_PP   48, 64, 8
+BLOCKCOPY_PP   64, 16, 8
+BLOCKCOPY_PP   64, 32, 8
+BLOCKCOPY_PP   64, 48, 8
+BLOCKCOPY_PP   64, 64, 8
+#else
+BLOCKCOPY_PP2  12, 16, 1
+BLOCKCOPY_PP2  12, 32, 1
+BLOCKCOPY_PP2  16, 4, 1
+BLOCKCOPY_PP2  16, 8, 1
+BLOCKCOPY_PP2  16, 12, 1
+BLOCKCOPY_PP2  16, 16, 1
+BLOCKCOPY_PP2  16, 24, 1
+BLOCKCOPY_PP2  16, 32, 1
+BLOCKCOPY_PP2  16, 64, 1
+BLOCKCOPY_PP2  24, 32, 2
+BLOCKCOPY_PP2  24, 64, 2
+BLOCKCOPY_PP2  32, 8, 2
+BLOCKCOPY_PP2  32, 12, 2
+BLOCKCOPY_PP2  32, 16, 2
+BLOCKCOPY_PP2  32, 24, 2
+BLOCKCOPY_PP2  32, 32, 2
+BLOCKCOPY_PP2  32, 48, 2
+BLOCKCOPY_PP2  32, 64, 2
+BLOCKCOPY_PP2  48, 64, 4
+BLOCKCOPY_PP2  64, 16, 4
+BLOCKCOPY_PP2  64, 32, 4
+BLOCKCOPY_PP2  64, 48, 4
+BLOCKCOPY_PP2  64, 64, 4
 #endif
 
 //void blockcopy_ss_c(int16_t* a, intptr_t stridea, const int16_t* b, intptr_t strideb)
@@ -1340,16 +1904,224 @@ loop_blockcopy_ss_\bx\()x\by:
 endfunc
 .endm
 
-BLOCKCOPY_SS  4, 4, 1
-BLOCKCOPY_SS  4, 8, 1
-BLOCKCOPY_SS  8, 8, 1
-BLOCKCOPY_SS  8, 16, 1
-BLOCKCOPY_SS  16, 16, 2
-BLOCKCOPY_SS  16, 24, 2
-BLOCKCOPY_SS  16, 32, 2
-BLOCKCOPY_SS  32, 32, 4
-BLOCKCOPY_SS  32, 64, 4
-BLOCKCOPY_SS  64, 64, 8
+.macro BLOCKCOPY_SS2 bx, by, lmul
+function PFX(blockcopy_ss_\bx\()x\by\()_v)
+    li              t1, \by
+    li              t2, \bx
+    slli            a1, a1, 1
+    slli            a3, a3, 1
+    slli            a4, a1, 1
+    slli            a6, a3, 1
+    add             a5, a4, a1
+    add             a7, a6, a3
+    vsetvli         zero, t2, e16, m\lmul, ta, ma
+loop_blockcopy_ss_\bx\()x\by:
+    add             t3, a2, a3
+    add             t4, a2, a6
+    add             t5, a2, a7
+    vle16.v         v0, (a2)
+    vle16.v         v4, (t3)
+    vle16.v         v8, (t4)
+    vle16.v         v12, (t5)
+    add             a2, t5, a3
+    add             t3, a0, a1
+    add             t4, a0, a4
+    add             t5, a0, a5
+    vse16.v         v0, (a0)
+    vse16.v         v4, (t3)
+    vse16.v         v8, (t4)
+    vse16.v         v12, (t5)
+    add             a0, t5, a1
+    addi            t1, t1, -4
+    bgtz            t1, loop_blockcopy_ss_\bx\()x\by
+    ret
+endfunc
+.endm
+
+BLOCKCOPY_SS2  4, 4, 1
+BLOCKCOPY_SS2  4, 8, 1
+BLOCKCOPY_SS2  8, 8, 1
+BLOCKCOPY_SS2  8, 16, 1
+BLOCKCOPY_SS2  16, 16, 2
+BLOCKCOPY_SS2  16, 24, 2
+BLOCKCOPY_SS2  16, 32, 2
+BLOCKCOPY_SS2  32, 32, 4
+BLOCKCOPY_SS2  32, 64, 4
+BLOCKCOPY_SS   64, 64, 8
+
+//void blockcopy_sp_c(pixel* a, intptr_t stridea, const int16_t* b, intptr_t strideb)
+.macro BLOCKCOPY_SP bx, by, lmul, lmul2
+function PFX(blockcopy_sp_\bx\()x\by\()_v)
+#if HIGH_BIT_DEPTH
+    slli            a1, a1, 1
+#endif
+    slli            a3, a3, 1
+    li              t1, \by
+    li              t2, \bx
+    vsetvli         zero, t2, e16, m\lmul, ta, ma
+loop_blockcopy_sp_\bx\()x\by:
+    vle16.v         v0, (a2)
+#if HIGH_BIT_DEPTH
+    vse16.v         v0, (a0)
+#else
+    vsetvli         zero, t2, e8, m\lmul2, ta, ma
+    vnsrl.wi        v8, v0, 0
+    vse8.v          v8, (a0)
+#endif
+    add             a0, a0, a1
+    add             a2, a2, a3
+    addi            t1, t1, -1
+    bgtz            t1, loop_blockcopy_sp_\bx\()x\by
+    ret
+endfunc
+.endm
+
+.macro BLOCKCOPY_SP2 bx, by, lmul, lmul2
+function PFX(blockcopy_sp_\bx\()x\by\()_v)
+#if HIGH_BIT_DEPTH
+    slli            a1, a1, 1
+#endif
+    slli            a3, a3, 1
+    slli            a4, a1, 1
+    slli            a6, a3, 1
+    add             a5, a4, a1
+    add             a7, a6, a3
+    li              t1, \by
+    li              t2, \bx
+    vsetvli         zero, t2, e16, m\lmul, ta, ma
+loop_blockcopy_sp_\bx\()x\by:
+    add             t3, a2, a3
+    add             t4, a2, a6
+    add             t5, a2, a7
+    vle16.v         v0, (a2)
+    vle16.v         v4, (t3)
+    vle16.v         v8, (t4)
+    vle16.v         v12, (t5)
+    add             a2, t5, a3
+#if HIGH_BIT_DEPTH
+    vse16.v         v0, (a0)
+#else
+    vsetvli         zero, t2, e8, m\lmul2, ta, ma
+    add             t3, a0, a1
+    add             t4, a0, a4
+    add             t5, a0, a5
+    vnsrl.wi        v16, v0, 0
+    vnsrl.wi        v20, v4, 0
+    vnsrl.wi        v24, v8, 0
+    vnsrl.wi        v28, v12, 0
+    vse8.v          v16, (a0)
+    vse8.v          v20, (t3)
+    vse8.v          v24, (t4)
+    vse8.v          v28, (t5)
+#endif
+    add             a0, t5, a1
+    addi            t1, t1, -4
+    bgtz            t1, loop_blockcopy_sp_\bx\()x\by
+    ret
+endfunc
+.endm
+
+BLOCKCOPY_SP2  4, 4, 1, 1
+BLOCKCOPY_SP2  4, 8, 1, 1
+BLOCKCOPY_SP2  8, 8, 1, 1
+BLOCKCOPY_SP2  8, 16, 1, 1
+BLOCKCOPY_SP2  16, 16, 2, 1
+BLOCKCOPY_SP2  16, 24, 2, 1
+BLOCKCOPY_SP2  16, 32, 2, 1
+BLOCKCOPY_SP2  32, 32, 4, 2
+BLOCKCOPY_SP2  32, 64, 4, 2
+BLOCKCOPY_SP   64, 64, 8, 4
+
+//void blockcopy_ps_c(int16_t* a, intptr_t stridea, const pixel* b, intptr_t strideb)
+.macro BLOCKCOPY_PS bx, by, lmul, lmul2
+function PFX(blockcopy_ps_\bx\()x\by\()_v)
+    li              t1, \by
+    li              t2, \bx
+    slli            a1, a1, 1
+#if HIGH_BIT_DEPTH
+    slli            a3, a3, 1
+    vsetvli         zero, t2, e16, m\lmul, ta, ma
+#else
+    vsetvli         zero, t2, e8, m\lmul2, ta, ma
+#endif
+loop_blockcopy_ps_\bx\()x\by:
+#if HIGH_BIT_DEPTH
+    vle16.v         v0, (a2)
+    vse16.v         v0, (a0)
+#else
+    vsetvli         zero, t2, e8, m\lmul2, ta, ma
+    vle8.v          v0, (a2)
+    vsetvli         zero, t2, e16, m\lmul, ta, ma
+    vzext.vf2       v8, v0
+    vse16.v         v8, (a0)
+#endif
+    add             a0, a0, a1
+    add             a2, a2, a3
+    addi            t1, t1, -1
+    bgtz            t1, loop_blockcopy_ps_\bx\()x\by
+    ret
+endfunc
+.endm
+
+.macro BLOCKCOPY_PS2 bx, by, lmul, lmul2
+function PFX(blockcopy_ps_\bx\()x\by\()_v)
+    li              t1, \by
+    li              t2, \bx
+    slli            a1, a1, 1
+#if HIGH_BIT_DEPTH
+    slli            a3, a3, 1
+    vsetvli         zero, t2, e16, m\lmul, ta, ma
+#endif
+    slli            a4, a1, 1
+    slli            a6, a3, 1
+    add             a5, a4, a1
+    add             a7, a6, a3
+loop_blockcopy_ps_\bx\()x\by:
+    add             t3, a2, a3
+    add             t4, a2, a6
+    add             t5, a2, a7
+#if HIGH_BIT_DEPTH
+    vle16.v         v0, (a2)
+    vle16.v         v4, (t3)
+    vle16.v         v8, (t4)
+    vle16.v         v12, (t5)
+#else
+    vsetvli         zero, t2, e8, m\lmul2, ta, ma
+    vle8.v          v16, (a2)
+    vle8.v          v20, (t3)
+    vle8.v          v24, (t4)
+    vle8.v          v28, (t5)
+    vsetvli         zero, t2, e16, m\lmul, ta, ma
+    vzext.vf2       v0, v16
+    vzext.vf2       v4, v20
+    vzext.vf2       v8, v24
+    vzext.vf2       v12, v28
+#endif
+    add             a2, t5, a3
+    add             t3, a0, a1
+    add             t4, a0, a4
+    add             t5, a0, a5
+    vse16.v         v0, (a0)
+    vse16.v         v4, (t3)
+    vse16.v         v8, (t4)
+    vse16.v         v12, (t5)
+    add             a0, t5, a1
+    addi            t1, t1, -4
+    bgtz            t1, loop_blockcopy_ps_\bx\()x\by
+    ret
+endfunc
+.endm
+
+BLOCKCOPY_PS2  4, 4, 1, 1
+BLOCKCOPY_PS2  4, 8, 1, 1
+BLOCKCOPY_PS2  8, 8, 1, 1
+BLOCKCOPY_PS2  8, 16, 1, 1
+BLOCKCOPY_PS2  16, 16, 2, 1
+BLOCKCOPY_PS2  16, 24, 2, 1
+BLOCKCOPY_PS2  16, 32, 2, 1
+BLOCKCOPY_PS2  32, 32, 4, 2
+BLOCKCOPY_PS2  32, 64, 4, 2
+BLOCKCOPY_PS   64, 64, 8, 4
 
 //void planecopy_cp_c(const uint8_t* src, intptr_t srcStride, pixel* dst, intptr_t dstStride, int width, int height, int shift)
 function PFX(planecopy_cp_v)

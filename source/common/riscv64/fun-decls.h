@@ -123,6 +123,8 @@ FUNCDEF_PU(void, sad_x3, rvv, const pixel *, const pixel *, const pixel *, const
 FUNCDEF_PU(void, sad_x4, rvv, const pixel *, const pixel *, const pixel *, const pixel *, const pixel *, intptr_t, int32_t *);
 FUNCDEF_PU(sse_t, pixel_sse_pp, rvv, const pixel*, intptr_t, const pixel*, intptr_t);
 FUNCDEF_PU(void, blockcopy_ss, v, int16_t* a, intptr_t stridea, const int16_t* b, intptr_t strideb);
+FUNCDEF_PU(void, blockcopy_sp, v, pixel* a, intptr_t stridea, const int16_t* b, intptr_t strideb);
+FUNCDEF_PU(void, blockcopy_ps, v, int16_t* a, intptr_t stridea, const pixel* b, intptr_t strideb);
 
 FUNCDEF_CHROMA_PU(int, pixel_sad, rvv, const pixel *, intptr_t, const pixel *, intptr_t);
 FUNCDEF_CHROMA_PU(int, pixel_satd, rvv, const pixel*, intptr_t, const pixel*, intptr_t);
