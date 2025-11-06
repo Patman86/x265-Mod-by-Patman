@@ -25,6 +25,7 @@
 #include "slicetype.h" // LOWRES_COST_MASK
 #include "primitives.h"
 #include "x265.h"
+#include "riscv64_utils.h"
 
 #include <riscv_vector.h>
 #include <stdint.h>
@@ -960,6 +961,49 @@ int satd8_rvv(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr
 }
 #endif
 
+#if HIGH_BIT_DEPTH
+template<int blockSize>
+void transpose_rvv(pixel *dst, const pixel *src, intptr_t stride)
+{
+    for (int k = 0; k < blockSize; k++)
+        for (int l = 0; l < blockSize; l++)
+        {
+            dst[k * blockSize + l] = src[l * stride + k];
+        }
+}
+
+template<>
+__attribute__((unused))
+void transpose_rvv<8>(pixel *dst, const pixel *src, intptr_t stride)
+{
+    transpose8x8_rvv(dst, src, 8, stride);
+}
+
+template<>
+__attribute__((unused))
+void transpose_rvv<16>(pixel *dst, const pixel *src, intptr_t stride)
+{
+    transpose16x16_rvv(dst, src, 16, stride);
+}
+
+template<>
+__attribute__((unused))
+void transpose_rvv<32>(pixel *dst, const pixel *src, intptr_t stride)
+{
+    transpose32x32_rvv(dst, src, 32, stride);
+}
+
+template<>
+__attribute__((unused))
+void transpose_rvv<64>(pixel *dst, const pixel *src, intptr_t stride)
+{
+    transpose32x32_rvv(dst, src, 64, stride);
+    transpose32x32_rvv(dst + 32 * 64 + 32, src + 32 * stride + 32, 64, stride);
+    transpose32x32_rvv(dst + 32 * 64, src + 32, 64, stride);
+    transpose32x32_rvv(dst + 32, src + 32 * stride, 64, stride);
+}
+#endif
+
 };
 
 namespace X265_NS {
@@ -975,6 +1019,9 @@ void setupPixelPrimitives_rvv(EncoderPrimitives &p) {
     p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[NONALIGNED] = pixelavg_pp_rvv<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[ALIGNED] = pixelavg_pp_rvv<W, H>;
 #endif // !(HIGH_BIT_DEPTH)
+
+#define LUMA_CU(W, H) \
+    //p.cu[BLOCK_ ## W ## x ## H].transpose = transpose_rvv<W>;
 
     LUMA_PU_S(4, 4);
     LUMA_PU_S(8, 8);
@@ -1001,6 +1048,11 @@ void setupPixelPrimitives_rvv(EncoderPrimitives &p) {
     LUMA_PU(48, 64);
     LUMA_PU(64, 16);
     LUMA_PU(16, 64);
+
+    LUMA_CU(8, 8);
+    LUMA_CU(16, 16);
+    LUMA_CU(32, 32);
+    LUMA_CU(64, 64);
 
 #if !(HIGH_BIT_DEPTH)
     p.pu[LUMA_4x4].satd = satd4_rvv<4, 4>;
