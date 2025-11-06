@@ -1,7 +1,7 @@
 /*****************************************************************************
- * Copyright (C) 2024 MulticoreWare, Inc
+ * Copyright (C) 2025 MulticoreWare, Inc
  *
- * Authors: Changsheng Wu <wu.changsheng@sanechips.com.cn>
+ * Authors: Jia Yuan <yuan.jia@sanechips.com.cn>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,18 +21,19 @@
  * For more information, contact us at license @ x265.com.
  *****************************************************************************/
 
-#ifndef X265_COMMON_RISCV64_INTRINSIC_SETUP_H
-#define X265_COMMON_RISCV64_INTRINSIC_SETUP_H
+#ifndef __RISCV64_UTILS_H__
+#define __RISCV64_UTILS_H__
 
-#include "primitives.h"
+#include <stdint.h>
 
-namespace X265_NS {
-
-void setupPixelPrimitives_rvv(EncoderPrimitives &p);
-void setupSaoPrimitives_rvv(EncoderPrimitives &p);
-void setupFilterPrimitives_rvv(EncoderPrimitives &p);
-void setupIntraPrimitives_rvv(EncoderPrimitives &p);
-
+namespace X265_NS
+{
+void transpose8x8_rvv(uint8_t *dst, const uint8_t *src, intptr_t dstride, intptr_t sstride);
+void transpose16x16_rvv(uint8_t *dst, const uint8_t *src, intptr_t dstride, intptr_t sstride);
+void transpose32x32_rvv(uint8_t *dst, const uint8_t *src, intptr_t dstride, intptr_t sstride);
+void transpose8x8_rvv(uint16_t *dst, const uint16_t *src, intptr_t dstride, intptr_t sstride);
+void transpose16x16_rvv(uint16_t *dst, const uint16_t *src, intptr_t dstride, intptr_t sstride);
+void transpose32x32_rvv(uint16_t *dst, const uint16_t *src, intptr_t dstride, intptr_t sstride);
 }
 
-#endif // X265_COMMON_RISCV64_INTRINSIC_SETUP_H
+#endif

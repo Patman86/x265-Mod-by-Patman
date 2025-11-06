@@ -429,6 +429,7 @@ void setupIntrinsicPrimitives(EncoderPrimitives &p, int cpuMask)
     {
         setupPixelPrimitives_rvv(p);
         setupSaoPrimitives_rvv(p);
+        setupIntraPrimitives_rvv(p);
 #if !HIGH_BIT_DEPTH
         setupFilterPrimitives_rvv(p);
 #endif
