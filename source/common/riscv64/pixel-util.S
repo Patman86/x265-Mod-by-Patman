@@ -160,6 +160,7 @@ loop_pixelvar\size:
 endfunc
 .endm
 
+PIXEL_VAR2 4, 1, 1, 1
 PIXEL_VAR2 8, 1, 1, 2
 PIXEL_VAR2 16, 1, 2, 4
 PIXEL_VAR  32, 2, 4, 8

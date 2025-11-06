@@ -125,6 +125,7 @@ FUNCDEF_PU(sse_t, pixel_sse_pp, rvv, const pixel*, intptr_t, const pixel*, intpt
 FUNCDEF_PU(void, blockcopy_ss, v, int16_t* a, intptr_t stridea, const int16_t* b, intptr_t strideb);
 FUNCDEF_PU(void, blockcopy_sp, v, pixel* a, intptr_t stridea, const int16_t* b, intptr_t strideb);
 FUNCDEF_PU(void, blockcopy_ps, v, int16_t* a, intptr_t stridea, const pixel* b, intptr_t strideb);
+FUNCDEF_PU(uint64_t, pixel_var, v, const pixel* pix, intptr_t stride);
 
 FUNCDEF_CHROMA_PU(int, pixel_sad, rvv, const pixel *, intptr_t, const pixel *, intptr_t);
 FUNCDEF_CHROMA_PU(int, pixel_satd, rvv, const pixel*, intptr_t, const pixel*, intptr_t);
@@ -144,11 +145,6 @@ void PFX(getResidual4_v(const pixel* fenc, const pixel* pred, int16_t* residual,
 void PFX(getResidual8_v(const pixel* fenc, const pixel* pred, int16_t* residual, intptr_t stride));
 void PFX(getResidual16_v(const pixel* fenc, const pixel* pred, int16_t* residual, intptr_t stride));
 void PFX(getResidual32_v(const pixel* fenc, const pixel* pred, int16_t* residual, intptr_t stride));
-
-uint64_t PFX(pixel_var_8x8_v(const pixel* pix, intptr_t stride));
-uint64_t PFX(pixel_var_16x16_v(const pixel* pix, intptr_t stride));
-uint64_t PFX(pixel_var_32x32_v(const pixel* pix, intptr_t stride));
-uint64_t PFX(pixel_var_64x64_v(const pixel* pix, intptr_t stride));
 
 void PFX(scale1D_128to64_v(pixel *dst, const pixel *src));
 void PFX(scale2D_64to32_v(pixel* dst, const pixel* src, intptr_t stride));
