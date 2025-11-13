@@ -1,3 +1,26 @@
+/*****************************************************************************
+ * Copyright (C) 2025 MulticoreWare, Inc
+ *
+ * Authors: Jia Yuan <yuan.jia@sanechips.com.cn>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02111, USA.
+ *
+ * This program is also available under a commercial proprietary license.
+ * For more information, contact us at license @ x265.com.
+ *****************************************************************************/
+
 #include "common.h"
 #include "slicetype.h" // LOWRES_COST_MASK
 #include "primitives.h"
@@ -45,8 +68,8 @@ typedef struct {
     vuint16m1_t *m3;
 } vectors_u16_m1_t;
 
-// ZF2.0: 4 times vle8 performs better than one time vlsseg4e8.
-// 1. array elements cannot have RVV type, such as  â€˜vuint8mf2_tâ€™;
+// 4 times vle8 performs better than one time vlsseg4e8.
+// 1. array elements cannot have RVV type, such as  �vuint8mf2_t�;
 // 2. The member variables in the structure cannot be RVV type, so use the structure pointer version.
 static inline void vload_u8mf2x4(vectors_u8_mf2_t *d, const uint8_t **pix, intptr_t stride_pix, size_t vl) {
     *(d->m0) = __riscv_vle8_v_u8mf2(*pix, vl);
@@ -635,7 +658,7 @@ static inline int pixel_satd_16x16_rvv(const uint8_t *pix1, intptr_t stride_pix1
 |       diff0[1]      |    |       diff1[1]       |
 |       diff0[2]      |    |       diff1[2]       |
 |       diff0[3]      |    |       diff1[3]       |
-                        â€¦â€¦
+                        ��
 */
     // Load 16x16 blocks four times
     // 1:
