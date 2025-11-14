@@ -793,8 +793,7 @@ function PFX(quant_v)
 loop_quant:
     vsetvli         t1, a6, e16, m2, ta, ma
     vle16.v         v4, (a0)
-    vrsub.vi        v6, v4, 0
-    vmax.vv         v8, v4, v6
+    VABS            v8, v4, v6
     vsetvli         zero, t1, e32, m4, ta, ma
     vzext.vf2       v12, v8
     vsext.vf2       v16, v4
@@ -840,8 +839,7 @@ function PFX(nquant_v)
 loop_nquant:
     vsetvli         t1, a5, e16, m2, ta, ma
     vle16.v         v4, (a0)
-    vrsub.vi        v6, v4, 0
-    vmax.vv         v8, v4, v6
+    VABS            v8, v4, v6
     vsetvli         zero, t1, e32, m4, ta, ma
     vzext.vf2       v12, v8
     vsext.vf2       v16, v4
@@ -858,8 +856,7 @@ loop_nquant:
     vadd.vv         v24, v24, v8
     vsetvli         zero, t1, e16, m2, ta, ma
     vnclip.wi       v4, v20, 0
-    vrsub.vi        v8, v4, 0
-    vmax.vv         v12, v4, v8
+    VABS            v12, v4, v8
     vse16.v         v12, (a2)
     sub             a5, a5, t1
     slli            t2, t1, 1

@@ -138,4 +138,13 @@ ELF     .size   \name, . - \name
     vmerge.vim      \vd, \vd, 1, v0
 .endm
 
+.macro VABS vd, va, vb
+#if HAVE_RVV_ZF
+    vabs.v          \vd, \va
+#else
+    vrsub.vi        \vb, \va, 0
+    vmax.vv         \vd, \va, \vb
+#endif
+.endm
+
 #endif
