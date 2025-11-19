@@ -1170,6 +1170,125 @@ int sa8d16_rvv(const pixel *pix1, intptr_t i_pix1, const pixel *pix2, intptr_t i
 #endif
 
 #if HIGH_BIT_DEPTH
+// todo
+#else // !HIGH_BIT_DEPTH
+static inline int calc_energy_8x8(const uint8_t *source, intptr_t sstride)
+{
+    const uint8_t *pix_ptr = source;
+
+    vuint8mf2_t s0, s1, s2, s3, s4, s5, s6, s7;
+    vectors_u8_mf2_t s_matrix_low = {&s0, &s1, &s2, &s3};
+    vectors_u8_mf2_t s_matrix_high = {&s4, &s5, &s6, &s7};
+
+    size_t vl = __riscv_vsetvl_e8mf2(8);
+    vload_u8x8x4_mf2(&pix_ptr, sstride, &s_matrix_low, vl);
+    pix_ptr += 4 * sstride;
+    vload_u8x8x4_mf2(&pix_ptr, sstride, &s_matrix_high, vl);
+
+    vuint16m1_t diff0, diff1, diff2, diff3, diff4, diff5, diff6, diff7;
+    diff0 = __riscv_vwaddu_vv_u16m1(*(s_matrix_low.m0), *(s_matrix_low.m1), vl);
+    diff1 = __riscv_vwaddu_vv_u16m1(*(s_matrix_low.m2), *(s_matrix_low.m3), vl);
+    diff2 = __riscv_vwaddu_vv_u16m1(*(s_matrix_high.m0), *(s_matrix_high.m1), vl);
+    diff3 = __riscv_vwaddu_vv_u16m1(*(s_matrix_high.m2), *(s_matrix_high.m3), vl);
+    diff4 = __riscv_vwsubu_vv_u16m1(*(s_matrix_low.m0), *(s_matrix_low.m1), vl);
+    diff5 = __riscv_vwsubu_vv_u16m1(*(s_matrix_low.m2), *(s_matrix_low.m3), vl);
+    diff6 = __riscv_vwsubu_vv_u16m1(*(s_matrix_high.m0), *(s_matrix_high.m1), vl);
+    diff7 = __riscv_vwsubu_vv_u16m1(*(s_matrix_high.m2), *(s_matrix_high.m3), vl);
+
+    vectors_u16_m1_t diff_0 = {&diff0, &diff1, &diff2, &diff3};
+    vectors_u16_m1_t diff_1 = {&diff4, &diff5, &diff6, &diff7};
+
+    vuint16m1_t tmp0, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7;
+    vectors_u16_m1_t tmp_0 = {&tmp0, &tmp1, &tmp2, &tmp3};
+    vectors_u16_m1_t tmp_1 = {&tmp4, &tmp5, &tmp6, &tmp7};
+    hadamard_vx4(&tmp_0, &diff_0, vl);
+    hadamard_vx4(&tmp_1, &diff_1, vl);
+
+    // The first line after the vertical hadamard transform contains the sum of coefficients.
+    int sum = vredsum_u16(*(tmp_0.m0), vl) >> 2;
+
+    vuint16m1_t sum0, sum1, sum2, sum3;
+    vectors_u16_m1_t sum_sa8d={&sum0, &sum1, &sum2, &sum3};
+    vectors_u16_m1_8_t tmp={tmp_0.m0, tmp_0.m1, tmp_0.m2, tmp_0.m3, tmp_1.m0, tmp_1.m1, tmp_1.m2, tmp_1.m3};
+    hadamard_hx8(&sum_sa8d, &tmp, vl);
+
+    vuint16m1_t out, out0, out1;
+    out0 = __riscv_vadd_vv_u16m1(*(sum_sa8d.m0), *(sum_sa8d.m1), vl);
+    out1 = __riscv_vadd_vv_u16m1(*(sum_sa8d.m2), *(sum_sa8d.m3), vl);
+    out = __riscv_vadd_vv_u16m1(out0, out1, vl);
+    int sa8 = (vredsum_u16(out, vl) + 1) >> 1;
+
+    return sa8 - sum;
+}
+
+
+static inline int calc_energy_4x4(const pixel *source, intptr_t sstride)
+{
+    const uint8_t *pix_ptr = source;
+    vuint8mf2_t s0, s1, s2, s3;
+    vectors_u8_mf2_t s = {&s0, &s1, &s2, &s3};
+    size_t vl = __riscv_vsetvl_e8mf2(4);
+    vload_u8mf2x4(&s, &pix_ptr, sstride, vl);
+    vuint16m1_t tmp0, tmp1, tmp2, tmp3;
+    tmp0 = __riscv_vwaddu_vx_u16m1(*(s.m0), 0, vl);
+    tmp1 = __riscv_vwaddu_vx_u16m1(*(s.m1), 0, vl);
+    tmp2 = __riscv_vwaddu_vx_u16m1(*(s.m2), 0, vl);
+    tmp3 = __riscv_vwaddu_vx_u16m1(*(s.m3), 0, vl);
+
+    vuint16m1_t s01_23, d01_23, d0, d1;
+    d0 = __riscv_vslideup_vx_u16m1(tmp0, tmp1, 4, 8);
+    d1 = __riscv_vslideup_vx_u16m1(tmp2, tmp3, 4, 8);
+
+    vl = __riscv_vsetvl_e16m1(8);
+    SUMSUB_AB(s01_23, d01_23, d0, d1, vl);
+
+    // The first line after the vertical hadamard transform contains the sum of coefficients.
+    int sum = vredsum_u16(s01_23, vl) >> 2;
+
+    vtrn_16s(&d0, &d1, s01_23, d01_23);
+    SUMSUB_AB(s01_23, d01_23, d0, d1, vl);
+
+    vtrn_8h(&d0, &d1, s01_23, d01_23);
+    SUMSUB_AB(s01_23, d01_23, d0, d1, vl);
+
+    vtrn_4s(&d0, &d1, s01_23, d01_23);
+
+    vuint16m1_t vmax = vmax_abs_u16(d0, d1, vl);
+    int sat = vredsum_u16(vmax, vl);
+
+    return sat - sum;
+}
+
+template<int size>
+int psyCost_pp_rvv(const pixel *source, intptr_t sstride, const pixel *recon, intptr_t rstride)
+{
+    if (size)
+    {
+        int dim = 1 << (size + 2);
+        uint32_t totEnergy = 0;
+        for (int i = 0; i < dim; i += 8)
+        {
+            for (int j = 0; j < dim; j += 8)
+            {
+                int sourceEnergy = calc_energy_8x8(source + i * sstride + j, sstride);
+                int reconEnergy = calc_energy_8x8(recon + i * rstride + j, rstride);
+
+                totEnergy += abs(sourceEnergy - reconEnergy);
+            }
+        }
+        return totEnergy;
+    }
+    else
+    {
+        int sourceEnergy = calc_energy_4x4(source, sstride);
+        int reconEnergy = calc_energy_4x4(recon, rstride);
+
+        return abs(sourceEnergy - reconEnergy);
+    }
+}
+#endif // HIGH_BIT_DEPTH
+
+#if HIGH_BIT_DEPTH
 template<int blockSize>
 void transpose_rvv(pixel *dst, const pixel *src, intptr_t stride)
 {
@@ -1229,6 +1348,7 @@ void setupPixelPrimitives_rvv(EncoderPrimitives &p) {
 #endif // !(HIGH_BIT_DEPTH)
 
 #define LUMA_CU(W, H) \
+    p.cu[BLOCK_ ## W ## x ## H].psy_cost_pp   = psyCost_pp_rvv<BLOCK_ ## W ## x ## H>;
     //p.cu[BLOCK_ ## W ## x ## H].transpose = transpose_rvv<W>;
 
     LUMA_PU_S(4, 4);
@@ -1257,12 +1377,13 @@ void setupPixelPrimitives_rvv(EncoderPrimitives &p) {
     LUMA_PU(64, 16);
     LUMA_PU(16, 64);
 
+#if !(HIGH_BIT_DEPTH)
+    LUMA_CU(4, 4);
     LUMA_CU(8, 8);
     LUMA_CU(16, 16);
     LUMA_CU(32, 32);
     LUMA_CU(64, 64);
 
-#if !(HIGH_BIT_DEPTH)
     p.pu[LUMA_4x4].satd = satd4_rvv<4, 4>;
     p.pu[LUMA_4x8].satd = satd4_rvv<4, 8>;
     p.pu[LUMA_4x16].satd = satd4_rvv<4, 16>;
