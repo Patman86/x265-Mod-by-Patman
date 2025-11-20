@@ -26,6 +26,11 @@
 .section .rodata
 .align 4
 
+tbl_const_1to5_3to0:
+    .byte 1, 2, 3, 4
+    .byte 3, 2, 1, 0
+
+.align 4
 tbl_const_1to8_7to0:
     .byte 1, 2, 3, 4, 5, 6, 7, 8          // coefficient of (x+1)*TR
     .byte 7, 6, 5, 4, 3, 2, 1, 0          // coefficient of (blksize-1-x)*L[y]
@@ -37,6 +42,76 @@ tbl_const_1to16_15to0:
 
 .section .text
 .align 4
+
+
+function PFX(intra_pred_planar4_rvv)
+    li t0, 4
+    vsetvli t0, t0, e8, mf2, ta, ma
+
+    addi t1, a2, 1
+    vle8.v v0, (t1)           # v0 = above[0..3]
+
+    lbu t2, 5(a2)
+    vmv.v.x v2, t2            # v2 = topRight_b_broadcast
+
+    lbu t3, 13(a2)
+    vsetvli zero, zero, e16, m1, ta, ma
+    vmv.v.x v3, t3            # v3 = bottomLeft_h_broadcast
+
+    la t2, tbl_const_1to5_3to0
+    vsetvli zero, zero, e8, mf2, ta, ma
+    vle8.v v4, (t2)           # v4 = [1,2,3,4] (x+1)
+    addi t2, t2, 4
+    vle8.v v5, (t2)           # v5 = [3,2,1,0] (3-x)
+
+    vsetvli zero, zero, e16, m1, ta, ma
+    vzext.vf2 v6, v0          # zero extension to 16 bits
+    vsll.vi v6, v6, 2         # v6 = 4 * above[x]
+
+    vsetvli zero, zero, e8, mf2, ta, ma
+    vwmulu.vv v10, v4, v2      # v10 = (x+1) * topRight
+
+    vsetvli zero, zero, e16, m1, ta, ma
+    vadd.vv v6, v6, v10        # v6 = 4 * above[x] + (x+1) * topRight
+
+    vzext.vf2 v12, v0          # v12 = above (zero extension to 16 bits)
+    vsub.vv v8, v3, v12        # v8 = bottomLeft - above[x], as a correction
+
+    csrwi  vxrm, 0
+    li t4, 0                  # y = 0
+    mv t5, a0                 # t5 = current dst
+    mv t6, a1                 # t6 = dstStride
+
+.rept 4
+    add t1, a2, t4
+    addi t1, t1, 9           # left = srcPix + 9 + y
+    lbu t2, 0(t1)             # t2 = left[y]
+
+    vsetvli zero, zero, e8, mf2, ta, ma
+    vmv.v.x v9, t2            # v9 = left[y]_broadcast
+
+    vsetvli zero, zero, e16, m1, ta, ma
+    vadd.vv v6, v6, v8        # v6 = (blkSize - 1 -y) * above[x] + (x+1) * topRight + (y+1) * bottomLeft
+
+    vmv.v.v v16, v6           # v16 = v6
+
+    vsetvli zero, zero, e8, mf2, ta, ma
+    vwmulu.vv v14, v5, v9                  # v14 = (3-x) * left[y]
+
+    vsetvli zero, zero, e16, m1, ta, ma
+    vadd.vv v16, v16, v14                  # v16 += (3-x) * left[y]
+
+    vsetvli zero, zero, e8, mf2, ta, ma
+    vnclipu.wi v18, v16, 3
+
+    vse8.v v18, (t5)
+
+    add     t5, t5, t6          # dst += dstStride
+    addi    t4, t4, 1           # y++
+.endr
+    ret
+endfunc
+
 
 function PFX(intra_pred_planar8_rvv)
 // Register map

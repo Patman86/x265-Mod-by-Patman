@@ -1288,7 +1288,6 @@ int psyCost_pp_rvv(const pixel *source, intptr_t sstride, const pixel *recon, in
 }
 #endif // HIGH_BIT_DEPTH
 
-#if HIGH_BIT_DEPTH
 template<int blockSize>
 void transpose_rvv(pixel *dst, const pixel *src, intptr_t stride)
 {
@@ -1329,7 +1328,6 @@ void transpose_rvv<64>(pixel *dst, const pixel *src, intptr_t stride)
     transpose32x32_rvv(dst + 32 * 64, src + 32, 64, stride);
     transpose32x32_rvv(dst + 32, src + 32 * stride, 64, stride);
 }
-#endif
 
 };
 

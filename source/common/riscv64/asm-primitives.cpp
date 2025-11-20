@@ -298,6 +298,11 @@ void setupRVVPrimitives(EncoderPrimitives &p)
     ALL_LUMA_PU(pixelavg_pp[NONALIGNED], pixel_avg_pp, rvv);
     ALL_LUMA_PU(pixelavg_pp[ALIGNED], pixel_avg_pp, rvv);
 
+    // intra_pred_planar
+    p.cu[BLOCK_4x4].intra_pred[PLANAR_IDX] = PFX(intra_pred_planar4_rvv);
+    p.cu[BLOCK_8x8].intra_pred[PLANAR_IDX] = PFX(intra_pred_planar8_rvv);
+    p.cu[BLOCK_16x16].intra_pred[PLANAR_IDX] = PFX(intra_pred_planar16_rvv);
+
     // ssimDist
     p.cu[BLOCK_4x4].ssimDist = PFX(ssimDist4_v);
     p.cu[BLOCK_8x8].ssimDist = PFX(ssimDist8_v);

@@ -109,9 +109,12 @@ FUNCDEF_TU_S(void, cpy2Dto1D_shl, v, int16_t* dst, const int16_t* src, intptr_t 
 FUNCDEF_TU_S(void, cpy2Dto1D_shr, v, int16_t* dst, const int16_t* src, intptr_t srcStride, int shift);
 FUNCDEF_TU_S(void, cpy1Dto2D_shl, v, int16_t* dst, const int16_t* src, intptr_t srcStride, int shift);
 FUNCDEF_TU_S(void, cpy1Dto2D_shr, v, int16_t* dst, const int16_t* src, intptr_t srcStride, int shift);
+
 FUNCDEF_TU_S2(void, ssimDist, v, const pixel *fenc, uint32_t fStride, const pixel *recon, intptr_t rstride, uint64_t *ssBlock, int shift, uint64_t *ac_k);
 FUNCDEF_TU_S2(void, idct, v, const int16_t* src, int16_t* dst, intptr_t dstStride);
 FUNCDEF_TU_S2(void, dct, v, const int16_t* src, int16_t* dst, intptr_t srcStride);
+FUNCDEF_TU_S2(void, intra_pred_planar, rvv, pixel* dst, intptr_t dstride, const pixel* srcPix, int, int);
+
 FUNCDEF_TU_S3(void, nonPsyRdoQuant, v, int16_t *m_resiDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, uint32_t blkPos);
 FUNCDEF_TU_S3(void, PsyRdoQuant, v, int16_t *m_resiDctCoeff, int16_t *m_fencDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, int64_t *psyScale, uint32_t blkPos);
 
