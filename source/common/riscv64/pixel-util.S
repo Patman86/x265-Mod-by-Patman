@@ -2,7 +2,7 @@
  * Copyright (C) 2025 MulticoreWare, Inc
  *
  * Authors: Changsheng Wu <wu.changsheng@sanechips.com.cn>
- *
+ *          Yujiao He <he.yujiao@sanechips.com.cn>
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -2290,5 +2290,153 @@ loop_planecopy_sp_shl_x:
     add             a2, a2, a3
     addi            a5, a5, -1
     bgtz            a5, loop_planecopy_sp_shl_y
+    ret
+endfunc
+
+// uint32_t costCoeffNxN(
+//    uint16_t *scan,        // a0
+//    coeff_t *coeff,        // a1
+//    intptr_t trSize,       // a2
+//    uint16_t *absCoeff,    // a3
+//    uint8_t *tabSigCtx,    // a4
+//    uint16_t scanFlagMask, // a5
+//    uint8_t *baseCtx,      // a6
+//    int offset,            // a7
+//    int scanPosSigOff,     // sp
+//    int subPosBase)        // sp + 8, or sp + 4 on APPLE
+function PFX(costCoeffNxN_rvv)
+    // load coeff
+    slli            a2, a2, 1
+    vsetivli        zero, 4, e16, m1, ta, ma
+    add             t0, a1, a2
+    add             t1, t0, a2
+    add             t2, t1, a2
+    vle16.v         v16, (a1)
+    vle16.v         v18, (t0)
+    vle16.v         v17, (t1)
+    vle16.v         v19, (t2)
+
+    vsetivli        zero, 16, e16, m1, ta, ma
+    vslideup.vi     v16, v18, 4
+    vslideup.vi     v17, v19, 4
+    vslideup.vi     v16, v17, 8
+
+    // loading tabSigCtx
+    vsetivli        zero, 16, e8, m1, ta, ma
+    vle8.v          v20, (a4)
+
+    vsetivli        zero, 16, e16, m2, ta, ma
+    vzext.vf2       v12, v20
+    VABS            v6, v16, v30
+
+    // load scan table
+    lw              a2, 0(sp)
+    xori            t6, a2, 15
+    slli            t0, t6, 1
+    add             t1, a0, t0
+    vle16.v         v8, (t1)
+    vmv.v.i         v10, 15
+    vxor.vv         v4, v8, v10
+
+    // reorder abs(coeff)
+    vrgatherei16.vv  v2, v6, v4
+
+    // reorder tabSigCtx
+    vrgatherei16.vv  v14, v12, v4
+    vadd.vx          v0, v14, a7
+
+    // register mapping
+    // a0 - sum
+    // a1 - entropyStateBits
+    // {v0, v1} - sigCtx
+    // {v2, v3} - abs(coeff)
+    // a2 - scanPosSigOff
+    // a3 - absCoeff
+    // a4 - numNonZero
+    // a5 - scanFlagMask
+    // a6 - baseCtx
+    // a7 - scanPosSigOff & 15
+    mv              a7, t6
+    li              a0, 0
+    la              a1, PFX(entropyStateBits)
+    li              a4, 0
+    beqz            a2, idx_zero
+
+loop_nonzero:
+    addi            a2, a2, -1
+    slli            t0, a4, 1
+    add             t0, a3, t0
+    vmv.x.s         t1, v2
+    vmv.x.s         t6, v0              // t6 = ctxSig
+    vslidedown.vi   v2, v2, 1
+    vslidedown.vi   v0, v0, 1
+    sh              t1, 0(t0)           // absCoeff[numNonZero] = tmpCoeff[blkPos]
+
+    andi            t5, a5, 1           // t5  sig = scanFlagMask & 1
+    srli            a5, a5, 1           // scanFlagMask >>= 1;
+    add             a4, a4, t5          // numNonZero += sig
+
+    add             t0, a6, t6
+    lbu             t4, 0(t0)           // mstate = baseCtx[ctxSig] load uint8
+    andi            t3, t4, 1           // t3 mps = mstate & 1
+    xor             t4, t4, t5          // t4 = mstate ^ sig
+
+    slli            t0, t4, 2
+    add             t0, a1, t0
+    lw              t1, 0(t0)           // stateBits = PFX(entropyStateBits)[mstate ^ sig]
+    add             a0, a0, t1          // sum += stateBits
+    srli            t1, t1, 24
+    add             t2, t1, t3          // t2 nextState = (stateBits >> 24) + mps
+
+    li              t0, 1
+    bne             t4, t0, 1f          // if ((mstate ^ sig) == 1)
+    mv              t2, t5              // nextState = sig
+1:
+    add             t0, a6, t6
+    sb              t2, 0(t0)           // baseCtx[ctxSig] = nextState
+    bnez            a2, loop_nonzero
+
+idx_zero:
+    slli            t0, a4, 1
+    add             t0, a3, t0
+    vmv.x.s         t1, v2
+    vmv.x.s         t6, v0
+    sh              t1, 0(t0)           // absCoeff[numNonZero] = tmpCoeff[blkPos]
+
+    lw              t0, 8(sp)
+    li              t1, 0xFFFF
+    and             t0, t0, t1          // subPosBase &= 0xFFFF
+    seqz            a2, t0
+
+    add             a4, a4, a7
+    add             a4, a4, a2
+    beqz            a4, 2f              // subPosBase != 0 && numNonZero == 0,exit
+
+    addi            a2, a2, -1
+    and             t6, t6, a2          // ctxSig &= posZeroMask
+
+    andi            t5, a5, 1           // t5, sig = scanFlagMask & 1
+
+    add             t0, a6, t6
+    lbu             t4, 0(t0)           // mstate = baseCtx[ctxSig] load uint8
+    andi            t3, t4, 1           // t3 mps = mstate & 1
+    xor             t4, t4, t5          // t4 = mstate ^ sig
+
+    slli            t0, t4, 2
+    add             t0, a1, t0
+    lw              t1, 0(t0)           // stateBits = PFX(entropyStateBits)[mstate ^ sig]
+    add             a0, a0, t1          // sum += stateBits
+    srli            t1, t1, 24
+    add             t2, t1, t3          // t2 nextState = (stateBits >> 24) + mps
+
+    li              t0, 1
+    bne             t4, t0, 3f          // if ((mstate ^ sig) == 1)
+    mv              t2, t5              // nextState = sig
+3:
+    add             t0, a6, t6
+    sb              t2, 0(t0)           // baseCtx[ctxSig] = nextState
+2:
+    li              t0, 0xFFFFFF
+    and             a0, a0, t0          //sum &=0xFFFFFF
     ret
 endfunc

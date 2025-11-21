@@ -315,6 +315,8 @@ void setupRVVPrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_16x16].normFact = PFX(normFact_v);
     p.cu[BLOCK_32x32].normFact = PFX(normFact_v);
     p.cu[BLOCK_64x64].normFact = PFX(normFact_v);
+
+    p.costCoeffNxN = PFX(costCoeffNxN_rvv);
 #endif
 
     // pixel_var
