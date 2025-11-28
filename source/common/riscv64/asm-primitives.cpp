@@ -288,12 +288,12 @@ void setupRVVPrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_32x32].sse_ss = PFX(pixel_sse_ss_32x32_rvv);
     p.cu[BLOCK_64x64].sse_ss = PFX(pixel_sse_ss_64x64_rvv);
 
-#if !HIGH_BIT_DEPTH
     // sad
     ALL_LUMA_PU(sad, pixel_sad, rvv);
     ALL_LUMA_PU(sad_x3, sad_x3, rvv);
     ALL_LUMA_PU(sad_x4, sad_x4, rvv);
 
+#if !HIGH_BIT_DEPTH
     // pixel_avg_pp
     ALL_LUMA_PU(pixelavg_pp[NONALIGNED], pixel_avg_pp, rvv);
     ALL_LUMA_PU(pixelavg_pp[ALIGNED], pixel_avg_pp, rvv);

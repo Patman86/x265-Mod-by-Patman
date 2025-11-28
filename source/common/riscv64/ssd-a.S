@@ -33,15 +33,9 @@
 
 .text
 
-.macro uabd d0, s0, s1, t0
-    vmaxu.vv            \d0, \s0, \s1
-    vminu.vv            \t0, \s0, \s1
-    vsub.vv             \d0, \d0, \t0    
-.endm
-
 /* sse_ss, 1 row */
 .macro SSE_SS_x1 s0,s1
-    vle16.v             v8, (\s0)            
+    vle16.v             v8, (\s0)
     vle16.v             v12, (\s1)
     vsub.vv             v16, v8, v12
     vwmacc.vv           v0, v16, v16     
@@ -116,7 +110,7 @@ SSD_S_FUNC_SMALL 16, 16, m4, m2
     vsetvli             zero, t0, e8, \lmul2, ta, ma
     vle8.v              v8, (\s0)
     vle8.v              v10, (\s1)
-    uabd                v16, v8, v10, v12
+    VABDU               v16, v8, v10, v12
 
     vsetvli             zero, t0, e32, \lmul1, ta, ma
     vzext.vf4           v24, v16
@@ -244,7 +238,7 @@ SSD_S_FUNC_BIG 64, 64, m8, m4
 .macro SSE_PP_x1_SMALL s0,s1,lmul1,lmul2
     vle16.v             v8, (\s0)
     vle16.v             v10, (\s1)
-    uabd                v16, v8, v10, v12
+    VABDU               v16, v8, v10, v12
     vwmacc.vv           v0, v16, v16
 .endm
 
@@ -290,7 +284,7 @@ SSE_PP_FUNC_SMALL 16, 32, m4, m2
     vsetvli             zero, t0, e16, \lmul2, ta, ma
     vle16.v             v8, (\s0)
     vle16.v             v10, (\s1)
-    uabd                v16, v8, v10, v12
+    VABDU               v16, v8, v10, v12
 
     vsetvli             zero, t0, e64, \lmul1, ta, ma
     vzext.vf4           v24, v16

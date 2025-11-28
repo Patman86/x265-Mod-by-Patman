@@ -65,6 +65,7 @@
 #define PFX_C(name)        JOIN(JOIN(JOIN(EXTERN_ASM, X265_NS), _), name)
 
 #define FENC_STRIDE 64
+#define FDNC_STRIDE 128
 
 // Alignment of stack arguments of size less than 8 bytes.
 #define STACK_ARG_ALIGNMENT 8
@@ -145,6 +146,44 @@ ELF     .size   \name, . - \name
     vrsub.vi        \vb, \va, 0
     vmax.vv         \vd, \va, \vb
 #endif
+.endm
+
+.macro VABDU d0, s0, s1, t0
+#if HAVE_RVV_ZF
+    vabdu.vv        \d0, \s0, \s1
+#else
+    vmaxu.vv        \d0, \s0, \s1
+    vminu.vv        \t0, \s0, \s1
+    vsub.vv         \d0, \d0, \t0
+#endif
+.endm
+
+.macro UWABDU d0, s0, s1, t0, t1
+    vmaxu.vv        \t1, \s0, \s1
+    vminu.vv        \t0, \s0, \s1
+    vwsubu.vv       \d0, \t1, \t0
+.endm
+
+.macro UWADBDACCU d0, s0, s1, t0, t1
+#if HAVE_RVV_ZF
+    vwabdaccu.vv    \d0, \s0, \s1
+#else
+    vmaxu.vv        \t1, \s0, \s1
+    vminu.vv        \t0, \s0, \s1
+    vsub.vv         \t1, \t1, \t0
+    vwaddu.wv       \d0, \d0, \t1
+#endif
+.endm
+
+.macro STRIDE_SHIFT t0, t1, stride0, stride1, shift0, shift1
+    slli     \t0, \stride0, \shift0
+    slli     \t1, \stride1, \shift1
+.endm
+
+.macro ADDPTR t0, t1, s0, s1, stride0, stride1, shift0, shift1
+    stride_shift \t0, \t1, \stride0, \stride1, \shift0, \shift1
+    add      \s0, \s0, \t0
+    add      \s1, \s1, \t1
 .endm
 
 #endif
