@@ -24,6 +24,13 @@
 #ifndef _RISCV_FUNC_DECLS_
 #define _RISCV_FUNC_DECLS_
 
+#define FUNCDEF_TU(ret, name, cpu, ...) \
+    ret PFX(name ## _4x4_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## _8x8_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## _16x16_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## _32x32_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## _64x64_ ## cpu(__VA_ARGS__))
+
 #define FUNCDEF_TU_S(ret, name, cpu, ...) \
     ret PFX(name ## _4_ ## cpu(__VA_ARGS__)); \
     ret PFX(name ## _8_ ## cpu(__VA_ARGS__)); \
@@ -39,10 +46,10 @@
     ret PFX(name ## 64_ ## cpu(__VA_ARGS__))
 
 #define FUNCDEF_TU_S3(ret, name, cpu, ...) \
-    ret PFX(name ## 2_ ## cpu(__VA_ARGS__)); \
-    ret PFX(name ## 3_ ## cpu(__VA_ARGS__)); \
-    ret PFX(name ## 4_ ## cpu(__VA_ARGS__)); \
-    ret PFX(name ## 5_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## _2_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## _3_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## _4_ ## cpu(__VA_ARGS__)); \
+    ret PFX(name ## _5_ ## cpu(__VA_ARGS__)); \
 
 #define FUNCDEF_PU(ret, name, cpu, ...)         \
     ret PFX(name##_4x4_##cpu)(__VA_ARGS__);     \
@@ -100,6 +107,8 @@
     ret PFX(name##_64x24_##cpu)(__VA_ARGS__);   \
     ret PFX(name##_24x64_##cpu)(__VA_ARGS__);
 
+FUNCDEF_TU(int, sa8d_8x8, rvv, const pixel* pix1, intptr_t i_pix1, const pixel* pix2, intptr_t i_pix2);
+FUNCDEF_TU(int, psyCost_pp, rvv, const pixel *source, intptr_t sstride, const pixel *recon, intptr_t rstride);
 FUNCDEF_TU_S(uint32_t, copy_cnt, v, int16_t* dst, const int16_t* src, intptr_t srcStride);
 FUNCDEF_TU_S(int, count_nonzero, v, const int16_t* quantCoeff);
 FUNCDEF_TU_S(sse_t, pixel_ssd_s, rvv, const int16_t*, intptr_t);
@@ -109,10 +118,11 @@ FUNCDEF_TU_S(void, cpy2Dto1D_shl, v, int16_t* dst, const int16_t* src, intptr_t 
 FUNCDEF_TU_S(void, cpy2Dto1D_shr, v, int16_t* dst, const int16_t* src, intptr_t srcStride, int shift);
 FUNCDEF_TU_S(void, cpy1Dto2D_shl, v, int16_t* dst, const int16_t* src, intptr_t srcStride, int shift);
 FUNCDEF_TU_S(void, cpy1Dto2D_shr, v, int16_t* dst, const int16_t* src, intptr_t srcStride, int shift);
+FUNCDEF_TU_S(void, ssimDist, v, const pixel *fenc, uint32_t fStride, const pixel *recon, intptr_t rstride, uint64_t *ssBlock, int shift, uint64_t *ac_k);
+FUNCDEF_TU_S(void, idct, v, const int16_t* src, int16_t* dst, intptr_t dstStride);
+FUNCDEF_TU_S(void, dct, v, const int16_t* src, int16_t* dst, intptr_t srcStride);
+FUNCDEF_TU_S(void, getResidual, v, const pixel* fenc, const pixel* pred, int16_t* residual, intptr_t stride);
 
-FUNCDEF_TU_S2(void, ssimDist, v, const pixel *fenc, uint32_t fStride, const pixel *recon, intptr_t rstride, uint64_t *ssBlock, int shift, uint64_t *ac_k);
-FUNCDEF_TU_S2(void, idct, v, const int16_t* src, int16_t* dst, intptr_t dstStride);
-FUNCDEF_TU_S2(void, dct, v, const int16_t* src, int16_t* dst, intptr_t srcStride);
 FUNCDEF_TU_S2(void, intra_pred_planar, rvv, pixel* dst, intptr_t dstride, const pixel* srcPix, int, int);
 
 FUNCDEF_TU_S3(void, nonPsyRdoQuant, v, int16_t *m_resiDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, uint32_t blkPos);
@@ -129,7 +139,10 @@ FUNCDEF_PU(void, blockcopy_ss, v, int16_t* a, intptr_t stridea, const int16_t* b
 FUNCDEF_PU(void, blockcopy_sp, v, pixel* a, intptr_t stridea, const int16_t* b, intptr_t strideb);
 FUNCDEF_PU(void, blockcopy_ps, v, int16_t* a, intptr_t stridea, const pixel* b, intptr_t strideb);
 FUNCDEF_PU(uint64_t, pixel_var, v, const pixel* pix, intptr_t stride);
+FUNCDEF_PU(int, sa8d, rvv, const pixel* pix1, intptr_t i_pix1, const pixel* pix2, intptr_t i_pix2);
 
+FUNCDEF_CHROMA_PU(int, satd4, rvv, const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr_t stride_pix2);
+FUNCDEF_CHROMA_PU(int, satd8, rvv, const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr_t stride_pix2);
 FUNCDEF_CHROMA_PU(int, pixel_sad, rvv, const pixel *, intptr_t, const pixel *, intptr_t);
 FUNCDEF_CHROMA_PU(int, pixel_satd, rvv, const pixel*, intptr_t, const pixel*, intptr_t);
 FUNCDEF_CHROMA_PU(sse_t, pixel_ssd_s, rvv, const int16_t*, intptr_t);
@@ -143,11 +156,6 @@ FUNCDEF_CHROMA_PU(void, blockcopy_pp, v, pixel* a, intptr_t stridea, const pixel
 void PFX(idst4_v)(const int16_t *src, int16_t *dst, intptr_t dstStride);
 void PFX(dst4_v)(const int16_t *src, int16_t *dst, intptr_t srcStride);
 void PFX(denoiseDct_v)(int16_t* dctCoef, uint32_t* resSum, const uint16_t* offset, int numCoeff);
-
-void PFX(getResidual4_v(const pixel* fenc, const pixel* pred, int16_t* residual, intptr_t stride));
-void PFX(getResidual8_v(const pixel* fenc, const pixel* pred, int16_t* residual, intptr_t stride));
-void PFX(getResidual16_v(const pixel* fenc, const pixel* pred, int16_t* residual, intptr_t stride));
-void PFX(getResidual32_v(const pixel* fenc, const pixel* pred, int16_t* residual, intptr_t stride));
 
 void PFX(scale1D_128to64_v(pixel *dst, const pixel *src));
 void PFX(scale2D_64to32_v(pixel* dst, const pixel* src, intptr_t stride));

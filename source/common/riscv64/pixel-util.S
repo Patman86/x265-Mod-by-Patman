@@ -3,6 +3,7 @@
  *
  * Authors: Changsheng Wu <wu.changsheng@sanechips.com.cn>
  *          Yujiao He <he.yujiao@sanechips.com.cn>
+ *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
@@ -23,6 +24,8 @@
 
 #include "asm.S"
 
+.option arch, +zbb
+
 #ifdef __APPLE__
 .section __RODATA,__rodata
 #else
@@ -31,6 +34,936 @@
 
 .align 4
 .text
+
+.macro LOAD_4_LINE src, es, stride, d1, d2, d3, d4
+    slli            t2, \stride, 1
+    add             t3, t2, \stride
+    add             t1, \src, \stride
+    add             t2, \src, t2
+    add             t3, \src, t3
+    vl\es\().v      \d1, (\src)
+    vl\es\().v      \d2, (t1)
+    vl\es\().v      \d3, (t2)
+    vl\es\().v      \d4, (t3)
+.endm
+
+#if !HIGH_BIT_DEPTH
+.macro LOAD_DIFF_8x8
+    vsetivli        zero, 8, e8, mf2, ta, ma
+    LOAD_4_LINE     a0, e8, a1, v24, v1, v2, v3
+    add             t0, t3, a1
+    LOAD_4_LINE     t0, e8, a1, v4, v5, v6, v7
+    LOAD_4_LINE     a2, e8, a3, v8, v9, v10, v11
+    add             t0, t3, a3
+    LOAD_4_LINE     t0, e8, a3, v12, v13, v14, v15
+
+    // diff v16~v23
+    vwsubu.vv       v16, v24, v8
+    vwsubu.vv       v17, v1, v9
+    vwsubu.vv       v18, v2, v10
+    vwsubu.vv       v19, v3, v11
+    vwsubu.vv       v20, v4, v12
+    vwsubu.vv       v21, v5, v13
+    vwsubu.vv       v22, v6, v14
+    vwsubu.vv       v23, v7, v15
+.endm
+
+.macro MAX_ABS s0, s1, s2, s3, t0, t1, t2, t3
+    VABS            \s0, \s0, \t0
+    VABS            \s1, \s1, \t1
+    VABS            \s2, \s2, \t2
+    VABS            \s3, \s3, \t3
+
+    vmax.vv         \t0, \s0, \s1
+    vmax.vv         \t1, \s2, \s3
+.endm
+
+.macro SA8D_8x8 dst, s0, s1, s2, s3, s4, s5, s6, s7, t0, t1, t2, t3, t4, t5, t6, t7
+    // v1~3 v8~v15
+    vsetivli        zero, 8, e16, m1, ta, ma
+    HADAMARD4       \s0, \s1, \s2, \s3, \t0, \t1, \t2, \t3
+    HADAMARD4       \s4, \s5, \s6, \s7, \t0, \t1, \t2, \t3
+    SUMSUB_ABCD     \t0, \t4, \t1, \t5, \s0, \s4, \s1, \s5
+    SUMSUB_ABCD     \t2, \t6, \t3, \t7, \s2, \s6, \s3, \s7
+
+    // transpose v8~v15
+    TRANSPOSE_8x8   16, \s0, \s1, \s2, \s3, \s4, \s5, \s6, \s7, \t0, \t1, \t2, \t3, \t4, \t5, \t6, \t7
+    vsetivli        zero, 8, e16, m1, ta, ma
+
+    // H1~2
+    HADAMARD4       \s0, \s1, \s2, \s3, \t0, \t1, \t2, \t3
+    HADAMARD4       \s4, \s5, \s6, \s7, \t0, \t1, \t2, \t3
+
+    VABS            \s0, \s0, \t0
+    VABS            \s1, \s1, \t1
+    VABS            \s2, \s2, \t2
+    VABS            \s3, \s3, \t3
+    VABS            \s4, \s4, \t4
+    VABS            \s5, \s5, \t5
+    VABS            \s6, \s6, \t6
+    VABS            \s7, \s7, \t7
+
+    vmv.v.i         \t0, 0
+    vmax.vv         \s0, \s0, \s4
+    vmax.vv         \s1, \s1, \s5
+    vmax.vv         \s2, \s2, \s6
+    vmax.vv         \s3, \s3, \s7
+    vadd.vv         \s0, \s0, \s1
+    vadd.vv         \s2, \s2, \s3
+    vadd.vv         \s0, \s0, \s2
+
+    vwredsumu.vs    \s1, \s0, \t0
+    vsetivli        zero, 1, e32, m1, ta, ma
+    vmv.x.s         \dst, \s1
+.endm
+
+//int sa8d_8x8(const pixel* pix1, intptr_t i_pix1, const pixel* pix2, intptr_t i_pix2)
+function PFX(sa8d_8x8_rvv)
+    li              t0, 0x55
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vmv.v.x         v0, t0
+
+    LOAD_DIFF_8x8
+    SA8D_8x8 a0, v16, v17, v18, v19, v20, v21, v22, v23, v8, v9, v10, v11, v12, v13, v14, v15
+    addi            a0, a0, 1
+    srli            a0, a0, 1
+    ret
+endfunc
+
+//int sa8d_8x16(const pixel* pix1, intptr_t i_pix1, const pixel* pix2, intptr_t i_pix2)
+function PFX(sa8d_8x16_rvv)
+    li              t0, 0x55
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vmv.v.i         v30, 0
+    vmv.v.x         v0, t0
+
+    LOAD_DIFF_8x8
+    SA8D_8x8 a7, v16, v17, v18, v19, v20, v21, v22, v23, v8, v9, v10, v11, v12, v13, v14, v15
+    addi            a7, a7, 1
+    srli            a7, a7, 1
+
+    slli            t0, a1, 3
+    slli            t1, a3, 3
+    add             a0, a0, t0
+    add             a2, a2, t1
+    LOAD_DIFF_8x8
+    SA8D_8x8 a0, v16, v17, v18, v19, v20, v21, v22, v23, v8, v9, v10, v11, v12, v13, v14, v15
+    addi            a0, a0, 1
+    srli            a0, a0, 1
+    add             a0, a0, a7
+
+    ret
+endfunc
+
+.macro LOAD_DIFF_8x16
+    LOAD_4_LINE     a0, e8, a1, v28, v29, v30, v31
+    add             t0, t3, a1
+    LOAD_4_LINE     t0, e8, a1, v4, v5, v6, v7
+    LOAD_4_LINE     a2, e8, a3, v8, v9, v10, v11
+    add             t0, t3, a3
+    LOAD_4_LINE     t0, e8, a3, v12, v13, v14, v15
+
+    // diff v16~v23
+    vwsubu.vv       v16, v28, v8
+    vwsubu.vv       v18, v29, v9
+    vwsubu.vv       v20, v30, v10
+    vwsubu.vv       v22, v31, v11
+    vwsubu.vv       v24, v4, v12
+    vwsubu.vv       v26, v5, v13
+    vwsubu.vv       v28, v6, v14
+    vwsubu.vv       v30, v7, v15
+
+    li              t1, 8
+    vsetivli        t0, 16, e16, m1, ta, ma
+    beq             t0, t1, 1f
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vslidedown.vi   v17, v16, 8
+    vslidedown.vi   v19, v18, 8
+    vslidedown.vi   v21, v20, 8
+    vslidedown.vi   v23, v22, 8
+    vslidedown.vi   v25, v24, 8
+    vslidedown.vi   v27, v26, 8
+    vslidedown.vi   v29, v28, 8
+    vslidedown.vi   v31, v30, 8
+1:
+.endm
+
+.macro SA8D_16x16 dst, stride1, stride2
+    li              t0, 0x55
+    vsetivli        zero, 16, e8, m1, ta, ma
+    vmv.v.x         v0, t0
+
+    LOAD_DIFF_8x16
+    SA8D_8x8 a6, v16, v18, v20, v22, v24, v26, v28, v30, v8, v9, v10, v11, v12, v13, v14, v15
+    SA8D_8x8 t4, v17, v19, v21, v23, v25, v27, v29, v31, v8, v9, v10, v11, v12, v13, v14, v15
+    add             a6, a6, t4
+
+    add             a0, a0, \stride1
+    add             a2, a2, \stride2
+    vsetivli        zero, 16, e8, m1, ta, ma
+    LOAD_DIFF_8x16
+    SA8D_8x8 t4, v16, v18, v20, v22, v24, v26, v28, v30, v8, v9, v10, v11, v12, v13, v14, v15
+    add             a6, a6, t4
+    SA8D_8x8 t4, v17, v19, v21, v23, v25, v27, v29, v31, v8, v9, v10, v11, v12, v13, v14, v15
+    add             a6, a6, t4
+
+    addi            a6, a6, 1
+    srli            \dst, a6, 1
+.endm
+
+//int sa8d_16x16(const pixel* pix1, intptr_t i_pix1, const pixel* pix2, intptr_t i_pix2)
+function PFX(sa8d_16x16_rvv)
+    slli            a4, a1, 3
+    slli            a5, a3, 3
+
+    SA8D_16x16 a0, a4, a5
+    ret
+endfunc
+
+function PFX(sa8d_16x32_rvv)
+    slli            a4, a1, 3
+    slli            a5, a3, 3
+
+    SA8D_16x16 a7, a4, a5
+
+    add             a0, a0, a4
+    add             a2, a2, a5
+    SA8D_16x16 a6, a4, a5
+
+    add             a0, a6, a7
+    ret
+endfunc
+
+function PFX(sa8d_32x32_rvv)
+    li              a7, 0
+    slli            a4, a1, 3
+    slli            a5, a3, 3
+    slli            t5, a4, 1
+    slli            t6, a5, 1
+
+    SA8D_16x16 a6, a4, a5
+    add             a7, a7, a6
+
+    add             a0, a0, a4
+    add             a2, a2, a5
+    SA8D_16x16 a6, a4, a5
+    add             a7, a7, a6
+
+    sub             a0, a0, a4
+    sub             a2, a2, a5
+    addi            a0, a0, 16
+    addi            a2, a2, 16
+    SA8D_16x16 a6, a4, a5
+    add             a7, a7, a6
+
+    sub             a0, a0, t5
+    sub             a2, a2, t6
+    sub             a0, a0, a4
+    sub             a2, a2, a5
+    SA8D_16x16 a6, a4, a5
+    add             a0, a7, a6
+
+    ret
+endfunc
+
+function PFX(sa8d_32x64_rvv)
+    li              a7, 0
+    slli            a4, a1, 3
+    slli            a5, a3, 3
+    li              t0, 7
+    mul             t5, a4, t0
+    mul             t6, a5, t0
+
+    SA8D_16x16 a6, a4, a5
+    add             a7, a7, a6
+
+.rept 3
+    add             a0, a0, a4
+    add             a2, a2, a5
+    SA8D_16x16 a6, a4, a5
+    add             a7, a7, a6
+.endr
+
+    addi            a0, a0, 16
+    addi            a2, a2, 16
+    sub             a0, a0, t5
+    sub             a2, a2, t6
+
+    SA8D_16x16 a6, a4, a5
+    add             a7, a7, a6
+
+.rept 3
+    add             a0, a0, a4
+    add             a2, a2, a5
+    SA8D_16x16 a6, a4, a5
+    add             a7, a7, a6
+.endr
+
+    mv              a0, a7
+    ret
+endfunc
+
+function PFX(sa8d_64x64_rvv)
+    li              a7, 0
+    slli            a4, a1, 3
+    slli            a5, a3, 3
+    li              t0, 7
+    mul             t5, a4, t0
+    mul             t6, a5, t0
+
+.rept 4
+    SA8D_16x16 a6, a4, a5
+    add             a7, a7, a6
+
+.rept 3
+    add             a0, a0, a4
+    add             a2, a2, a5
+    SA8D_16x16 a6, a4, a5
+    add             a7, a7, a6
+.endr
+    addi            a0, a0, 16
+    addi            a2, a2, 16
+    sub             a0, a0, t5
+    sub             a2, a2, t6
+.endr
+
+    mv              a0, a7
+    ret
+endfunc
+
+//int psyCost_pp_neon(const pixel *source, intptr_t sstride, const pixel *recon, intptr_t rstride)
+function PFX(psyCost_pp_4x4_rvv)
+    li              t5, 0x55
+    vsetivli        zero, 4, e8, mf4, ta, ma
+    LOAD_4_LINE     a0, e8, a1, v0, v1, v2, v3
+    LOAD_4_LINE     a2, e8, a3, v4, v5, v6, v7
+
+    vsetivli        zero, 8, e8, mf2, ta, ma
+    vslideup.vi     v0, v1, 4
+    vslideup.vi     v2, v3, 4
+    vslideup.vi     v4, v5, 4
+    vslideup.vi     v6, v7, 4
+
+    vwaddu.vv       v8, v0, v2
+    vwsubu.vv       v9, v0, v2
+    vwaddu.vv       v10, v4, v6
+    vwsubu.vv       v11, v4, v6
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vmv.v.x         v0, t5
+    vmv.v.i         v30, 0
+    vredsum.vs      v2, v8, v30
+    vredsum.vs      v3, v10, v30
+    vmv.x.s         t1, v2
+    vmv.x.s         t2, v3
+    srai            t1, t1, 2
+    srai            t2, t2, 2
+
+    vsetivli        zero, 2, e64, m1, ta, ma
+    TRN_4REG        v4, v5, v6, v7, v8, v9, v10, v11
+    vsetivli        zero, 8, e16, m1, ta, ma
+    SUMSUB_ABCD     v8, v9, v10, v11, v4, v5, v6, v7
+    TRN_4REG        v4, v5, v6, v7, v8, v9, v10, v11
+    SUMSUB_ABCD     v8, v9, v10, v11, v4, v5, v6, v7
+    vsetivli        zero, 4, e32, m1, ta, ma
+    TRN_4REG        v4, v5, v6, v7, v8, v9, v10, v11
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    MAX_ABS         v4, v5, v6, v7, v8, v9, v10, v11
+    vwredsumu.vs    v4, v8, v30
+    vwredsumu.vs    v5, v9, v30
+    vsetivli        zero, 1, e32, m1, ta, ma
+    vmv.x.s         t3, v4
+    vmv.x.s         t4, v5
+
+    sub             t3, t3, t1
+    sub             t4, t4, t2
+    max             t0, t3, t4
+    min             t1, t3, t4
+    sub             a0, t0, t1
+    ret
+endfunc
+
+// int calc_energy_8x8(const uint8_t *source, intptr_t sstride)
+.macro CALC_ENERGY_8x8 src, sstride, dst
+    vsetivli        zero, 8, e8, mf2, ta, ma
+    LOAD_4_LINE     \src, e8, \sstride, v8, v9, v10, v11
+    add             t0, t3, \sstride
+    LOAD_4_LINE     t0, e8, \sstride, v12, v13, v14, v15
+
+    // diff v16~v23
+    vwaddu.vv       v16, v8, v9
+    vwaddu.vv       v17, v10, v11
+    vwaddu.vv       v18, v12, v13
+    vwaddu.vv       v19, v14, v15
+    vwsubu.vv       v20, v8, v9
+    vwsubu.vv       v21, v10, v11
+    vwsubu.vv       v22, v12, v13
+    vwsubu.vv       v23, v14, v15
+
+    // v1~3 v8~v15
+    vsetivli        zero, 8, e16, m1, ta, ma
+    HADAMARD4       v16, v17, v18, v19, v8, v9, v10, v11
+    HADAMARD4       v20, v21, v22, v23, v8, v9, v10, v11
+
+    // sum
+    vredsum.vs      v1, v16, v30
+    vmv.x.s         t1, v1
+    srai            t1, t1, 2
+
+    // transpose v8~v15
+    TRANSPOSE_8x8   16, v8, v9, v10, v11, v12, v13, v14, v15, v16, v17, v18, v19, v20, v21, v22, v23
+    vsetivli        zero, 8, e16, m1, ta, ma
+
+    // H1~2
+    HADAMARD4       v8, v9, v10, v11, v16, v17, v18, v19
+    HADAMARD4       v12, v13, v14, v15, v16, v17, v18, v19
+
+    VABS            v8, v8, v16
+    VABS            v9, v9, v17
+    VABS            v10, v10, v18
+    VABS            v11, v11, v19
+    VABS            v12, v12, v20
+    VABS            v13, v13, v21
+    VABS            v14, v14, v22
+    VABS            v15, v15, v23
+
+    vmax.vv         v8, v8, v12
+    vmax.vv         v9, v9, v13
+    vmax.vv         v10, v10, v14
+    vmax.vv         v11, v11, v15
+    vadd.vv         v8, v8, v9
+    vadd.vv         v10, v10, v11
+    vadd.vv         v8, v8, v10
+
+    vwredsumu.vs    v9, v8, v30
+    vsetivli        zero, 1, e32, m1, ta, ma
+    vmv.x.s         t2, v9
+    addi            t2, t2, 1
+    srli            t2, t2, 1
+
+    sub             \dst, t2, t1
+.endm
+
+//int psyCost_pp_neon(const pixel *source, intptr_t sstride, const pixel *recon, intptr_t rstride)
+function PFX(psyCost_pp_8x8_rvv)
+    li              t0, 0x55
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vmv.v.i         v30, 0
+    vmv.v.x         v0, t0
+    CALC_ENERGY_8x8 a0, a1, a4
+    CALC_ENERGY_8x8 a2, a3, a5
+    max             t0, a4, a5
+    min             t1, a4, a5
+    sub             a0, t0, t1
+    ret
+endfunc
+
+.macro PSYCOST_PP size
+function PFX(psyCost_pp_\size\()x\size\()_rvv)
+    li              t5, \size
+    li              a7, 0
+    slli            a6, a1, 3
+    slli            t6, a3, 3
+    addi            a6, a6, -\size
+    addi            t6, t6, -\size
+    li              t0, 0x55
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vmv.v.i         v30, 0
+    vmv.v.x         v0, t0
+looph_psyCost_pp_\size\()x\size\():
+    li              t4, \size
+loopw_psyCost_pp_\size\()x\size\():
+    CALC_ENERGY_8x8 a0, a1, a4
+    CALC_ENERGY_8x8 a2, a3, a5
+    max             t0, a4, a5
+    min             t1, a4, a5
+    sub             t2, t0, t1
+    add             a7, a7, t2
+
+    addi            a0, a0, 8
+    addi            a2, a2, 8
+    addi            t4, t4, -8
+    bgtz            t4, loopw_psyCost_pp_\size\()x\size\()
+    add             a0, a0, a6
+    add             a2, a2, t6
+    addi            t5, t5, -8
+    bgtz            t5, looph_psyCost_pp_\size\()x\size\()
+
+    mv              a0, a7
+    ret
+endfunc
+.endm
+
+PSYCOST_PP  16
+PSYCOST_PP  32
+PSYCOST_PP  64
+
+// int satd4_neon(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr_t stride_pix2)
+function PFX(satd4_4x4_rvv)
+    li              t5, 0x55
+    vsetivli        zero, 4, e8, mf4, ta, ma
+    LOAD_4_LINE     a0, e8, a1, v0, v1, v2, v3
+    LOAD_4_LINE     a2, e8, a3, v4, v5, v6, v7
+
+    vsetivli        zero, 8, e8, mf2, ta, ma
+    vslideup.vi     v0, v2, 4
+    vslideup.vi     v1, v3, 4
+    vslideup.vi     v4, v6, 4
+    vslideup.vi     v5, v7, 4
+
+    vwsubu.vv       v8, v0, v4
+    vwsubu.vv       v9, v5, v1
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vmv.v.x         v0, t5
+    vmv.v.i         v30, 0
+    SUMSUB_AB       v2, v3, v8, v9
+
+    vsetivli        zero, 2, e64, m1, ta, ma
+    TRN_2REG        v4, v5, v2, v3
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    SUMSUB_AB       v6, v7, v4, v5
+    TRN_2REG        v8, v9, v6, v7
+    SUMSUB_AB       v2, v3, v8, v9
+
+    vsetivli        zero, 4, e32, m1, ta, ma
+    TRN_2REG        v4, v5, v2, v3
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    VABS            v6, v4, v8
+    VABS            v7, v5, v9
+    vmaxu.vv        v2, v6, v7
+    vwredsumu.vs    v1, v2, v30
+    vsetivli        zero, 1, e32, m1, ta, ma
+    vmv.x.s         a0, v1
+    ret
+endfunc
+
+.macro HADAMARD_4x4_DUAL s0, s1, s2, s3, t0, t1, t2, t3
+    HADAMARD4   \s0, \s1, \s2, \s3, \t0, \t1, \t2, \t3
+
+    TRN_4REG    \t0, \t1, \t2, \t3, \s0, \s1, \s2, \s3
+
+    SUMSUB_ABCD \s0, \s1, \s2, \s3, \t0, \t1, \t2, \t3
+
+    vsetivli    zero, 4, e32, m1, ta, ma
+    TRN_4REG    \t0, \t1, \t2, \t3, \s0, \s2, \s1, \s3
+    vsetivli    zero, 8, e16, m1, ta, ma
+
+    MAX_ABS     \t0, \t1, \t2, \t3, \s0, \s1, \s2, \s3
+    vadd.vv     \s0, \s0, \s1
+.endm
+
+.macro SATD4_4x8 dst, src1, stride1, src2, stride2, v0, v30
+    vsetivli        zero, 4, e8, mf4, ta, ma
+    LOAD_4_LINE     \src1, e8, \stride1, v20, v1, v2, v3
+    add             t0, t3, \stride1
+    LOAD_4_LINE     t0, e8, \stride1, v4, v5, v6, v7
+    LOAD_4_LINE     \src2, e8, \stride2, v8, v9, v10, v11
+    add             t0, t3, \stride2
+    LOAD_4_LINE     t0, e8, \stride2, v12, v13, v14, v15
+
+    vsetivli        zero, 8, e8, mf2, ta, ma
+    vslideup.vi     v20, v4, 4
+    vslideup.vi     v1, v5, 4
+    vslideup.vi     v2, v6, 4
+    vslideup.vi     v3, v7, 4
+    vslideup.vi     v8, v12, 4
+    vslideup.vi     v9, v13, 4
+    vslideup.vi     v10, v14, 4
+    vslideup.vi     v11, v15, 4
+
+    vwsubu.vv       v4, v20, v8
+    vwsubu.vv       v5, v9, v1
+    vwsubu.vv       v6, v2, v10
+    vwsubu.vv       v7, v11, v3
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    HADAMARD_4x4_DUAL v4, v5, v6, v7, v8, v9, v10, v11
+    vwredsumu.vs    v1, v4, v30
+    vsetivli        zero, 1, e32, m1, ta, ma
+    vmv.x.s         \dst, v1
+.endm
+
+function PFX(satd4_4x8_rvv)
+    li              t5, 0x55
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vmv.v.x         v0, t5
+    vmv.v.i         v30, 0
+    SATD4_4x8       a0, a0, a1, a2, a3, v0, v30
+    ret
+endfunc
+
+.macro SATD4_4xN N
+function PFX(satd4_4x\N\()_rvv)
+    li              t5, 0x55
+    li              t4, \N
+    li              a7, 0
+    slli            a4, a1, 3
+    slli            a5, a3, 3
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vmv.v.x         v0, t5
+    vmv.v.i         v30, 0
+
+loop_satd4_4x\N:
+    SATD4_4x8       a6, a0, a1, a2, a3, v0, v30
+    add             a7, a7, a6
+    addi            t4, t4, -8
+    add             a0, a0, a4
+    add             a2, a2, a5
+    bgtz            t4, loop_satd4_4x\N
+
+    mv              a0, a7
+    ret
+endfunc
+.endm
+
+SATD4_4xN 16
+SATD4_4xN 32
+
+.macro SATD4_WxH W, H
+function PFX(satd4_\W\()x\H\()_rvv)
+    li              t5, 0x55
+    li              t4, \H
+    li              a7, 0
+    slli            a4, a1, 3
+    slli            a5, a3, 3
+    addi            a4, a4, -\W
+    addi            a5, a5, -\W
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vmv.v.x         v0, t5
+    vmv.v.i         v30, 0
+
+looph_satd4_\W\()x\H:
+    li              t6, \W
+loopw_satd4_\W\()x\H:
+    SATD4_4x8       a6, a0, a1, a2, a3, v0, v30
+    add             a7, a7, a6
+    addi            a0, a0, 4
+    addi            a2, a2, 4
+    addi            t6, t6, -4
+    bgtz            t6, loopw_satd4_\W\()x\H
+    add             a0, a0, a4
+    add             a2, a2, a5
+    addi            t4, t4, -8
+    bgtz            t4, looph_satd4_\W\()x\H
+
+    mv              a0, a7
+    ret
+endfunc
+.endm
+
+SATD4_WxH 12, 16
+SATD4_WxH 12, 32
+
+// int pixel_satd_16x16_neon(const uint8_t *pix1, intptr_t stride_pix1, const uint8_t *pix2, intptr_t stride_pix2)
+function PFX(satd8_8x4_rvv)
+    vsetivli        zero, 8, e8, mf2, ta, ma
+    LOAD_4_LINE     a0, e8, a1, v1, v2, v3, v4
+    LOAD_4_LINE     a2, e8, a3, v5, v6, v7, v8
+
+    vwsubu.vv       v10, v1, v5
+    vwsubu.vv       v11, v2, v6
+    vwsubu.vv       v12, v3, v7
+    vwsubu.vv       v13, v4, v8
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    li              t5, 0x55
+    vmv.v.x         v0, t5
+    vmv.v.i         v30, 0
+    HADAMARD_4x4_DUAL v10, v11, v12, v13, v14, v15, v16, v17
+    vwredsumu.vs    v1, v10, v30
+    vsetivli        zero, 1, e32, m1, ta, ma
+    vmv.x.s         a0, v1
+
+    ret
+endfunc
+
+function PFX(satd8_8x12_rvv)
+    li              t5, 0x55
+    li              t4, 12
+    slli            a4, a1, 2
+    slli            a5, a3, 2
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vmv.v.x         v0, t5
+    vmv.v.i         v30, 0
+    vmv.v.i         v31, 0
+
+loop_satd8_8x12:
+    vsetivli        zero, 8, e8, mf2, ta, ma
+    LOAD_4_LINE     a0, e8, a1, v1, v2, v3, v4
+    LOAD_4_LINE     a2, e8, a3, v5, v6, v7, v8
+
+    vwsubu.vv       v10, v1, v5
+    vwsubu.vv       v11, v2, v6
+    vwsubu.vv       v12, v3, v7
+    vwsubu.vv       v13, v4, v8
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    HADAMARD_4x4_DUAL v10, v11, v12, v13, v14, v15, v16, v17
+    vadd.vv         v31, v31, v10
+
+    add             a0, a0, a4
+    add             a2, a2, a5
+    addi            t4, t4, -4
+    bgtz            t4, loop_satd8_8x12
+
+    vwredsumu.vs    v1, v31, v30
+    vsetivli        zero, 1, e32, m1, ta, ma
+    vmv.x.s         a0, v1
+
+    ret
+endfunc
+
+.macro HADAMARD_4x4_QUAD s0, s1, s2, s3, s4, s5, s6, s7, t0, t1, t2, t3, t4, t5, t6, t7
+    HADAMARD4       \s0, \s1, \s2, \s3, \t0, \t1, \t2, \t3
+    HADAMARD4       \s4, \s5, \s6, \s7, \t0, \t1, \t2, \t3
+
+    TRN_8REG        \t0, \t1, \t2, \t3, \t4, \t5, \t6, \t7, \s0, \s1, \s2, \s3, \s4, \s5, \s6, \s7
+    SUMSUB_ABCD     \s0, \s1, \s2, \s3, \t0, \t1, \t2, \t3
+    SUMSUB_ABCD     \s4, \s5, \s6, \s7, \t4, \t5, \t6, \t7
+
+    vsetivli        zero, 4, e32, m1, ta, ma
+    TRN_8REG        \t0, \t1, \t2, \t3, \t4, \t5, \t6, \t7, \s0, \s2, \s1, \s3, \s4, \s6, \s5, \s7
+    vsetivli        zero, 8, e16, m1, ta, ma
+
+    MAX_ABS         \t0, \t1, \t2, \t3, \s0, \s1, \s2, \s3
+    MAX_ABS         \t4, \t5, \t6, \t7, \s4, \s5, \s6, \s7
+
+    vadd.vv         \s0, \s0, \s1
+    vadd.vv         \s4, \s4, \s5
+    vadd.vv         \s0, \s0, \s4
+.endm
+
+function PFX(satd8_8x8_rvv)
+    LOAD_DIFF_8x8
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    li              t5, 0x55
+    vmv.v.x         v0, t5
+    vmv.v.i         v30, 0
+
+    HADAMARD_4x4_QUAD v16, v17, v18, v19, v20, v21, v22, v23, v8, v9, v10, v11, v12, v13, v14, v15
+
+    vwredsumu.vs    v2, v16, v30
+    vsetivli        zero, 1, e32, m1, ta, ma
+    vmv.x.s         a0, v2
+    ret
+endfunc
+
+.macro SATD8S_WxH W, H
+function PFX(satd8_\W\()x\H\()_rvv)
+    vsetivli        zero, 8, e32, m2, ta, ma
+    vmv.v.i         v30, 0
+    vsetivli        zero, 8, e16, m1, ta, ma
+    li              t5, 0x55
+    vmv.v.x         v0, t5
+    vmv.v.i         v28, 0
+
+    slli            a4, a1, 3
+    slli            a5, a3, 3
+    addi            a4, a4, -\W
+    addi            a5, a5, -\W
+    li              t4, \H
+looph_satd8_\W\()x\H\():
+.if \W > 8
+    li              t5, \W
+loopw_satd8_\W\()x\H\():
+.endif
+
+    LOAD_DIFF_8x8
+    vsetivli        zero, 8, e16, m1, ta, ma
+    HADAMARD_4x4_QUAD v16, v17, v18, v19, v20, v21, v22, v23, v8, v9, v10, v11, v12, v13, v14, v15
+    vwaddu.wv       v30, v30, v16
+
+    addi            a0, a0, 8
+    addi            a2, a2, 8
+.if \W > 8
+    addi            t5, t5, -8
+    bgtz            t5, loopw_satd8_\W\()x\H
+.endif
+    addi            t4, t4, -8
+    add             a0, a0, a4
+    add             a2, a2, a5
+    bgtz            t4, looph_satd8_\W\()x\H
+
+    vsetivli        zero, 8, e32, m2, ta, ma
+    vredsum.vs      v2, v30, v28
+    vmv.x.s         a0, v2
+    ret
+endfunc
+.endm
+
+SATD8S_WxH 8, 16
+SATD8S_WxH 8, 32
+SATD8S_WxH 8, 64
+SATD8S_WxH 24, 32
+SATD8S_WxH 24, 64
+
+function PFX(satd8_16x4_rvv)
+    li              t5, 0x55
+    vsetivli        zero, 16, e8, m1, ta, ma
+    vmv.v.x         v0, t5
+    vmv.v.i         v30, 0
+
+    LOAD_4_LINE     a0, e8, a1, v8, v9, v10, v11
+    LOAD_4_LINE     a2, e8, a3, v12, v13, v14, v15
+
+    vwsubu.vv       v16, v8, v12
+    vwsubu.vv       v18, v9, v13
+    vwsubu.vv       v20, v10, v14
+    vwsubu.vv       v22, v11, v15
+
+    li              t0, 8
+    vsetivli        t1, 16, e16, m1, ta, ma
+    beq             t0, t1, 1f
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vslidedown.vi   v17, v16, 8
+    vslidedown.vi   v19, v18, 8
+    vslidedown.vi   v21, v20, 8
+    vslidedown.vi   v23, v22, 8
+
+1:
+    HADAMARD_4x4_DUAL v16, v18, v20, v22, v8, v9, v10, v11
+    HADAMARD_4x4_DUAL v17, v19, v21, v23, v8, v9, v10, v11
+
+    vadd.vv         v16, v16, v17
+    vwredsumu.vs    v8, v16, v30
+    vsetivli        zero, 1, e32, m1, ta, ma
+    vmv.x.s         a0, v8
+
+    ret
+endfunc
+
+function PFX(satd8_16x12_rvv)
+    li              t5, 0x55
+    li              t6, 3
+    slli            a4, a1, 2
+    slli            a5, a3, 2
+    vsetivli        zero, 8, e32, m2, ta, ma
+    vmv.v.i         v28, 0
+    vsetivli        zero, 16, e8, m1, ta, ma
+    vmv.v.x         v0, t5
+    vmv.v.i         v30, 0
+
+loop_satd8_16x12:
+    vsetivli        zero, 16, e8, m1, ta, ma
+    LOAD_4_LINE     a0, e8, a1, v8, v9, v10, v11
+    LOAD_4_LINE     a2, e8, a3, v12, v13, v14, v15
+
+    vwsubu.vv       v16, v8, v12
+    vwsubu.vv       v18, v9, v13
+    vwsubu.vv       v20, v10, v14
+    vwsubu.vv       v22, v11, v15
+
+    li              t0, 8
+    vsetivli        t1, 16, e16, m1, ta, ma
+    beq             t0, t1, 1f
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    vslidedown.vi   v17, v16, 8
+    vslidedown.vi   v19, v18, 8
+    vslidedown.vi   v21, v20, 8
+    vslidedown.vi   v23, v22, 8
+
+1:
+    HADAMARD_4x4_DUAL v16, v18, v20, v22, v8, v9, v10, v11
+    HADAMARD_4x4_DUAL v17, v19, v21, v23, v8, v9, v10, v11
+    vadd.vv         v16, v16, v17
+    vwaddu.wv       v28, v28, v16
+
+    add             a0, a0, a4
+    add             a2, a2, a5
+    addi            t6, t6, -1
+    bgtz            t6, loop_satd8_16x12
+
+    vsetivli        zero, 8, e32, m2, ta, ma
+    vredsum.vs      v8, v28, v30
+    vsetivli        zero, 1, e32, m1, ta, ma
+    vmv.x.s         a0, v8
+
+    ret
+endfunc
+
+.macro SATD8_16x8 v0, v2
+    vsetivli        zero, 16, e8, m1, ta, ma
+    LOAD_DIFF_8x16
+
+    vsetivli        zero, 8, e16, m1, ta, ma
+    HADAMARD_4x4_QUAD v16, v18, v20, v22, v24, v26, v28, v30, v8, v9, v10, v11, v12, v13, v14, v15
+    HADAMARD_4x4_QUAD v17, v19, v21, v23, v25, v27, v29, v31, v8, v9, v10, v11, v12, v13, v14, v15
+
+    vadd.vv         v16, v16, v17
+    vwaddu.wv       \v2, \v2, v16
+.endm
+
+.macro SATD8_WxH W, H
+function PFX(satd8_\W\()x\H\()_rvv)
+    li              t5, 0x55
+    vsetivli        zero, 8, e32, m2, ta, ma
+    vmv.v.i         v2, 0
+    vsetivli        zero, 16, e8, m1, ta, ma
+    vmv.v.i         v1, 0
+    vmv.v.x         v0, t5
+
+.if \H > 8
+    slli            a4, a1, 3
+    slli            a5, a3, 3
+    addi            a4, a4, -\W
+    addi            a5, a5, -\W
+    li              t4, \H
+looph_satd8_\W\()x\H:
+.endif
+.if \W > 16
+    li              t5, \W
+loopw_satd8_\W\()x\H:
+.endif
+
+    SATD8_16x8      v0, v2
+
+    addi            a0, a0, 16
+    addi            a2, a2, 16
+.if \W > 16
+    addi            t5, t5, -16
+    bgtz            t5, loopw_satd8_\W\()x\H
+.endif
+.if \H > 8
+    add             a0, a0, a4
+    add             a2, a2, a5
+    addi            t4, t4, -8
+    bgtz            t4, looph_satd8_\W\()x\H
+.endif
+
+    vsetivli        zero, 8, e32, m2, ta, ma
+    vredsum.vs      v8, v2, v1
+    vsetivli        zero, 1, e32, m1, ta, ma
+    vmv.x.s         a0, v8
+    ret
+endfunc
+.endm
+
+SATD8_WxH 16, 8
+SATD8_WxH 16, 16
+SATD8_WxH 16, 24
+SATD8_WxH 16, 32
+SATD8_WxH 16, 64
+SATD8_WxH 32, 8
+SATD8_WxH 32, 16
+SATD8_WxH 32, 24
+SATD8_WxH 32, 32
+SATD8_WxH 32, 48
+SATD8_WxH 32, 64
+SATD8_WxH 48, 64
+SATD8_WxH 64, 16
+SATD8_WxH 64, 32
+SATD8_WxH 64, 48
+SATD8_WxH 64, 64
+
+#endif
 
 // uint64_t pixel_var(const pixel* pix, intptr_t i_stride)
 .macro PIXEL_VAR size, lmul, lmul2, lmul4
@@ -221,7 +1154,7 @@ endfunc
 
 // void getResidual(const pixel* fenc, const pixel* pred, int16_t* residual, intptr_t stride)
 .macro GET_RESIDUAL blocksize, lmul, lmul2
-function PFX(getResidual\blocksize\()_v)
+function PFX(getResidual_\blocksize\()_v)
     li              t1, \blocksize
     slli            a4, a3, 1
 #if HIGH_BIT_DEPTH
@@ -264,7 +1197,7 @@ endfunc
 .endm
 
 .macro GET_RESIDUAL2 blocksize, lmul, lmul2
-function PFX(getResidual\blocksize\()_v)
+function PFX(getResidual_\blocksize\()_v)
     li              t1, \blocksize
     slli            a4, a3, 1
     slli            a5, a4, 1
@@ -874,7 +1807,7 @@ endfunc
 
 // void ssimDist_c(const pixel* fenc, uint32_t fStride, const pixel* recon, intptr_t rstride, uint64_t *ssBlock, int shift, uint64_t *ac_k)
 .macro SSIM_DIST size, lmul, lmul2, lmul4
-function PFX(ssimDist\size\()_v)
+function PFX(ssimDist_\size\()_v)
     li              t1, \size
     li              t2, \size
     vsetvli         zero, t2, e32, m\lmul4, ta, ma
@@ -909,7 +1842,7 @@ endfunc
 .endm
 
 .macro SSIM_DIST2 size, lmul, lmul2, lmul4
-function PFX(ssimDist\size\()_v)
+function PFX(ssimDist_\size\()_v)
     li              t1, \size
     li              t2, \size
     vsetvli         zero, t2, e32, m\lmul4, ta, ma
@@ -958,7 +1891,7 @@ SSIM_DIST2 16, 1, 2, 4
 SSIM_DIST  32, 2, 4, 8
 
 // void ssimDist_c(const pixel* fenc, uint32_t fStride, const pixel* recon, intptr_t rstride, uint64_t *ssBlock, int shift, uint64_t *ac_k)
-function PFX(ssimDist64_v)
+function PFX(ssimDist_64_v)
     li              t1, 64
     vsetvli         zero, t1, e32, m8, ta, ma
     vmv.v.i         v8, 0

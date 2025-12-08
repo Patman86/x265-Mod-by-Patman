@@ -583,7 +583,7 @@
 .endm
 
 .macro IDCT_N size
-function PFX(idct\size\()_v)
+function PFX(idct_\size\()_v)
 .if \size == 32
     addi    sp, sp, -1024
     addi    sp, sp, -1024
@@ -1200,7 +1200,7 @@ endfunc
 .endm
 
 .macro DCT_N size, shiftbase
-function PFX(dct\size\()_v)
+function PFX(dct_\size\()_v)
 .if \size == 32
     addi    sp, sp, -1024
     addi    sp, sp, -1024
@@ -1351,7 +1351,7 @@ endfunc
 
 // void nonPsyRdoQuant_c(int16_t *m_resiDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, uint32_t blkPos)
 .macro NONPSYRDOQUANT_N log2TrSize
-function PFX(nonPsyRdoQuant\log2TrSize\()_v)
+function PFX(nonPsyRdoQuant_\log2TrSize\()_v)
     li              t0, 1
     slli            t0, t0, \log2TrSize + 1
     slli            a4, a4, 1
@@ -1421,7 +1421,7 @@ NONPSYRDOQUANT_N 5
 
 // void psyRdoQuant_c(int16_t *m_resiDctCoeff, int16_t *m_fencDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, int64_t *psyScale, uint32_t blkPos)
 .macro PSYRDOQUANT_N log2TrSize
-function PFX(PsyRdoQuant\log2TrSize\()_v)
+function PFX(PsyRdoQuant_\log2TrSize\()_v)
     li              t0, 1
     slli            t0, t0, \log2TrSize + 1
     slli            a6, a6, 1

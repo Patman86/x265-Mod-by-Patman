@@ -131,6 +131,7 @@ const cpu_name_t cpu_names[] =
 
 #elif X265_ARCH_RISCV64
     { "RVV",           X265_CPU_RVV },
+    { "Zbb",           X265_CPU_ZBB },
 
 #endif // if X265_ARCH_X86
     { "", 0 },

@@ -118,7 +118,7 @@ ELF     .size   \name, . - \name
     SUMSUB_AB       \s2, \d2, \c, \d
 .endm
 
-.macro HADAMARD4_V r1, r2, r3, r4, t1, t2, t3, t4
+.macro HADAMARD4 r1, r2, r3, r4, t1, t2, t3, t4
     SUMSUB_ABCD     \t1, \t2, \t3, \t4, \r1, \r2, \r3, \r4
     SUMSUB_ABCD     \r1, \r3, \r2, \r4, \t1, \t3, \t2, \t4
 .endm
@@ -148,6 +148,16 @@ ELF     .size   \name, . - \name
 #endif
 .endm
 
+.macro VABD d0, s0, s1, t0
+#if HAVE_RVV_ZF
+    vabd.vv         \d0, \s0, \s1
+#else
+    vmax.vv         \d0, \s0, \s1
+    vmin.vv         \t0, \s0, \s1
+    vsub.vv         \d0, \d0, \t0
+#endif
+.endm
+
 .macro VABDU d0, s0, s1, t0
 #if HAVE_RVV_ZF
     vabdu.vv        \d0, \s0, \s1
@@ -173,6 +183,112 @@ ELF     .size   \name, . - \name
     vsub.vv         \t1, \t1, \t0
     vwaddu.wv       \d0, \d0, \t1
 #endif
+.endm
+
+// v0 must be 0x55 as mask
+.macro TRANSPOSE_8x8 es, d0, d1, d2, d3, d4, d5, d6, d7, r0, r1, r2, r3, r4, r5, r6, r7
+    vslideup.vi     \d0, \r1, 1
+    vslidedown.vi   \d1, \r0, 1
+    vslideup.vi     \d2, \r3, 1
+    vslidedown.vi   \d3, \r2, 1
+    vslideup.vi     \d4, \r5, 1
+    vslidedown.vi   \d5, \r4, 1
+    vslideup.vi     \d6, \r7, 1
+    vslidedown.vi   \d7, \r6, 1
+    vmerge.vvm      \d0, \d0, \r0, v0
+    vmerge.vvm      \d1, \r1, \d1, v0
+    vmerge.vvm      \d2, \d2, \r2, v0
+    vmerge.vvm      \d3, \r3, \d3, v0
+    vmerge.vvm      \d4, \d4, \r4, v0
+    vmerge.vvm      \d5, \r5, \d5, v0
+    vmerge.vvm      \d6, \d6, \r6, v0
+    vmerge.vvm      \d7, \r7, \d7, v0
+
+.if \es == 16
+    vsetivli        zero, 4, e32, m1, ta, ma
+.elseif \es == 8
+    vsetivli        zero, 4, e16, m1, ta, ma
+.endif
+
+    vslideup.vi     \r0, \d2, 1
+    vslidedown.vi   \r1, \d0, 1
+    vslideup.vi     \r2, \d3, 1
+    vslidedown.vi   \r3, \d1, 1
+    vslideup.vi     \r4, \d6, 1
+    vslidedown.vi   \r5, \d4, 1
+    vslideup.vi     \r6, \d7, 1
+    vslidedown.vi   \r7, \d5, 1
+    vmerge.vvm      \r0, \r0, \d0, v0
+    vmerge.vvm      \r1, \d2, \r1, v0
+    vmerge.vvm      \r2, \r2, \d1, v0
+    vmerge.vvm      \r3, \d3, \r3, v0
+    vmerge.vvm      \r4, \r4, \d4, v0
+    vmerge.vvm      \r5, \d6, \r5, v0
+    vmerge.vvm      \r6, \r6, \d5, v0
+    vmerge.vvm      \r7, \d7, \r7, v0
+
+.if \es == 16
+    vsetivli        zero, 2, e64, m1, ta, ma
+.elseif \es == 8
+    vsetivli        zero, 2, e32, m1, ta, ma
+.endif
+
+    vslideup.vi     \d0, \r4, 1
+    vslidedown.vi   \d4, \r0, 1
+    vslideup.vi     \d1, \r6, 1
+    vslidedown.vi   \d5, \r2, 1
+    vslideup.vi     \d2, \r5, 1
+    vslidedown.vi   \d6, \r1, 1
+    vslideup.vi     \d3, \r7, 1
+    vslidedown.vi   \d7, \r3, 1
+    vmerge.vvm      \d0, \d0, \r0, v0
+    vmerge.vvm      \d4, \r4, \d4, v0
+    vmerge.vvm      \d1, \d1, \r2, v0
+    vmerge.vvm      \d5, \r6, \d5, v0
+    vmerge.vvm      \d2, \d2, \r1, v0
+    vmerge.vvm      \d6, \r5, \d6, v0
+    vmerge.vvm      \d3, \d3, \r3, v0
+    vmerge.vvm      \d7, \r7, \d7, v0
+.endm
+
+// v0 = 0x5555
+.macro TRN_2REG d1, d2, vn, vm
+    vslideup.vi     \d1, \vm, 1
+    vslidedown.vi   \d2, \vn, 1
+    vmerge.vvm      \d1, \d1, \vn, v0
+    vmerge.vvm      \d2, \vm, \d2, v0
+.endm
+
+// v0 = 0x5555
+.macro TRN_4REG d1, d2, d3, d4, s1, s2, s3, s4
+    vslideup.vi     \d1, \s2, 1
+    vslideup.vi     \d3, \s4, 1
+    vslidedown.vi   \d2, \s1, 1
+    vslidedown.vi   \d4, \s3, 1
+    vmerge.vvm      \d1, \d1, \s1, v0
+    vmerge.vvm      \d2, \s2, \d2, v0
+    vmerge.vvm      \d3, \d3, \s3, v0
+    vmerge.vvm      \d4, \s4, \d4, v0
+.endm
+
+// v0 = 0x5555
+.macro TRN_8REG d1, d2, d3, d4, d5, d6, d7, d8, s1, s2, s3, s4, s5, s6, s7, s8
+    vslideup.vi     \d1, \s2, 1
+    vslideup.vi     \d3, \s4, 1
+    vslideup.vi     \d5, \s6, 1
+    vslideup.vi     \d7, \s8, 1
+    vslidedown.vi   \d2, \s1, 1
+    vslidedown.vi   \d4, \s3, 1
+    vslidedown.vi   \d6, \s5, 1
+    vslidedown.vi   \d8, \s7, 1
+    vmerge.vvm      \d1, \d1, \s1, v0
+    vmerge.vvm      \d2, \s2, \d2, v0
+    vmerge.vvm      \d3, \d3, \s3, v0
+    vmerge.vvm      \d4, \s4, \d4, v0
+    vmerge.vvm      \d5, \d5, \s5, v0
+    vmerge.vvm      \d6, \s6, \d6, v0
+    vmerge.vvm      \d7, \d7, \s7, v0
+    vmerge.vvm      \d8, \s8, \d8, v0
 .endm
 
 .macro STRIDE_SHIFT t0, t1, stride0, stride1, shift0, shift1

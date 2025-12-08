@@ -107,6 +107,7 @@ struct test_arch_t
     { "FastNeonMRC", X265_CPU_FAST_NEON_MRC },
 #elif X265_ARCH_RISCV64
     { "RVV", X265_CPU_RVV},
+    { "Zbb", X265_CPU_RVV | X265_CPU_ZBB},
 #endif
     { "", 0 },
 };
