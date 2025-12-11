@@ -327,7 +327,13 @@ void intra_pred_ang_rvv(pixel *dst, intptr_t dstStride, const pixel *srcPix0, in
         }
     }
     if (horMode) {
-        if (width == 32) {
+        if (width == 4) {
+            transpose4x4_rvv(dst, dst, dstStride, dstStride);
+        } else if (width == 8) {
+            transpose8x8_rvv(dst, dst, dstStride, dstStride);
+        } else if (width == 16) {
+            transpose16x16_rvv(dst, dst, dstStride, dstStride);
+        } else if (width == 32) {
             transpose32x32_rvv(dst, dst, dstStride, dstStride);
         } else {
             for (int y = 0; y < width - 1; y++) {
@@ -352,7 +358,13 @@ void all_angs_pred_rvv(pixel *dest, pixel *refPix, pixel *filtPix, int bLuma) {
 
         bool modeHor = (mode < 18);
         if (modeHor) {
-            if (size == 32) {
+            if (size == 4) {
+                transpose4x4_rvv(out, out, size, size);
+            } else if (size == 8) {
+                transpose8x8_rvv(out, out, size, size);
+            } else if (size == 16) {
+                transpose16x16_rvv(out, out, size, size);
+            } else if (size == 32) {
                 transpose32x32_rvv(out, out, size, size);
             } else {
                 for (int k = 0; k < size - 1; k++) {
@@ -953,7 +965,7 @@ void setupIntraPrimitives_rvv(EncoderPrimitives &p)
     }
 
     //p.cu[BLOCK_4x4].intra_pred_allangs = all_angs_pred_rvv<2>;
-    //p.cu[BLOCK_8x8].intra_pred_allangs = all_angs_pred_rvv<3>;
+    p.cu[BLOCK_8x8].intra_pred_allangs = all_angs_pred_rvv<3>;
     p.cu[BLOCK_16x16].intra_pred_allangs = all_angs_pred_rvv<4>;
     p.cu[BLOCK_32x32].intra_pred_allangs = all_angs_pred_rvv<5>;
 

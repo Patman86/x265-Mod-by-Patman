@@ -109,6 +109,8 @@
 
 FUNCDEF_TU(int, sa8d_8x8, rvv, const pixel* pix1, intptr_t i_pix1, const pixel* pix2, intptr_t i_pix2);
 FUNCDEF_TU(int, psyCost_pp, rvv, const pixel *source, intptr_t sstride, const pixel *recon, intptr_t rstride);
+FUNCDEF_TU(int, transpose, rvv, pixel *dst, const pixel *src, intptr_t dstride, intptr_t sstride);
+
 FUNCDEF_TU_S(uint32_t, copy_cnt, v, int16_t* dst, const int16_t* src, intptr_t srcStride);
 FUNCDEF_TU_S(int, count_nonzero, v, const int16_t* quantCoeff);
 FUNCDEF_TU_S(sse_t, pixel_ssd_s, rvv, const int16_t*, intptr_t);

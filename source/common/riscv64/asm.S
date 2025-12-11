@@ -185,6 +185,41 @@ ELF     .size   \name, . - \name
 #endif
 .endm
 
+// v0 must be 0x5 as mask
+.macro TRANSPOSE_4x4 sew, d0, d1, d2, d3, r0, r1, r2, r3
+
+    # Stage 1: Interleave within pairs (\es, VL=4)
+    vslideup.vi     \d0, \r1, 1
+    vslidedown.vi   \d1, \r0, 1
+    vslideup.vi     \d2, \r3, 1
+    vslidedown.vi   \d3, \r2, 1
+
+    # Reinterpret v0 as \es mask
+    vmerge.vvm      \d0, \d0, \r0, v0
+    vmerge.vvm      \d1, \r1, \d1, v0
+    vmerge.vvm      \d2, \d2, \r2, v0
+    vmerge.vvm      \d3, \r3, \d3, v0
+
+    # Stage 2: Switch to \ext_es, VL=2
+.if \sew == 8
+    vsetivli        zero, 2, e16, mf2, ta, ma
+.elseif \sew == 16
+    vsetivli        zero, 2, e32, mf2, ta, ma
+.endif
+
+    vslideup.vi     \r0, \d2, 1
+    vslidedown.vi   \r1, \d0, 1
+    vslideup.vi     \r2, \d3, 1
+    vslidedown.vi   \r3, \d1, 1
+
+    vmerge.vvm      \d0, \r0, \d0, v0
+    vmerge.vvm      \d2, \d2, \r1, v0
+    vmerge.vvm      \d1, \r2, \d1, v0
+    vmerge.vvm      \d3, \d3, \r3, v0
+
+    # Caller should reinterpret as \es and store
+.endm
+
 // v0 must be 0x55 as mask
 .macro TRANSPOSE_8x8 es, d0, d1, d2, d3, d4, d5, d6, d7, r0, r1, r2, r3, r4, r5, r6, r7
     vslideup.vi     \d0, \r1, 1

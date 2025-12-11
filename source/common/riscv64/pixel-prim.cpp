@@ -1299,28 +1299,30 @@ void transpose_rvv(pixel *dst, const pixel *src, intptr_t stride)
 }
 
 template<>
-__attribute__((unused))
+void transpose_rvv<4>(pixel *dst, const pixel *src, intptr_t stride)
+{
+    transpose4x4_rvv(dst, src, 4, stride);
+}
+
+template<>
 void transpose_rvv<8>(pixel *dst, const pixel *src, intptr_t stride)
 {
     transpose8x8_rvv(dst, src, 8, stride);
 }
 
 template<>
-__attribute__((unused))
 void transpose_rvv<16>(pixel *dst, const pixel *src, intptr_t stride)
 {
     transpose16x16_rvv(dst, src, 16, stride);
 }
 
 template<>
-__attribute__((unused))
 void transpose_rvv<32>(pixel *dst, const pixel *src, intptr_t stride)
 {
     transpose32x32_rvv(dst, src, 32, stride);
 }
 
 template<>
-__attribute__((unused))
 void transpose_rvv<64>(pixel *dst, const pixel *src, intptr_t stride)
 {
     transpose32x32_rvv(dst, src, 64, stride);
@@ -1374,6 +1376,13 @@ void setupPixelPrimitives_rvv(EncoderPrimitives &p) {
     LUMA_PU(48, 64);
     LUMA_PU(64, 16);
     LUMA_PU(16, 64);
+
+    // transpose
+    p.cu[BLOCK_4x4].transpose = transpose_rvv<4>;
+    p.cu[BLOCK_8x8].transpose = transpose_rvv<8>;
+    p.cu[BLOCK_16x16].transpose = transpose_rvv<16>;
+    p.cu[BLOCK_32x32].transpose = transpose_rvv<32>;
+    p.cu[BLOCK_64x64].transpose = transpose_rvv<64>;
 
 #if !(HIGH_BIT_DEPTH)
     LUMA_CU(4, 4);
