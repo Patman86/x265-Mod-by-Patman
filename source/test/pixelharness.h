@@ -120,6 +120,7 @@ protected:
     bool check_saoCuStatsE3_t(saoCuStatsE3_t ref, saoCuStatsE3_t opt);
     bool check_planecopy_sp(planecopy_sp_t ref, planecopy_sp_t opt);
     bool check_planecopy_cp(planecopy_cp_t ref, planecopy_cp_t opt);
+    bool check_planecopy_pp_shr(planecopy_pp_t ref, planecopy_pp_t opt);
     bool check_cutree_propagate_cost(cutree_propagate_cost ref, cutree_propagate_cost opt);
     bool check_cutree_fix8_pack(cutree_fix8_pack ref, cutree_fix8_pack opt);
     bool check_cutree_fix8_unpack(cutree_fix8_unpack ref, cutree_fix8_unpack opt);

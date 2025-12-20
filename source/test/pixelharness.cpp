@@ -1548,6 +1548,44 @@ bool PixelHarness::check_planecopy_sp(planecopy_sp_t ref, planecopy_sp_t opt)
     return true;
 }
 
+bool PixelHarness::check_planecopy_pp_shr(planecopy_pp_t ref, planecopy_pp_t opt)
+{
+    ALIGN_VAR_16(pixel, ref_dest[64 * 64 * 2]);
+    ALIGN_VAR_16(pixel, opt_dest[64 * 64 * 2]);
+
+    memset(ref_dest, 0xCD, sizeof(ref_dest));
+    memset(opt_dest, 0xCD, sizeof(opt_dest));
+
+    int width = 16 + rand() % 48;
+    int height = 16 + rand() % 48;
+    intptr_t srcStride = 64;
+    intptr_t dstStride = width;
+    int shift = X265_DEPTH - 8;
+    int j = 0;
+
+    for (int i = 0; i < ITERS; i++)
+    {
+        int index = i % TEST_CASES;
+        checked(opt, pixel_test_buff[index] + j, srcStride, opt_dest, dstStride, width, height, shift);
+        ref(pixel_test_buff[index] + j, srcStride, ref_dest, dstStride, width, height, shift);
+
+        if (memcmp(ref_dest, opt_dest, sizeof(ref_dest)))
+            return false;
+
+        // check tail memory area
+        for(int x = width; x < dstStride; x++)
+        {
+            if (opt_dest[(height - 1 * dstStride) + x] != 0xCD)
+                return false;
+        }
+
+        reportfail();
+        j += INCR;
+    }
+
+    return true;
+}
+
 bool PixelHarness::check_planecopy_cp(planecopy_cp_t ref, planecopy_cp_t opt)
 {
     ALIGN_VAR_16(pixel, ref_dest[64 * 64 * 2]);
@@ -3007,6 +3045,15 @@ bool PixelHarness::testCorrectness(const EncoderPrimitives& ref, const EncoderPr
         }
     }
 
+    if (opt.planecopy_pp_shr)
+    {
+        if (!check_planecopy_pp_shr(ref.planecopy_pp_shr, opt.planecopy_pp_shr))
+        {
+            printf("planecopy_pp_shr failed\n");
+            return false;
+        }
+    }
+
     if (opt.propagateCost)
     {
         if (!check_cutree_propagate_cost(ref.propagateCost, opt.propagateCost))
@@ -3660,11 +3707,23 @@ void PixelHarness::measureSpeed(const EncoderPrimitives& ref, const EncoderPrimi
         REPORT_SPEEDUP(opt.planecopy_sp, ref.planecopy_sp, ushort_test_buff[0], 64, pbuf1, 64, 64, 64, 8, 255);
     }
 
+    if (opt.planecopy_sp_shl)
+    {
+        HEADER0("planecopy_sp_shl");
+        REPORT_SPEEDUP(opt.planecopy_sp_shl, ref.planecopy_sp_shl, ushort_test_buff[0], 64, pbuf1, 64, 64, 64, 8, 255);
+    }
+
     if (opt.planecopy_cp)
     {
         HEADER0("planecopy_cp");
         REPORT_SPEEDUP(opt.planecopy_cp, ref.planecopy_cp, uchar_test_buff[0], 64, pbuf1,
                        64, 64, 64, X265_DEPTH - 8);
+    }
+
+    if (opt.planecopy_pp_shr)
+    {
+        HEADER0("planecopy_pp_shr");
+        REPORT_SPEEDUP(opt.planecopy_pp_shr, ref.planecopy_pp_shr, pbuf1, 64, pbuf2, 64, 64, 64, X265_DEPTH - 8);
     }
 
     if (opt.propagateCost)

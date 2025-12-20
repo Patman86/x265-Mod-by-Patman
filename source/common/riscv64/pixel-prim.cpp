@@ -1,9 +1,32 @@
+/*****************************************************************************
+ * Copyright (C) 2025 MulticoreWare, Inc
+ *
+ * Authors: Jia Yuan <yuan.jia@sanechips.com.cn>
+ *          foolgry <wang.zhiyong11@sanechips.com.cn>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02111, USA.
+ *
+ * This program is also available under a commercial proprietary license.
+ * For more information, contact us at license @ x265.com.
+ *****************************************************************************/
+
 #include "common.h"
 #include "slicetype.h" // LOWRES_COST_MASK
 #include "primitives.h"
 #include "x265.h"
-
-#include "pixel-prim.h"
+#include "riscv64_utils.h"
 
 #include <riscv_vector.h>
 #include <stdint.h>
@@ -32,6 +55,16 @@ typedef struct {
     vuint8mf2_t *m3;
 } vectors_u8_mf2_t;
 
+typedef struct {
+    vuint8mf2_t *m0;
+    vuint8mf2_t *m1;
+    vuint8mf2_t *m2;
+    vuint8mf2_t *m3;
+    vuint8mf2_t *m4;
+    vuint8mf2_t *m5;
+    vuint8mf2_t *m6;
+    vuint8mf2_t *m7;
+} vectors_u8_mf2_8_t;
 
 typedef struct {
     vuint8m1_t *m0;
@@ -47,42 +80,78 @@ typedef struct {
     vuint16m1_t *m3;
 } vectors_u16_m1_t;
 
-// ZF2.0: 4 times vle8 performs better than one time vlsseg4e8.
-// 1. array elements cannot have RVV type, such as  â€˜vuint8mf2_tâ€™;
+typedef struct {
+    vuint16m1_t *m0;
+    vuint16m1_t *m1;
+    vuint16m1_t *m2;
+    vuint16m1_t *m3;
+    vuint16m1_t *m4;
+    vuint16m1_t *m5;
+    vuint16m1_t *m6;
+    vuint16m1_t *m7;
+} vectors_u16_m1_8_t;
+
+// 4 times vle8 performs better than one time vlsseg4e8.
+// 1. array elements cannot have RVV type, such as 'vuint8mf2_t';
 // 2. The member variables in the structure cannot be RVV type, so use the structure pointer version.
+static void inline vload_u8x8x4_mf2(const uint8_t **pix, const intptr_t stride_pix,
+                               vectors_u8_mf2_t *d, size_t vl)
+{
+    *(d->m0) = __riscv_vle8_v_u8mf2(*pix, vl);
+    *(d->m1) = __riscv_vle8_v_u8mf2(*pix + stride_pix, vl);
+    *(d->m2) = __riscv_vle8_v_u8mf2(*pix + 2 * stride_pix, vl);
+    *(d->m3) = __riscv_vle8_v_u8mf2(*pix + 3 * stride_pix, vl);
+}
+
+static inline void load_diff_u8x8x8(const uint8_t *pix1, intptr_t stride_pix1,
+                                    const uint8_t *pix2, intptr_t stride_pix2, vectors_u16_m1_8_t *diff)
+{
+    const uint8_t *pix1_ptr = pix1;
+    const uint8_t *pix2_ptr = pix2;
+
+    size_t vl = __riscv_vsetvl_e8mf2(8);
+    vuint8mf2_t r0, r1, r2, r3, t0, t1, t2, t3;
+    vectors_u8_mf2_t r = {&r0, &r1, &r2, &r3};
+    vectors_u8_mf2_t t = {&t0, &t1, &t2, &t3};
+
+    //row 0~3
+    vload_u8x8x4_mf2(&pix1_ptr, stride_pix1, &r, vl);
+    vload_u8x8x4_mf2(&pix2_ptr, stride_pix2, &t, vl);
+    *(diff->m0) = __riscv_vwsubu_vv_u16m1(*(r.m0), *(t.m0), vl);
+    *(diff->m1) = __riscv_vwsubu_vv_u16m1(*(r.m1), *(t.m1), vl);
+    *(diff->m2) = __riscv_vwsubu_vv_u16m1(*(r.m2), *(t.m2), vl);
+    *(diff->m3) = __riscv_vwsubu_vv_u16m1(*(r.m3), *(t.m3), vl);
+    //row4~7
+
+    pix1_ptr += 4 * stride_pix1;
+    pix2_ptr += 4 * stride_pix2;
+    vload_u8x8x4_mf2(&pix1_ptr, stride_pix1, &r, vl);
+    vload_u8x8x4_mf2(&pix2_ptr, stride_pix2, &t, vl);
+    *(diff->m4) = __riscv_vwsubu_vv_u16m1(*(r.m0), *(t.m0), vl);
+    *(diff->m5) = __riscv_vwsubu_vv_u16m1(*(r.m1), *(t.m1), vl);
+    *(diff->m6) = __riscv_vwsubu_vv_u16m1(*(r.m2), *(t.m2), vl);
+    *(diff->m7) = __riscv_vwsubu_vv_u16m1(*(r.m3), *(t.m3), vl);
+}
+
 static inline void vload_u8mf2x4(vectors_u8_mf2_t *d, const uint8_t **pix, intptr_t stride_pix, size_t vl) {
     *(d->m0) = __riscv_vle8_v_u8mf2(*pix, vl);
-    *pix += stride_pix;
-    *(d->m1) = __riscv_vle8_v_u8mf2(*pix, vl);
-    *pix += stride_pix;
-    *(d->m2) = __riscv_vle8_v_u8mf2(*pix, vl);
-    *pix += stride_pix;
-    *(d->m3) = __riscv_vle8_v_u8mf2(*pix, vl);
-    *pix += stride_pix;
+    *(d->m1) = __riscv_vle8_v_u8mf2(*pix + stride_pix, vl);
+    *(d->m2) = __riscv_vle8_v_u8mf2(*pix + 2 * stride_pix, vl);
+    *(d->m3) = __riscv_vle8_v_u8mf2(*pix + 3 * stride_pix, vl);
+    *pix += 4 * stride_pix;
 }
 
 static inline void vload_u8m1x4(vectors_u8_m1_t *d, const uint8_t **pix, intptr_t stride_pix, size_t vl) {
     *(d->m0) = __riscv_vle8_v_u8m1(*pix, vl);
-    *pix += stride_pix;
-    *(d->m1) = __riscv_vle8_v_u8m1(*pix, vl);
-    *pix += stride_pix;
-    *(d->m2) = __riscv_vle8_v_u8m1(*pix, vl);
-    *pix += stride_pix;
-    *(d->m3) = __riscv_vle8_v_u8m1(*pix, vl);
-    *pix += stride_pix;
+    *(d->m1) = __riscv_vle8_v_u8m1(*pix + stride_pix, vl);
+    *(d->m2) = __riscv_vle8_v_u8m1(*pix + 2 * stride_pix, vl);
+    *(d->m3) = __riscv_vle8_v_u8m1(*pix + 3 * stride_pix, vl);
+    *pix += 4 * stride_pix;
 }
 
-static inline void vslide_combine_u8(vuint8mf2_t *d0, vuint8mf2_t *d1, vectors_u8_mf2_t s, size_t vl) {
-    vuint32mf2_t tmp0 = __riscv_vreinterpret_v_u8mf2_u32mf2(*(s.m0));
-    vuint32mf2_t tmp2 = __riscv_vreinterpret_v_u8mf2_u32mf2(*(s.m2));
-    vuint32mf2_t combined0 = __riscv_vslideup_vx_u32mf2(tmp0, tmp2, 1, vl);
-
-    vuint32mf2_t tmp1 = __riscv_vreinterpret_v_u8mf2_u32mf2(*(s.m1));
-    vuint32mf2_t tmp3 = __riscv_vreinterpret_v_u8mf2_u32mf2(*(s.m3));
-    vuint32mf2_t combined1 = __riscv_vslideup_vx_u32mf2(tmp1, tmp3, 1, vl);
-
-    *d0 = __riscv_vreinterpret_v_u32mf2_u8mf2(combined0);
-    *d1 = __riscv_vreinterpret_v_u32mf2_u8mf2(combined1);
+static inline void vslide_combine_u8(vuint8mf2_t *d0, vuint8mf2_t *d1, vectors_u8_mf2_t s) {
+    *d0 = __riscv_vslideup_vx_u8mf2(*(s.m0), *(s.m2), 4, 8);
+    *d1 = __riscv_vslideup_vx_u8mf2(*(s.m1), *(s.m3), 4, 8);
 }
 
 static inline void vslidedown_u8x4(vectors_u8_m1_t *d0, vectors_u8_m1_t *d1,
@@ -131,6 +200,12 @@ static inline int vredsum_u16(const vuint16m1_t src, size_t vl) {
     return __riscv_vmv_x_s_u16m1_u16(v_sum);
 }
 
+static inline int vredsum_u32(const vuint32m2_t src, size_t vl) {
+    vuint32m1_t v_sum = __riscv_vmv_v_x_u32m1(0, 4);
+    v_sum = __riscv_vredsum_vs_u32m2_u32m1(src, v_sum, vl);
+    return __riscv_vmv_x_s_u32m1_u32(v_sum);
+}
+
 static inline void vtrn_8h(vuint16m1_t *d0, vuint16m1_t *d1, vuint16m1_t s0, vuint16m1_t s1) {
     size_t vl = __riscv_vsetvl_e32m1(4);
     const size_t shift = 16;
@@ -173,6 +248,17 @@ static inline void vtrn_4s(vuint16m1_t *d0, vuint16m1_t *d1, vuint16m1_t s0, vui
     *d1 = __riscv_vreinterpret_v_u64m1_u16m1(__riscv_vor_vv_u64m1(d1_64, t0, vl / 2));
 }
 
+static inline void vtrn_16s(vuint16m1_t *d0, vuint16m1_t *d1, vuint16m1_t s0, vuint16m1_t s1) {
+    size_t vl = __riscv_vsetvl_e16m1(8);
+    const size_t offset = 4;
+    vuint16m1_t v1_slide = s1;
+
+    *d0 = __riscv_vslideup_vx_u16m1(s0, s1, offset, vl);
+
+    vl = __riscv_vsetvl_e16m1(4);
+    *d1 = __riscv_vslidedown_vx_u16m1_tu(v1_slide, s0, offset, vl);
+}
+
 // 4 way hadamard vertical pass.
 static inline void hadamard_vx4(vectors_u16_m1_t *out, const vectors_u16_m1_t *in, size_t vl) {
     vuint16m1_t s0, s1, d0, d1;
@@ -184,7 +270,25 @@ static inline void hadamard_vx4(vectors_u16_m1_t *out, const vectors_u16_m1_t *i
     SUMSUB_AB(*(out->m1), *(out->m3), d0, d1, vl);
 }
 
-// 4 way hadamard vertical pass.
+// 8 way hadamard vertical pass.
+static inline void hadamard_vx8(vectors_u16_m1_8_t *out, const vectors_u16_m1_8_t *in, size_t vl)
+{
+    vuint16m1_t tmp0, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7;
+    vectors_u16_m1_t t0={&tmp0, &tmp1, &tmp2, &tmp3};
+    vectors_u16_m1_t t1={&tmp4, &tmp5, &tmp6, &tmp7};
+    vectors_u16_m1_t in0={in->m0, in->m1, in->m2, in->m3};
+    vectors_u16_m1_t in1={in->m4, in->m5, in->m6, in->m7};
+
+    hadamard_vx4(&t0, &in0 ,vl);
+    hadamard_vx4(&t1, &in1, vl);
+
+    SUMSUB_AB(*(out->m0), *(out->m4), *(t0.m0), *(t1.m0), vl);
+    SUMSUB_AB(*(out->m1), *(out->m5), *(t0.m1), *(t1.m1), vl);
+    SUMSUB_AB(*(out->m2), *(out->m6), *(t0.m2), *(t1.m2), vl);
+    SUMSUB_AB(*(out->m3), *(out->m7), *(t0.m3), *(t1.m3), vl);
+}
+
+// 4 way hadamard horizontal pass.
 static inline void hadamard_hx4(vectors_u16_m1_t *out, const vectors_u16_m1_t *in, size_t vl) {
     vuint16m1_t s0, s1, t0, t1, t2, t3, d0, d1;
 
@@ -196,6 +300,35 @@ static inline void hadamard_hx4(vectors_u16_m1_t *out, const vectors_u16_m1_t *i
 
     vtrn_4s(out->m0, out->m1, s0, s1);
     vtrn_4s(out->m2, out->m3, d0, d1);
+}
+
+// 8 way hadamard horizontal pass.
+static inline void hadamard_hx8(vectors_u16_m1_t *out, const vectors_u16_m1_8_t *in, size_t vl)
+{
+    vuint16m1_t s0, s1, s2, s3, d0, d1, d2, d3;
+    vuint16m1_t tmp0, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7;
+    vectors_u16_m1_t t0={&tmp0, &tmp1, &tmp2, &tmp3};
+    vectors_u16_m1_t t1={&tmp4, &tmp5, &tmp6, &tmp7};
+    vectors_u16_m1_t in0={in->m0, in->m1, in->m2, in->m3};
+    vectors_u16_m1_t in1={in->m4, in->m5, in->m6, in->m7};
+
+    hadamard_hx4(&t0, &in0 ,vl);
+    hadamard_hx4(&t1, &in1 ,vl);
+
+    SUMSUB_AB(s0, d0, *(t0.m0), *(t0.m1), vl);
+    SUMSUB_AB(s1, d1, *(t0.m2), *(t0.m3), vl);
+    SUMSUB_AB(s2, d2, *(t1.m0), *(t1.m1), vl);
+    SUMSUB_AB(s3, d3, *(t1.m2), *(t1.m3), vl);
+
+    vtrn_16s((t0.m0), (t0.m1), s0, s2);
+    vtrn_16s((t0.m2), (t0.m3), s1, s3);
+    vtrn_16s((t1.m0), (t1.m1), d0, d2);
+    vtrn_16s((t1.m2), (t1.m3), d1, d3);
+
+    *(out->m0) = vmax_abs_u16(*(t0.m0), *(t0.m1), vl);
+    *(out->m1) = vmax_abs_u16(*(t0.m2), *(t0.m3), vl);
+    *(out->m2) = vmax_abs_u16(*(t1.m0), *(t1.m1), vl);
+    *(out->m3) = vmax_abs_u16(*(t1.m2), *(t1.m3), vl);
 }
 
 // Calculate 2 4x4 hadamard transformation.
@@ -231,6 +364,21 @@ static inline void hadamard_4x4x4(vuint16m1_t *out0, vuint16m1_t *out1, vectors_
     *out1 = __riscv_vadd_vv_u16m1(b2, b3, vl);
 }
 
+// Calculate 8x8 hadamard transformation.
+static inline void hadamard_8x8(vuint16m1_t *out0, vuint16m1_t *out1, vectors_u16_m1_8_t *diff, size_t vl)
+{
+    vuint16m1_t tmp0, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7;
+    vectors_u16_m1_8_t tmp={&tmp0, &tmp1, &tmp2, &tmp3, &tmp4, &tmp5, &tmp6, &tmp7};
+    vuint16m1_t sum0, sum1, sum2, sum3;
+    vectors_u16_m1_t sum={&sum0, &sum1, &sum2, &sum3};
+
+    hadamard_vx8(&tmp, diff, vl);
+    hadamard_hx8(&sum, &tmp, vl);
+
+    *out0 = __riscv_vadd_vv_u16m1(*(sum.m0), *(sum.m1), vl);
+    *out1 = __riscv_vadd_vv_u16m1(*(sum.m2), *(sum.m3), vl);
+}
+
 static inline int pixel_satd_4x4_rvv(const uint8_t *pix1, intptr_t stride_pix1,
                                      const uint8_t *pix2, intptr_t stride_pix2) {
     // Load 4x4 blocks
@@ -245,9 +393,8 @@ static inline int pixel_satd_4x4_rvv(const uint8_t *pix1, intptr_t stride_pix1,
 
     // Slide upper parts
     vuint8mf2_t s_combined0, s_combined1, r_combined0, r_combined1;
-    vl = __riscv_vsetvl_e32mf2(2);
-    vslide_combine_u8(&s_combined0, &s_combined1, s, vl);
-    vslide_combine_u8(&r_combined0, &r_combined1, r, vl);
+    vslide_combine_u8(&s_combined0, &s_combined1, s);
+    vslide_combine_u8(&r_combined0, &r_combined1, r);
 
     // Convert to 16-bit and compute differences (sign extension, not zero extension)
     vl = __riscv_vsetvl_e8mf2(8);
@@ -310,11 +457,10 @@ static inline int pixel_satd_4x8_rvv(const uint8_t *pix1, intptr_t stride_pix1,
     vectors_u8_mf2_t tmp_s1 = {s0.m2, s0.m3, s1.m2, s1.m3};
     vectors_u8_mf2_t tmp_r0 = {r0.m0, r0.m1, r1.m0, r1.m1};
     vectors_u8_mf2_t tmp_r1 = {r0.m2, r0.m3, r1.m2, r1.m3};
-    vl = __riscv_vsetvl_e32mf2(2);
-    vslide_combine_u8(&s_combined0, &s_combined1, tmp_s0, vl);
-    vslide_combine_u8(&s_combined2, &s_combined3, tmp_s1, vl);
-    vslide_combine_u8(&r_combined0, &r_combined1, tmp_r0, vl);
-    vslide_combine_u8(&r_combined2, &r_combined3, tmp_r1, vl);
+    vslide_combine_u8(&s_combined0, &s_combined1, tmp_s0);
+    vslide_combine_u8(&s_combined2, &s_combined3, tmp_s1);
+    vslide_combine_u8(&r_combined0, &r_combined1, tmp_r0);
+    vslide_combine_u8(&r_combined2, &r_combined3, tmp_r1);
 
     // Convert to 16-bit and compute differences
     vectors_u8_mf2_t tmp_s_combined = {&s_combined0, &s_combined1, &s_combined2, &s_combined3};
@@ -830,6 +976,60 @@ static inline int pixel_satd_16x16_rvv(const uint8_t *pix1, intptr_t stride_pix1
     return __riscv_vmv_x_s_u32m1_u32(v_sum);
 }
 
+static inline int pixel_sa8d_8x8_rvv(const uint8_t *pix1, intptr_t stride_pix1,
+                                      const uint8_t *pix2, intptr_t stride_pix2)
+{
+    const uint8_t *pix1_ptr = pix1;
+    const uint8_t *pix2_ptr = pix2;
+    vuint16m1_t diff0, diff1, diff2, diff3, diff4, diff5, diff6, diff7;
+    vectors_u16_m1_8_t diff = {&diff0, &diff1, &diff2, &diff3, &diff4, &diff5, &diff6, &diff7};
+    vuint16m1_t res0, res1;
+    vuint16m1_t out;
+
+    load_diff_u8x8x8(pix1_ptr, stride_pix1, pix2_ptr, stride_pix2, &diff);
+
+    size_t vl = __riscv_vsetvl_e16m1(8);
+    hadamard_8x8(&res0, &res1, &diff, vl);
+    out = __riscv_vadd_vv_u16m1(res0, res1, vl);
+    int sum = vredsum_u16(out, vl);
+    return (sum + 1) >> 1;
+}
+
+static inline int pixel_sa8d_16x16_rvv(const uint8_t *pix1, intptr_t stride_pix1,
+                                        const uint8_t *pix2, intptr_t stride_pix2)
+{
+    const uint8_t *pix1_ptr = pix1;
+    const uint8_t *pix2_ptr = pix2;
+    vuint16m1_t diff0, diff1, diff2, diff3, diff4, diff5, diff6, diff7;
+    vectors_u16_m1_8_t diff = {&diff0, &diff1, &diff2, &diff3, &diff4, &diff5, &diff6, &diff7};
+    vuint16m1_t res0, res1;
+    vuint32m2_t sum, tmp;
+
+    load_diff_u8x8x8(pix1_ptr, stride_pix1, pix2, stride_pix2, &diff);
+    size_t vl = __riscv_vsetvl_e16m1(8);
+    hadamard_8x8(&res0, &res1, &diff, vl);
+    sum = __riscv_vwaddu_vv_u32m2(res0, res1, vl);
+
+    load_diff_u8x8x8(pix1_ptr + 8, stride_pix1, pix2_ptr + 8, stride_pix2, &diff);
+    hadamard_8x8(&res0, &res1, &diff, vl);
+    tmp = __riscv_vwaddu_vv_u32m2(res0, res1, vl);
+    sum = __riscv_vadd_vv_u32m2(tmp, sum, vl);
+
+    load_diff_u8x8x8(pix1_ptr + 8 * stride_pix1, stride_pix1, pix2_ptr + 8 * stride_pix2, stride_pix2, &diff);
+    hadamard_8x8(&res0, &res1, &diff, vl);
+    tmp = __riscv_vwaddu_vv_u32m2(res0, res1, vl);
+    sum = __riscv_vadd_vv_u32m2(tmp, sum, vl);
+
+    load_diff_u8x8x8(pix1_ptr + 8 * stride_pix1 + 8, stride_pix1, pix2_ptr + 8 * stride_pix2 + 8, stride_pix2, &diff);
+    hadamard_8x8(&res0, &res1, &diff, vl);
+    tmp = __riscv_vwaddu_vv_u32m2(res0, res1, vl);
+    sum = __riscv_vadd_vv_u32m2(tmp, sum, vl);
+
+    int sum_int = vredsum_u32(sum, vl);
+
+    return (sum_int + 1) >> 1;
+}
+
 #endif // HIGH_BIT_DEPTH
 
 // To be optimized
@@ -937,6 +1137,79 @@ int satd8_rvv(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2, intptr
 
     return satd;
 }
+
+// Calculate sa8d in blocks of 8x8
+template<int w, int h>
+int sa8d8_rvv(const pixel *pix1, intptr_t i_pix1, const pixel *pix2, intptr_t i_pix2)
+{
+    int cost = 0;
+
+    for (int y = 0; y < h; y += 8)
+        for (int x = 0; x < w; x += 8)
+        {
+            cost += pixel_sa8d_8x8_rvv(pix1 + i_pix1 * y + x, i_pix1, pix2 + i_pix2 * y + x, i_pix2);
+        }
+
+    return cost;
+}
+
+// Calculate sa8d in blocks of 16x16
+template<int w, int h>
+int sa8d16_rvv(const pixel *pix1, intptr_t i_pix1, const pixel *pix2, intptr_t i_pix2)
+{
+    int cost = 0;
+
+    for (int y = 0; y < h; y += 16)
+        for (int x = 0; x < w; x += 16)
+        {
+            cost += pixel_sa8d_16x16_rvv(pix1 + i_pix1 * y + x, i_pix1, pix2 + i_pix2 * y + x, i_pix2);
+        }
+
+    return cost;
+}
+#endif
+
+#if HIGH_BIT_DEPTH
+template<int blockSize>
+void transpose_rvv(pixel *dst, const pixel *src, intptr_t stride)
+{
+    for (int k = 0; k < blockSize; k++)
+        for (int l = 0; l < blockSize; l++)
+        {
+            dst[k * blockSize + l] = src[l * stride + k];
+        }
+}
+
+template<>
+__attribute__((unused))
+void transpose_rvv<8>(pixel *dst, const pixel *src, intptr_t stride)
+{
+    transpose8x8_rvv(dst, src, 8, stride);
+}
+
+template<>
+__attribute__((unused))
+void transpose_rvv<16>(pixel *dst, const pixel *src, intptr_t stride)
+{
+    transpose16x16_rvv(dst, src, 16, stride);
+}
+
+template<>
+__attribute__((unused))
+void transpose_rvv<32>(pixel *dst, const pixel *src, intptr_t stride)
+{
+    transpose32x32_rvv(dst, src, 32, stride);
+}
+
+template<>
+__attribute__((unused))
+void transpose_rvv<64>(pixel *dst, const pixel *src, intptr_t stride)
+{
+    transpose32x32_rvv(dst, src, 64, stride);
+    transpose32x32_rvv(dst + 32 * 64 + 32, src + 32 * stride + 32, 64, stride);
+    transpose32x32_rvv(dst + 32 * 64, src + 32, 64, stride);
+    transpose32x32_rvv(dst + 32, src + 32 * stride, 64, stride);
+}
 #endif
 
 };
@@ -954,6 +1227,9 @@ void setupPixelPrimitives_rvv(EncoderPrimitives &p) {
     p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[NONALIGNED] = pixelavg_pp_rvv<W, H>; \
     p.pu[LUMA_ ## W ## x ## H].pixelavg_pp[ALIGNED] = pixelavg_pp_rvv<W, H>;
 #endif // !(HIGH_BIT_DEPTH)
+
+#define LUMA_CU(W, H) \
+    //p.cu[BLOCK_ ## W ## x ## H].transpose = transpose_rvv<W>;
 
     LUMA_PU_S(4, 4);
     LUMA_PU_S(8, 8);
@@ -981,6 +1257,11 @@ void setupPixelPrimitives_rvv(EncoderPrimitives &p) {
     LUMA_PU(64, 16);
     LUMA_PU(16, 64);
 
+    LUMA_CU(8, 8);
+    LUMA_CU(16, 16);
+    LUMA_CU(32, 32);
+    LUMA_CU(64, 64);
+
 #if !(HIGH_BIT_DEPTH)
     p.pu[LUMA_4x4].satd = satd4_rvv<4, 4>;
     p.pu[LUMA_4x8].satd = satd4_rvv<4, 8>;
@@ -1007,6 +1288,12 @@ void setupPixelPrimitives_rvv(EncoderPrimitives &p) {
     p.pu[LUMA_64x32].satd = satd8_rvv<64, 32>;
     p.pu[LUMA_64x48].satd = satd8_rvv<64, 48>;
     p.pu[LUMA_64x64].satd = satd8_rvv<64, 64>;
+
+    p.cu[BLOCK_4x4].sa8d   = satd4_rvv<4, 4>;
+    p.cu[BLOCK_8x8].sa8d   = sa8d8_rvv<8, 8>;
+    p.cu[BLOCK_16x16].sa8d = sa8d16_rvv<16, 16>;
+    p.cu[BLOCK_32x32].sa8d = sa8d16_rvv<32, 32>;
+    p.cu[BLOCK_64x64].sa8d = sa8d16_rvv<64, 64>;
 
     p.chroma[X265_CSP_I420].pu[CHROMA_420_2x2].satd = NULL;
     p.chroma[X265_CSP_I420].pu[CHROMA_420_2x4].satd = NULL;
@@ -1059,6 +1346,21 @@ void setupPixelPrimitives_rvv(EncoderPrimitives &p) {
     p.chroma[X265_CSP_I422].pu[CHROMA_422_32x32].satd = satd8_rvv<32, 32>;
     p.chroma[X265_CSP_I422].pu[CHROMA_422_32x48].satd = satd8_rvv<32, 48>;
     p.chroma[X265_CSP_I422].pu[CHROMA_422_32x64].satd = satd8_rvv<32, 64>;
+
+    p.chroma[X265_CSP_I420].cu[BLOCK_8x8].sa8d   = p.chroma[X265_CSP_I420].pu[CHROMA_420_4x4].satd;
+    p.chroma[X265_CSP_I420].cu[BLOCK_16x16].sa8d = sa8d8_rvv<8, 8>;
+    p.chroma[X265_CSP_I420].cu[BLOCK_32x32].sa8d = sa8d16_rvv<16, 16>;
+    p.chroma[X265_CSP_I420].cu[BLOCK_64x64].sa8d = sa8d16_rvv<32, 32>;
+
+    p.chroma[X265_CSP_I422].cu[BLOCK_8x8].sa8d       = p.chroma[X265_CSP_I422].pu[CHROMA_422_4x8].satd;
+    p.chroma[X265_CSP_I422].cu[BLOCK_16x16].sa8d     = sa8d8_rvv<8, 16>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_32x32].sa8d     = sa8d16_rvv<16, 32>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_64x64].sa8d     = sa8d16_rvv<32, 64>;
+
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sa8d  = sa8d8_rvv<8, 16>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].sa8d = sa8d16_rvv<16, 32>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].sa8d = sa8d16_rvv<32, 64>;
+
 #else
     (void)p;
 #endif
