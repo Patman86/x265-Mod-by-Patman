@@ -783,7 +783,7 @@ static inline int pixel_satd_16x16_rvv(const uint8_t *pix1, intptr_t stride_pix1
 |       diff0[1]      |    |       diff1[1]       |
 |       diff0[2]      |    |       diff1[2]       |
 |       diff0[3]      |    |       diff1[3]       |
-                        â€¦â€¦
+                        ...
 */
     // Load 16x16 blocks four times
     // 1:

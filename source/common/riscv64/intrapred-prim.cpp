@@ -331,7 +331,7 @@ void planar_pred_rvv(pixel * dst, intptr_t dstStride, const pixel * srcPix, int 
                 // left[y]
                 vuint32m2_t leftYVec = __riscv_vmv_v_x_u32m2(left[y], vl);
 
-                // {0, 1, 2, 3, 4, 5, 6, 7â€¦â€¦}
+                // {0, 1, 2, 3, 4, 5, 6, 7 ...}
                 vuint32m2_t xvec = __riscv_vadd_vv_u32m2(__riscv_vid_v_u32m2(vl), __riscv_vmv_v_x_u32m2(inc * vl, vl), vl);
 
                 // (blkSize - 1 - y) * above[x]
@@ -525,7 +525,7 @@ static void dcPredFilter_rvv(const pixel* above, const pixel* left, pixel* dst, 
             vuint16m2_t vabo = __riscv_vzext_vf2_u16m2(__riscv_vle8_v_u8m1(above + x, vl), vl);
             vuint16m2_t vdst = __riscv_vzext_vf2_u16m2(__riscv_vle8_v_u8m1(dst + x, vl), vl);
 
-            // Computeï¼šdst[x] = (above[x] + 3 * dst[x] + 2) >> 2
+            // Compute dst[x] = (above[x] + 3 * dst[x] + 2) >> 2
             vdst = __riscv_vmul_vv_u16m2(vdst, vconst_3, vl);
             vdst = __riscv_vadd_vv_u16m2(vdst, vabo, vl);
 
@@ -541,7 +541,7 @@ static void dcPredFilter_rvv(const pixel* above, const pixel* left, pixel* dst, 
             vuint32m2_t vabo = __riscv_vzext_vf2_u32m2(__riscv_vle16_v_u16m1(above + x, vl), vl);
             vuint32m2_t vdst = __riscv_vzext_vf2_u32m2(__riscv_vle16_v_u16m1(dst + x, vl), vl);
 
-            // Computeï¼šdst[x] = (above[x] + 3 * dst[x] + 2) >> 2
+            // Compute dst[x] = (above[x] + 3 * dst[x] + 2) >> 2
             vdst = __riscv_vmul_vv_u32m2(vdst, vconst_3, vl);
             vdst = __riscv_vadd_vv_u32m2(vdst, vabo, vl);
 
@@ -560,7 +560,7 @@ static void dcPredFilter_rvv(const pixel* above, const pixel* left, pixel* dst, 
         vuint16m1_t vabo = __riscv_vzext_vf2_u16m1(__riscv_vle8_v_u8mf2(above , size), size);
         vuint16m1_t vdst = __riscv_vzext_vf2_u16m1(__riscv_vle8_v_u8mf2(dst, size), size);
 
-        // Computeï¼šdst[x] = (above[x] + 3 * dst[x] + 2) >> 2
+        // Compute dst[x] = (above[x] + 3 * dst[x] + 2) >> 2
         vdst = __riscv_vmul_vv_u16m1(vdst, vconst_3, size);
         vdst = __riscv_vadd_vv_u16m1(vdst, vabo, size);
 
@@ -572,7 +572,7 @@ static void dcPredFilter_rvv(const pixel* above, const pixel* left, pixel* dst, 
         vuint32m2_t vabo = __riscv_vzext_vf2_u32m2(__riscv_vle16_v_u16m1(above , size), size);
         vuint32m2_t vdst = __riscv_vzext_vf2_u32m2(__riscv_vle16_v_u16m1(dst, size), size);
 
-        // Computeï¼šdst[x] = (above[x] + 3 * dst[x] + 2) >> 2
+        // Compute dst[x] = (above[x] + 3 * dst[x] + 2) >> 2
         vdst = __riscv_vmul_vv_u32m2(vdst, vconst_3, size);
         vdst = __riscv_vadd_vv_u32m2(vdst, vabo, size);
 
