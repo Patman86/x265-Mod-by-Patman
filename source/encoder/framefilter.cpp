@@ -663,7 +663,7 @@ void FrameFilter::processPostRow(int row, int layer)
     uint32_t cuAddr = lineStartCUAddr;
     if (m_param->bEnablePsnr)
     {
-        PicYuv* fencPic = m_frame->m_fencPic;
+        PicYuv* fencPic = m_param->bEnableTemporalFilter ? m_frame->m_mcstffencPic : m_frame->m_fencPic;
 
         intptr_t stride = reconPic->m_stride;
         uint32_t width  = reconPic->m_picWidth - m_pad[0];
@@ -689,7 +689,7 @@ void FrameFilter::processPostRow(int row, int layer)
     if (m_param->bEnableSsim && m_ssimBuf)
     {
         pixel *rec = reconPic->m_picOrg[0];
-        pixel *fenc = m_frame->m_fencPic->m_picOrg[0];
+        pixel *fenc = m_param->bEnableTemporalFilter ? m_frame->m_mcstffencPic->m_picOrg[0] : m_frame->m_fencPic->m_picOrg[0];
         intptr_t stride1 = reconPic->m_stride;
         intptr_t stride2 = m_frame->m_fencPic->m_stride;
         uint32_t bEnd = ((row) == (this->m_numRows - 1));

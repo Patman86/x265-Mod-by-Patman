@@ -1560,10 +1560,20 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                     {
                         inFrame[layer]->m_fencPic->m_cuOffsetY = m_sps.cuOffsetY;
                         inFrame[layer]->m_fencPic->m_buOffsetY = m_sps.buOffsetY;
+                        if (m_param->bEnableTemporalFilter)
+                        {
+                            inFrame[layer]->m_mcstffencPic->m_cuOffsetY = m_sps.cuOffsetY;
+                            inFrame[layer]->m_mcstffencPic->m_buOffsetY = m_sps.buOffsetY;
+                        }
                         if (m_param->internalCsp != X265_CSP_I400)
                         {
                             inFrame[layer]->m_fencPic->m_cuOffsetC = m_sps.cuOffsetC;
                             inFrame[layer]->m_fencPic->m_buOffsetC = m_sps.buOffsetC;
+                            if (m_param->bEnableTemporalFilter)
+                            {
+                                inFrame[layer]->m_mcstffencPic->m_cuOffsetC = m_sps.cuOffsetC;
+                                inFrame[layer]->m_mcstffencPic->m_buOffsetC = m_sps.buOffsetC;
+                            }
                         }
                     }
                     else
@@ -1580,12 +1590,20 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
                         {
                             m_sps.cuOffsetY = inFrame[layer]->m_fencPic->m_cuOffsetY;
                             m_sps.buOffsetY = inFrame[layer]->m_fencPic->m_buOffsetY;
+                            if (m_param->bEnableTemporalFilter)
+                            {
+                                inFrame[layer]->m_mcstffencPic->m_cuOffsetY = m_sps.cuOffsetY;
+                                inFrame[layer]->m_mcstffencPic->m_buOffsetY = m_sps.buOffsetY;
+                            }
                             if (m_param->internalCsp != X265_CSP_I400)
                             {
                                 m_sps.cuOffsetC = inFrame[layer]->m_fencPic->m_cuOffsetC;
-                                m_sps.cuOffsetY = inFrame[layer]->m_fencPic->m_cuOffsetY;
                                 m_sps.buOffsetC = inFrame[layer]->m_fencPic->m_buOffsetC;
-                                m_sps.buOffsetY = inFrame[layer]->m_fencPic->m_buOffsetY;
+                                if (m_param->bEnableTemporalFilter)
+                                {
+                                    inFrame[layer]->m_mcstffencPic->m_cuOffsetC = m_sps.cuOffsetC;
+                                    inFrame[layer]->m_mcstffencPic->m_buOffsetC = m_sps.buOffsetC;
+                                }
                             }
                         }
                     }
