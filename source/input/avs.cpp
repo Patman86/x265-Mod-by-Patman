@@ -21,11 +21,12 @@
  *****************************************************************************/
 
 #include "avs.h"
+#include "cli_log.h"
 
 #define FAIL_IF_ERROR( cond, ... )\
 if( cond )\
 {\
-    general_log( NULL, "avs+", X265_LOG_ERROR, __VA_ARGS__ );\
+    avs_log(X265_LOG_ERROR, __VA_ARGS__);\
     b_fail = true;\
     return;\
 }
@@ -75,13 +76,13 @@ void AVSInput::parseAvsOptions(const char* _options)
             {
             case 1:
                 avs_library_path = convertLibraryPath(value);
-                general_log(nullptr, "avs+", X265_LOG_INFO, "using external Avisynth library from: \"%s\" \n", value.c_str());
+                avs_log(X265_LOG_INFO, "using external Avisynth library from: \"%s\" \n", value.c_str());
                 break;
             }
         }
         else if (option.length() > 0)
         {
-            general_log(nullptr, "avs+", X265_LOG_ERROR, "invalid option \"%s\" ignored\n", option.c_str());
+            avs_log(X265_LOG_ERROR, "invalid option \"%s\" ignored\n", option.c_str());
         }
         start = end + optSeparator.length();
         end = options.find(optSeparator, start);
@@ -135,7 +136,7 @@ void AVSInput::info_avs()
         return;
     const char *version = avs_as_string(ver);
     h->func.avs_release_value(ver);
-    general_log(NULL, "avs+", X265_LOG_INFO, "%s\n", version);
+    avs_log(X265_LOG_INFO, "%s\n", version);
 }
 
 void AVSInput::openfile(InputFileInfo& info)
@@ -240,7 +241,7 @@ bool AVSInput::readPicture(x265_picture& pic)
     const char *err = h->func.avs_clip_get_error(h->clip);
     if (err)
     {
-        general_log(NULL, "avs+", X265_LOG_ERROR, "%s occurred while reading frame %d\n", err, h->next_frame);
+        avs_log(X265_LOG_ERROR, "%s occurred while reading frame %d\n", err, h->next_frame);
         b_fail = true;
         return false;
     }

@@ -1182,7 +1182,7 @@ if(ENABLE_VAPOURSYNTH)
     add_definitions(-DENABLE_VAPOURSYNTH)
 endif(ENABLE_VAPOURSYNTH)
 if(ENABLE_CLI)
-    file(GLOB InputFiles input/input.cpp input/yuv.cpp input/y4m.cpp input/*.h)
+    file(GLOB InputFiles input/input.cpp input/yuv.cpp input/y4m.cpp input/cli_log.cpp input/*.h)
     file(GLOB OutputFiles output/output.cpp output/reconplay.cpp output/*.h
                           output/yuv.cpp output/y4m.cpp # recon
                           output/gop.cpp

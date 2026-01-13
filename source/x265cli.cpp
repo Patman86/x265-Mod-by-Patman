@@ -29,6 +29,7 @@
 #include "svt.h"
 #include <string>
 #include <locale.h>
+#include "input/cli_log.h"
 
 #define START_CODE 0x00000001
 #define START_CODE_BYTES 4
@@ -759,6 +760,9 @@ namespace X265_NS {
             x265_log(NULL, X265_LOG_ERROR, "preset or tune unrecognized\n");
             return true;
         }
+
+        X265_CLI::CliLogContext logCtx(param);
+        X265_CLI::setCliLogContext(logCtx);
 
         if (bShowHelp)
         {
