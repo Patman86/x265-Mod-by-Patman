@@ -2495,7 +2495,7 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     s += snprintf(s, bufSize - (s - buf), " scenecut-aware-qp=%d", p->bEnableSceneCutAwareQp);
     if (p->bEnableSceneCutAwareQp)
         s += snprintf(s, bufSize - (s - buf), " fwd-scenecut-window=%d fwd-ref-qp-delta=%.2f fwd-nonref-qp-delta=%.2f bwd-scenecut-window=%d bwd-ref-qp-delta=%.2f bwd-nonref-qp-delta=%.2f", p->fwdMaxScenecutWindow, p->fwdRefQpDelta[0], p->fwdNonRefQpDelta[0], p->bwdMaxScenecutWindow, p->bwdRefQpDelta[0], p->bwdNonRefQpDelta[0]);
-    s += snprintf(s, bufSize - (s - buf), "conformance-window-offsets right=%d bottom=%d", p->confWinRightOffset, p->confWinBottomOffset);
+    s += snprintf(s, bufSize - (s - buf), " conformance-window-offsets right=%d bottom=%d", p->confWinRightOffset, p->confWinBottomOffset);
     s += snprintf(s, bufSize - (s - buf), " decoder-max-rate=%d", p->decoderVbvMaxRate);
     BOOL(p->bliveVBV2pass, "vbv-live-multi-pass");
     if (p->filmGrain)
