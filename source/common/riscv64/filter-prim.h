@@ -75,16 +75,13 @@ vint16m1_t inline filter8_s16x8(vint16m1_t **s, const vint16m1_t c, const size_t
         // { -1, 4, -11, 40, 40, -11, 4, -1 }
         d0 = __riscv_vmv_v_x_i16m1(0, vl);
         vint16m1_t t0 = __riscv_vadd_vv_i16m1(*s[3], *s[4], vl);
+        vint16m1_t t1 = __riscv_vadd_vv_i16m1(*s[2], *s[5], vl);
+        vint16m1_t t2 = __riscv_vadd_vv_i16m1(*s[1], *s[6], vl);
+        vint16m1_t t3 = __riscv_vadd_vv_i16m1(*s[0], *s[7], vl);
         d0 = __riscv_vmacc_vx_i16m1(d0, 40, t0, vl);
-
-        t0 = __riscv_vadd_vv_i16m1(*s[2], *s[5], vl);
-        d0 = __riscv_vmacc_vx_i16m1(d0, -11, t0, vl);
-
-        t0 = __riscv_vadd_vv_i16m1(*s[1], *s[6], vl);
-        d0 = __riscv_vmacc_vx_i16m1(d0, 4, t0, vl);
-
-        t0 = __riscv_vadd_vv_i16m1(*s[0], *s[7], vl);
-        d0 = __riscv_vmacc_vx_i16m1(d0, -1, t0, vl);
+        d0 = __riscv_vmacc_vx_i16m1(d0, -11, t1, vl);
+        d0 = __riscv_vmacc_vx_i16m1(d0, 4, t2, vl);
+        d0 = __riscv_vmacc_vx_i16m1(d0, -1, t3, vl);
     }
     else
     {
@@ -118,16 +115,13 @@ vint16m2_t inline filter8_s16x16(vint16m2_t **s, const vint16m2_t c, size_t vl)
         // { -1, 4, -11, 40, 40, -11, 4, -1 }
         d0 = __riscv_vmv_v_x_i16m2(0, vl);
         vint16m2_t t0 = __riscv_vadd_vv_i16m2(*s[3], *s[4], vl);
+        vint16m2_t t1 = __riscv_vadd_vv_i16m2(*s[2], *s[5], vl);
+        vint16m2_t t2 = __riscv_vadd_vv_i16m2(*s[1], *s[6], vl);
+        vint16m2_t t3 = __riscv_vadd_vv_i16m2(*s[0], *s[7], vl);
         d0 = __riscv_vmacc_vx_i16m2(d0, 40, t0, vl);
-
-        t0 = __riscv_vadd_vv_i16m2(*s[2], *s[5], vl);
-        d0 = __riscv_vmacc_vx_i16m2(d0, -11, t0, vl);
-
-        t0 = __riscv_vadd_vv_i16m2(*s[1], *s[6], vl);
-        d0 = __riscv_vmacc_vx_i16m2(d0, 4, t0, vl);
-
-        t0 = __riscv_vadd_vv_i16m2(*s[0], *s[7], vl);
-        d0 = __riscv_vmacc_vx_i16m2(d0, -1, t0, vl);
+        d0 = __riscv_vmacc_vx_i16m2(d0, -11, t1, vl);
+        d0 = __riscv_vmacc_vx_i16m2(d0, 4, t2, vl);
+        d0 = __riscv_vmacc_vx_i16m2(d0, -1, t3, vl);
     }
     else
     {
@@ -161,16 +155,14 @@ vint32m2_t inline filter8_s32x8(vint32m2_t **s, const vint32m2_t c, size_t vl)
         // { -1, 4, -11, 40, 40, -11, 4, -1 }
         d0 = __riscv_vmv_v_x_i32m2(0, vl);
         vint32m2_t t0 = __riscv_vadd_vv_i32m2(*s[3], *s[4], vl);
+        vint32m2_t t1 = __riscv_vadd_vv_i32m2(*s[2], *s[5], vl);
+        vint32m2_t t2 = __riscv_vadd_vv_i32m2(*s[1], *s[6], vl);
+        vint32m2_t t3 = __riscv_vadd_vv_i32m2(*s[0], *s[7], vl);
+
         d0 = __riscv_vmacc_vx_i32m2(d0, 40, t0, vl);
-
-        t0 = __riscv_vadd_vv_i32m2(*s[2], *s[5], vl);
-        d0 = __riscv_vmacc_vx_i32m2(d0, -11, t0, vl);
-
-        t0 = __riscv_vadd_vv_i32m2(*s[1], *s[6], vl);
-        d0 = __riscv_vmacc_vx_i32m2(d0, 4, t0, vl);
-
-        t0 = __riscv_vadd_vv_i32m2(*s[0], *s[7], vl);
-        d0 = __riscv_vmacc_vx_i32m2(d0, -1, t0, vl);
+        d0 = __riscv_vmacc_vx_i32m2(d0, -11, t1, vl);
+        d0 = __riscv_vmacc_vx_i32m2(d0, 4, t2, vl);
+        d0 = __riscv_vmacc_vx_i32m2(d0, -1, t3, vl);
     }
     else
     {

@@ -29,16 +29,14 @@ namespace X265_NS
 #if !HIGH_BIT_DEPTH
 
 template<int coeffIdx, int width, int height>
-void interp8_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
-                           intptr_t dstStride, intptr_t tStride)
+void interp8_horiz_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
+                           intptr_t dstStride)
 {
     const int N_TAPS = 8;
-    src -= (N_TAPS / 2 - 1) * tStride;
+    src -= (N_TAPS / 2 - 1);
+    size_t vl = 32;
 
-
-    size_t vl = 16;
-
-    if (width % 16 == 0)
+    if (width > 8)
     {
         const vuint8m1_t shift = __riscv_vmv_v_x_u8m1(IF_FILTER_PREC, vl);
         const vint16m2_t zero = __riscv_vmv_v_x_i16m2(0, vl);
@@ -47,13 +45,14 @@ void interp8_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
         vint16m2_t *s0[8] = {&t0, &t1, &t2, &t3, &t4, &t5, &t6, &t7};
         vint16m2_t *s1[8] = {&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7};
 
-        for (int row = 0; row < height; row++)
+        for (int row = 0; row < height; row +=2)
         {
-            int col = 0;
-            for (; col + 32 <= width; col += 32)
+            for (int col = 0; col < width; col += vl)
             {
-                load_u8x16xn<8>(src + col + 0, s0, tStride, vl);
-                load_u8x16xn<8>(src + col + 16, s1, tStride, vl);
+                vl = __riscv_vsetvl_e16m2(width - col);
+
+                load_u8x16xn<8>(src + col + 0 * srcStride, s0, 1, vl);
+                load_u8x16xn<8>(src + col + 1 * srcStride, s1, 1, vl);
 
                 vint16m2_t d0 = filter8_s16x16<coeffIdx>(s0, zero, vl);
                 vint16m2_t d1 = filter8_s16x16<coeffIdx>(s1, zero, vl);
@@ -64,27 +63,16 @@ void interp8_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
                 vuint8m1_t d0_u8 = __riscv_vnclipu_wv_u8m1(d0_u16, shift, 0, vl);
                 vuint8m1_t d1_u8 = __riscv_vnclipu_wv_u8m1(d1_u16, shift, 0, vl);
 
-                __riscv_vse8_v_u8m1(dst + col + 0, d0_u8, vl);
-                __riscv_vse8_v_u8m1(dst + col + 16, d1_u8, vl);
+                __riscv_vse8_v_u8m1(dst + col + 0 * dstStride, d0_u8, vl);
+                __riscv_vse8_v_u8m1(dst + col + 1 * dstStride, d1_u8, vl);
             }
 
-            for (; col + 16 <= width; col += 16)
-            {
-                load_u8x16xn<8>(src + col, s0, tStride, vl);
-                vint16m2_t d0 = filter8_s16x16<coeffIdx>(s0, zero, vl);
-                vuint16m2_t d0_u16 = __riscv_vreinterpret_v_i16m2_u16m2(__riscv_vmax_vv_i16m2(d0, zero, vl));
-                vuint8m1_t d0_u8 = __riscv_vnclipu_wv_u8m1(d0_u16, shift, 0, vl);
-
-                __riscv_vse8_v_u8m1(dst + col, d0_u8, vl);
-            }
-
-            src += srcStride;
-            dst += dstStride;
+            src += 2 * srcStride;
+            dst += 2 * dstStride;
         }
     }
     else
     {
-        vl = 8;
         vuint8mf2_t shift = __riscv_vmv_v_x_u8mf2(IF_FILTER_PREC, vl);
         vint16m1_t zero = __riscv_vmv_v_x_i16m1(0, vl);
         vint16m1_t t0, t1, t2, t3, t4, t5, t6, t7;
@@ -95,10 +83,11 @@ void interp8_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
         for (int row = 0; row < height; row += 2)
         {
             int col = 0;
-            for (; col + 8 <= width; col += 8)
+            for (; col < width; col += vl)
             {
-                load_u8x8xn<8>(src + col + 0 * srcStride, s0, tStride, vl);
-                load_u8x8xn<8>(src + col + 1 * srcStride, s1, tStride, vl);
+                vl = __riscv_vsetvl_e16m1(width - col);
+                load_u8x8xn<8>(src + col + 0 * srcStride, s0, 1, vl);
+                load_u8x8xn<8>(src + col + 1 * srcStride, s1, 1, vl);
 
                 vint16m1_t d0 = filter8_s16x8<coeffIdx>(s0, zero, vl);
                 vint16m1_t d1 = filter8_s16x8<coeffIdx>(s1, zero, vl);
@@ -112,26 +101,74 @@ void interp8_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
                 __riscv_vse8_v_u8mf2(dst + col + 0 * dstStride, d0_u8, vl);
                 __riscv_vse8_v_u8mf2(dst + col + 1 * dstStride, d1_u8, vl);
             }
-            if (width % 8 != 0){
-                load_u8x8xn<8>(src + col + 0 * srcStride, s0, tStride, vl);
-                load_u8x8xn<8>(src + col + 1 * srcStride, s1, tStride, vl);
-
-                vint16m1_t d0 = filter8_s16x8<coeffIdx>(s0, zero, vl);
-                vint16m1_t d1 = filter8_s16x8<coeffIdx>(s1, zero, vl);
-
-                vuint16m1_t d0_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d0, zero, vl));
-                vuint16m1_t d1_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d1, zero, vl));
-
-                vuint8mf2_t d0_u8 = __riscv_vnclipu_wv_u8mf2(d0_u16, shift, 0, vl);
-                vuint8mf2_t d1_u8 = __riscv_vnclipu_wv_u8mf2(d1_u16, shift, 0, vl);
-
-                __riscv_vse8_v_u8mf2(dst + col + 0 * dstStride, d0_u8, 4);
-                __riscv_vse8_v_u8mf2(dst + col + 1 * dstStride, d1_u8, 4);
-            }
 
             src += 2 * srcStride;
             dst += 2 * dstStride;
         }
+    }
+}
+
+template<int coeffIdx, int width, int height>
+void interp8_vert_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
+                           intptr_t dstStride)
+{
+    const int N_TAPS = 8;
+    src -= (N_TAPS / 2 - 1) * srcStride;
+
+    size_t vl = 16;
+
+    vuint8mf2_t shift = __riscv_vmv_v_x_u8mf2(IF_FILTER_PREC, vl);
+    vint16m1_t zero = __riscv_vmv_v_x_i16m1(0, vl);
+    vint16m1_t t0, t1, t2, t3, t4, t5, t6;
+    vint16m1_t r0, r1, r2, r3;
+    vint16m1_t *s0[11] = {&t0, &t1, &t2, &t3, &t4, &t5, &t6, &r0, &r1, &r2, &r3};
+
+    for (int col = 0; col < width; col += vl)
+    {
+        vl = __riscv_vsetvl_e16m1(width - col);
+        const uint8_t *s = src;
+        uint8_t *d = dst;
+
+        load_u8x8xn<7>(s, s0, srcStride, vl);
+        s += 7 * srcStride;
+
+        for (int row = 0; row < height; row += 4)
+        {
+            load_u8x8xn<4>(s, s0 + 7, srcStride, vl);
+            vint16m1_t d0 = filter8_s16x8<coeffIdx>(s0, zero, vl);
+            vint16m1_t d1 = filter8_s16x8<coeffIdx>(s0 + 1, zero, vl);
+            vint16m1_t d2 = filter8_s16x8<coeffIdx>(s0 + 2, zero, vl);
+            vint16m1_t d3 = filter8_s16x8<coeffIdx>(s0 + 3, zero, vl);
+
+            vuint16m1_t d0_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d0, zero, vl));
+            vuint16m1_t d1_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d1, zero, vl));
+            vuint16m1_t d2_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d2, zero, vl));
+            vuint16m1_t d3_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d3, zero, vl));
+
+            vuint8mf2_t d0_u8 = __riscv_vnclipu_wv_u8mf2(d0_u16, shift, 0, vl);
+            vuint8mf2_t d1_u8 = __riscv_vnclipu_wv_u8mf2(d1_u16, shift, 0, vl);
+            vuint8mf2_t d2_u8 = __riscv_vnclipu_wv_u8mf2(d2_u16, shift, 0, vl);
+            vuint8mf2_t d3_u8 = __riscv_vnclipu_wv_u8mf2(d3_u16, shift, 0, vl);
+
+            __riscv_vse8_v_u8mf2(d + 0 * dstStride, d0_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 1 * dstStride, d1_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 2 * dstStride, d2_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 3 * dstStride, d3_u8, vl);
+
+            *s0[0] = *s0[4];
+            *s0[1] = *s0[5];
+            *s0[2] = *s0[6];
+            *s0[3] = *s0[7];
+            *s0[4] = *s0[8];
+            *s0[5] = *s0[9];
+            *s0[6] = *s0[10];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+
+        src += vl;
+        dst += vl;
     }
 }
 
@@ -149,17 +186,17 @@ const int16_t g_chromaFilter8[8][NTAPS_CHROMA] =
 };
 
 template<bool coeff4, int width, int height>
-void interp4_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
-                           intptr_t dstStride, int coeffIdx, intptr_t tStride)
+void interp4_horiz_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
+                           intptr_t dstStride, int coeffIdx)
 {
     const int N_TAPS = 4;
-    src -= (N_TAPS / 2 - 1) * tStride;
+    src -= (N_TAPS / 2 - 1) * 1;
 
     const int16_t* filter = g_chromaFilter8[coeffIdx];
 
-    size_t vl = 16;
+    size_t vl = 32;
 
-    if (width % 16 == 0)
+    if (width > 8)
     {
         vuint8m1_t shift = __riscv_vmv_v_x_u8m1(IF_FILTER_PREC, vl);
         vint16m2_t zero = __riscv_vmv_v_x_i16m2(0, vl);
@@ -167,13 +204,14 @@ void interp4_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
         vint16m2_t *s0[4] = {&t0, &t1, &t2, &t3};
         vint16m2_t *s1[4] = {&r0, &r1, &r2, &r3};
 
-        for (int row = 0; row < height; row++)
+        for (int row = 0; row < height; row +=2)
         {
-            int col = 0;
-            for (; col + 32 <= width; col += 32)
+            for (int col = 0; col < width; col += vl)
             {
-                load_u8x16xn<4>(src + col + 0, s0, tStride, vl);
-                load_u8x16xn<4>(src + col + 16, s1, tStride, vl);
+                vl = __riscv_vsetvl_e16m2(width - col);
+
+                load_u8x16xn<4>(src + col + 0 * srcStride, s0, 1, vl);
+                load_u8x16xn<4>(src + col + 1 * srcStride, s1, 1, vl);
                 vint16m2_t d0 = filter4_s16x16<coeff4>(s0, zero, filter, vl);
                 vint16m2_t d1 = filter4_s16x16<coeff4>(s1, zero, filter, vl);
 
@@ -183,43 +221,31 @@ void interp4_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
                 vuint8m1_t d0_u8 = __riscv_vnclipu_wv_u8m1(d0_u16, shift, 0, vl);
                 vuint8m1_t d1_u8 = __riscv_vnclipu_wv_u8m1(d1_u16, shift, 0, vl);
 
-                __riscv_vse8_v_u8m1(dst + col + 0, d0_u8, vl);
-                __riscv_vse8_v_u8m1(dst + col + 16, d1_u8, vl);
+                __riscv_vse8_v_u8m1(dst + col + 0 * dstStride, d0_u8, vl);
+                __riscv_vse8_v_u8m1(dst + col + 1 * dstStride, d1_u8, vl);
             }
 
-            for (; col + 16 <= width; col += 16)
-            {
-                load_u8x16xn<4>(src + col + 0, s0, tStride, vl);
-                vint16m2_t d0 = filter4_s16x16<coeff4>(s0, zero, filter, vl);
-                vuint16m2_t d0_u16 = __riscv_vreinterpret_v_i16m2_u16m2(__riscv_vmax_vv_i16m2(d0, zero, vl));
-
-                vuint8m1_t d0_u8 = __riscv_vnclipu_wv_u8m1(d0_u16, shift, 0, vl);
-
-                __riscv_vse8_v_u8m1(dst + col, d0_u8, vl);
-            }
-
-            src += srcStride;
-            dst += dstStride;
+            src += 2 * srcStride;
+            dst += 2 * dstStride;
         }
     }
     else
     {
-        vl = 8;
         vuint8mf2_t shift = __riscv_vmv_v_x_u8mf2(IF_FILTER_PREC, vl);
         vint16m1_t zero = __riscv_vmv_v_x_i16m1(0, vl);
         vint16m1_t t0, t1, t2, t3, r0, r1, r2, r3;
         vint16m1_t *s0[4] = {&t0, &t1, &t2, &t3};
         vint16m1_t *s1[4] = {&r0, &r1, &r2, &r3};
 
-        size_t store_vl = width % 8;
-
         for (int row = 0; row < height; row += 2)
         {
             int col = 0;
-            for (; col + 8 <= width; col += 8)
+            for (; col < width; col += vl)
             {
-                load_u8x8xn<4>(src + col + 0 * srcStride, s0, tStride, vl);
-                load_u8x8xn<4>(src + col + 1 * srcStride, s1, tStride, vl);
+                vl = __riscv_vsetvl_e16m1(width - col);
+
+                load_u8x8xn<4>(src + col + 0 * srcStride, s0, 1, vl);
+                load_u8x8xn<4>(src + col + 1 * srcStride, s1, 1, vl);
                 vint16m1_t d0 = filter4_s16x8<coeff4>(s0, zero, filter, vl);
                 vint16m1_t d1 = filter4_s16x8<coeff4>(s1, zero, filter, vl);
 
@@ -233,26 +259,83 @@ void interp4_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
                 __riscv_vse8_v_u8mf2(dst + col + 1 * dstStride, d1_u8, vl);
             }
 
-            if (width % 8 != 0)
-            {
-                load_u8x8xn<4>(src + col + 0 * srcStride, s0, tStride, vl);
-                load_u8x8xn<4>(src + col + 1 * srcStride, s1, tStride, vl);
-                vint16m1_t d0 = filter4_s16x8<coeff4>(s0, zero, filter, vl);
-                vint16m1_t d1 = filter4_s16x8<coeff4>(s1, zero, filter, vl);
-
-                vuint16m1_t d0_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d0, zero, vl));
-                vuint16m1_t d1_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d1, zero, vl));
-
-                vuint8mf2_t d0_u8 = __riscv_vnclipu_wv_u8mf2(d0_u16, shift, 0, vl);
-                vuint8mf2_t d1_u8 = __riscv_vnclipu_wv_u8mf2(d1_u16, shift, 0, vl);
-
-                __riscv_vse8_v_u8mf2(dst + col + 0 * dstStride, d0_u8, store_vl);
-                __riscv_vse8_v_u8mf2(dst + col + 1 * dstStride, d1_u8, store_vl);
-            }
-
             src += 2 * srcStride;
             dst += 2 * dstStride;
         }
+    }
+}
+
+template<bool coeff4, int width, int height>
+void interp4_vert_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
+                           intptr_t dstStride, int coeffIdx)
+{
+    const int N_TAPS = 4;
+    src -= (N_TAPS / 2 - 1) * srcStride;
+
+    const int16_t* filter = g_chromaFilter8[coeffIdx];
+
+    size_t vl = 16;
+    vuint8mf2_t shift = __riscv_vmv_v_x_u8mf2(IF_FILTER_PREC, vl);
+    vint16m1_t zero = __riscv_vmv_v_x_i16m1(0, vl);
+    vint16m1_t t0, t1, t2, t3, t4, t5, t6;
+    vint16m1_t *s0[7] = {&t0, &t1, &t2, &t3, &t4, &t5, &t6};
+
+    for (int col = 0; col < width; col += vl)
+    {
+        vl = __riscv_vsetvl_e16m1(width - col);
+        const uint8_t *s = src;
+        uint8_t *d = dst;
+        load_u8x8xn<3>(s, s0, srcStride, vl);
+        s += 3 * srcStride;
+
+        for (int row = 0; row + 4 <= height; row += 4)
+        {
+            load_u8x8xn<4>(s, s0 + 3, srcStride, vl);
+            vint16m1_t d0 = filter4_s16x8<coeff4>(s0, zero, filter, vl);
+            vint16m1_t d1 = filter4_s16x8<coeff4>(s0 + 1, zero, filter, vl);
+            vint16m1_t d2 = filter4_s16x8<coeff4>(s0 + 2, zero, filter, vl);
+            vint16m1_t d3 = filter4_s16x8<coeff4>(s0 + 3, zero, filter, vl);
+
+            vuint16m1_t d0_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d0, zero, vl));
+            vuint16m1_t d1_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d1, zero, vl));
+            vuint16m1_t d2_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d2, zero, vl));
+            vuint16m1_t d3_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d3, zero, vl));
+
+            vuint8mf2_t d0_u8 = __riscv_vnclipu_wv_u8mf2(d0_u16, shift, 0, vl);
+            vuint8mf2_t d1_u8 = __riscv_vnclipu_wv_u8mf2(d1_u16, shift, 0, vl);
+            vuint8mf2_t d2_u8 = __riscv_vnclipu_wv_u8mf2(d2_u16, shift, 0, vl);
+            vuint8mf2_t d3_u8 = __riscv_vnclipu_wv_u8mf2(d3_u16, shift, 0, vl);
+
+            __riscv_vse8_v_u8mf2(d + 0 * dstStride, d0_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 1 * dstStride, d1_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 2 * dstStride, d2_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 3 * dstStride, d3_u8, vl);
+
+            *s0[0] = *s0[4];
+            *s0[1] = *s0[5];
+            *s0[2] = *s0[6];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+
+        if (height & 2)
+        {
+            load_u8x8xn<2>(s, s0 + 3, srcStride, vl);
+            vint16m1_t d0 = filter4_s16x8<coeff4>(s0, zero, filter, vl);
+            vint16m1_t d1 = filter4_s16x8<coeff4>(s0 + 1, zero, filter, vl);
+
+            vuint16m1_t d0_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d0, zero, vl));
+            vuint16m1_t d1_u16 = __riscv_vreinterpret_v_i16m1_u16m1(__riscv_vmax_vv_i16m1(d1, zero, vl));
+
+            vuint8mf2_t d0_u8 = __riscv_vnclipu_wv_u8mf2(d0_u16, shift, 0, vl);
+            vuint8mf2_t d1_u8 = __riscv_vnclipu_wv_u8mf2(d1_u16, shift, 0, vl);
+
+            __riscv_vse8_v_u8mf2(d + 0 * dstStride, d0_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 1 * dstStride, d1_u8, vl);
+        }
+        src += vl;
+        dst += vl;
     }
 }
 
@@ -261,20 +344,19 @@ template<int N, int width, int height>
 void interp_horiz_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
                           intptr_t dstStride, int coeffIdx)
 {
-    int16_t tStride = 1;
     if (N == 8)
     {
         switch (coeffIdx)
         {
         case 1:
-            return interp8_pp_rvv<1, width, height>(src, srcStride, dst,
-                                                           dstStride, tStride);
+            return interp8_horiz_pp_rvv<1, width, height>(src, srcStride, dst,
+                                                           dstStride);
         case 2:
-            return interp8_pp_rvv<2, width, height>(src, srcStride, dst,
-                                                           dstStride, tStride);
+            return interp8_horiz_pp_rvv<2, width, height>(src, srcStride, dst,
+                                                           dstStride);
         case 3:
-            return interp8_pp_rvv<3, width, height>(src, srcStride, dst,
-                                                           dstStride, tStride);
+            return interp8_horiz_pp_rvv<3, width, height>(src, srcStride, dst,
+                                                           dstStride);
         }
     }
     else
@@ -282,24 +364,24 @@ void interp_horiz_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
         switch (coeffIdx)
         {
         case 4:
-            return interp4_pp_rvv<true, width, height>(src, srcStride,
+            return interp4_horiz_pp_rvv<true, width, height>(src, srcStride,
                                                               dst, dstStride,
-                                                              coeffIdx, tStride);
+                                                              coeffIdx);
         default:
-            return interp4_pp_rvv<false, width, height>(src, srcStride,
+            return interp4_horiz_pp_rvv<false, width, height>(src, srcStride,
                                                                dst, dstStride,
-                                                               coeffIdx, tStride);
+                                                               coeffIdx);
         }
     }
 }
 
 template<int coeffIdx, int width, int height>
-void interp8_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
-                           intptr_t dstStride, int isRowExt, int16_t tStride)
+void interp8_horiz_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
+                           intptr_t dstStride, int isRowExt)
 {
     int blkheight = height;
     const int N_TAPS = 8;
-    src -= (N_TAPS / 2 - 1) * tStride;
+    src -= (N_TAPS / 2 - 1);
 
     if (isRowExt)
     {
@@ -322,8 +404,8 @@ void interp8_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
             vint16m2_t *s0[8] = {&t0, &t1, &t2, &t3, &t4, &t5, &t6, &t7};
             vint16m2_t *s1[8] = {&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7};
 
-            load_u8x16xn<8>(src + col + 0 * srcStride, s0, tStride, vl);
-            load_u8x16xn<8>(src + col + 1 * srcStride, s1, tStride, vl);
+            load_u8x16xn<8>(src + col + 0 * srcStride, s0, 1, vl);
+            load_u8x16xn<8>(src + col + 1 * srcStride, s1, 1, vl);
             vint16m2_t d0 = filter8_s16x16<coeffIdx>(s0, c, vl);
             vint16m2_t d1 = filter8_s16x16<coeffIdx>(s1, c, vl);
 
@@ -339,8 +421,8 @@ void interp8_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
 
             for (; col + 8 <= width; col += 8)
             {
-                load_u8x8xn<8>(src + col + 0 * srcStride, s0, tStride, 8);
-                load_u8x8xn<8>(src + col + 1 * srcStride, s1, tStride, 8);
+                load_u8x8xn<8>(src + col + 0 * srcStride, s0, 1, 8);
+                load_u8x8xn<8>(src + col + 1 * srcStride, s1, 1, 8);
 
                 vint16m1_t d0 = filter8_s16x8<coeffIdx>(s0, c2, 8);
                 vint16m1_t d1 = filter8_s16x8<coeffIdx>(s1, c2, 8);
@@ -351,11 +433,11 @@ void interp8_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
 
             if (width % 8 != 0)
             {
-                load_u8x8xn<8>(src + col + 0 * srcStride, s0, tStride, 8);
-                load_u8x8xn<8>(src + col + 1 * srcStride, s1, tStride, 8);
+                load_u8x8xn<8>(src + col + 0 * srcStride, s0, 1, 4);
+                load_u8x8xn<8>(src + col + 1 * srcStride, s1, 1, 4);
 
-                vint16m1_t d0 = filter8_s16x8<coeffIdx>(s0, c2, 8);
-                vint16m1_t d1 = filter8_s16x8<coeffIdx>(s1, c2, 8);
+                vint16m1_t d0 = filter8_s16x8<coeffIdx>(s0, c2, 4);
+                vint16m1_t d1 = filter8_s16x8<coeffIdx>(s1, c2, 4);
 
                 __riscv_vse16_v_i16m1(dst + col + 0 * dstStride, d0, 4);
                 __riscv_vse16_v_i16m1(dst + col + 1 * dstStride, d1, 4);
@@ -374,28 +456,82 @@ void interp8_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
 
         for (; col + 8 <= width; col += 8)
         {
-            load_u8x8xn<8>(src + col, s0, tStride, 8);
+            load_u8x8xn<8>(src + col, s0, 1, 8);
             vint16m1_t d0 = filter8_s16x8<coeffIdx>(s0, c2, 8);
             __riscv_vse16_v_i16m1(dst + col, d0, 8);
         }
 
         if (width % 8 != 0)
         {
-            load_u8x8xn<8>(src + col, s0, tStride, 8);
+            load_u8x8xn<8>(src + col, s0, 1, 8);
             vint16m1_t d0 = filter8_s16x8<coeffIdx>(s0, c2, 8);
             __riscv_vse16_v_i16m1(dst + col, d0, 4);
         }
     }
 }
 
+template<int coeffIdx, int width, int height>
+void interp8_vert_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
+                           intptr_t dstStride)
+{
+    const int N_TAPS = 8;
+    src -= (N_TAPS / 2 - 1) * srcStride;
+
+    size_t vl = 16;
+    vint16m1_t c = __riscv_vmv_v_x_i16m1(-IF_INTERNAL_OFFS, vl);
+
+    vint16m1_t t0, t1, t2, t3, t4, t5, t6;
+    vint16m1_t r0, r1, r2, r3;
+    vint16m1_t *s0[11] = {&t0, &t1, &t2, &t3, &t4, &t5, &t6, &r0, &r1, &r2, &r3};
+
+    for (int col = 0; col < width; col += vl)
+    {
+        vl = __riscv_vsetvl_e16m1(width - col);
+        const uint8_t *s = src;
+        int16_t *d = dst;
+
+        load_u8x8xn<7>(s, s0, srcStride, vl);
+        s += 7 * srcStride;
+
+        for (int row = 0; row < height; row += 4)
+        {
+            load_u8x8xn<4>(s, s0 + 7, srcStride, vl);
+
+            vint16m1_t d0 = filter8_s16x8<coeffIdx>(s0, c, vl);
+            vint16m1_t d1 = filter8_s16x8<coeffIdx>(s0 + 1, c, vl);
+            vint16m1_t d2 = filter8_s16x8<coeffIdx>(s0 + 2, c, vl);
+            vint16m1_t d3 = filter8_s16x8<coeffIdx>(s0 + 3, c, vl);
+
+            __riscv_vse16_v_i16m1(d + 0 * dstStride, d0, vl);
+            __riscv_vse16_v_i16m1(d + 1 * dstStride, d1, vl);
+            __riscv_vse16_v_i16m1(d + 2 * dstStride, d2, vl);
+            __riscv_vse16_v_i16m1(d + 3 * dstStride, d3, vl);
+
+            *s0[0] = *s0[4];
+            *s0[1] = *s0[5];
+            *s0[2] = *s0[6];
+            *s0[3] = *s0[7];
+            *s0[4] = *s0[8];
+            *s0[5] = *s0[9];
+            *s0[6] = *s0[10];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+
+        src += vl;
+        dst += vl;
+    }
+}
+
 template<bool coeff4, int width, int height>
-void interp4_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
+void interp4_horiz_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
                            intptr_t dstStride, int coeffIdx,
-                           int isRowExt, int16_t tStride)
+                           int isRowExt)
 {
     int blkheight = height;
     const int N_TAPS = 4;
-    src -= (N_TAPS / 2 - 1) * tStride;
+    src -= (N_TAPS / 2 - 1);
 
     if (isRowExt)
     {
@@ -417,8 +553,8 @@ void interp4_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
         int col = 0;
         for (; col + 8 <= width; col += 8)
         {
-            load_u8x8xn<4>(src + col + 0 * srcStride, s0, tStride, vl);
-            load_u8x8xn<4>(src + col + 1 * srcStride, s1, tStride, vl);
+            load_u8x8xn<4>(src + col + 0 * srcStride, s0, 1, vl);
+            load_u8x8xn<4>(src + col + 1 * srcStride, s1, 1, vl);
 
             vint16m1_t d0 = filter4_s16x8<coeff4>(s0, c, filter, vl);
             vint16m1_t d1 = filter4_s16x8<coeff4>(s1, c, filter, vl);
@@ -429,8 +565,8 @@ void interp4_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
 
         if (width % 8 != 0)
         {
-            load_u8x8xn<4>(src + col + 0 * srcStride, s0, tStride, store_vl);
-            load_u8x8xn<4>(src + col + 1 * srcStride, s1, tStride, store_vl);
+            load_u8x8xn<4>(src + col + 0 * srcStride, s0, 1, store_vl);
+            load_u8x8xn<4>(src + col + 1 * srcStride, s1, 1, store_vl);
 
             vint16m1_t d0 = filter4_s16x8<coeff4>(s0, c, filter, store_vl);
             vint16m1_t d1 = filter4_s16x8<coeff4>(s1, c, filter, store_vl);
@@ -448,17 +584,78 @@ void interp4_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
         int col = 0;
         for (; col + 8 <= width; col += 8)
         {
-            load_u8x8xn<4>(src + col, s0, tStride, vl);
+            load_u8x8xn<4>(src + col, s0, 1, vl);
             vint16m1_t d0 = filter4_s16x8<coeff4>(s0, c, filter, vl);
             __riscv_vse16_v_i16m1(dst + col, d0, vl);
         }
 
         if (width % 8 != 0)
         {
-            load_u8x8xn<4>(src + col, s0, tStride, store_vl);
+            load_u8x8xn<4>(src + col, s0, 1, store_vl);
             vint16m1_t d0 = filter4_s16x8<coeff4>(s0, c, filter, store_vl);
             __riscv_vse16_v_i16m1(dst + col, d0, store_vl);
         }
+    }
+}
+
+template<bool coeff4, int width, int height>
+void interp4_vert_ps_rvv(const uint8_t *src, intptr_t srcStride, int16_t *dst,
+                           intptr_t dstStride, int coeffIdx)
+{
+    const int N_TAPS = 4;
+    src -= (N_TAPS / 2 - 1) * srcStride;
+
+    const int16_t* filter = g_chromaFilter8[coeffIdx];
+
+    size_t vl = 16;
+    const vint16m1_t c = __riscv_vmv_v_x_i16m1(-IF_INTERNAL_OFFS, vl);
+    vint16m1_t t0, t1, t2, t3, t4, t5, t6;
+    vint16m1_t *s0[7] = {&t0, &t1, &t2, &t3, &t4, &t5, &t6};
+
+    for (int col = 0; col < width; col += vl)
+    {
+        vl = __riscv_vsetvl_e16m1(width - col);
+        const uint8_t *s = src;
+        int16_t *d = dst;
+
+        load_u8x8xn<3>(s, s0, srcStride, vl);
+        s += 3 * srcStride;
+
+        for (int row = 0; row + 4 <= height; row += 4)
+        {
+            load_u8x8xn<4>(s, s0 + 3, srcStride, vl);
+
+            vint16m1_t d0 = filter4_s16x8<coeff4>(s0, c, filter, vl);
+            vint16m1_t d1 = filter4_s16x8<coeff4>(s0 + 1, c, filter, vl);
+            vint16m1_t d2 = filter4_s16x8<coeff4>(s0 + 2, c, filter, vl);
+            vint16m1_t d3 = filter4_s16x8<coeff4>(s0 + 3, c, filter, vl);
+
+            __riscv_vse16_v_i16m1(d + 0 * dstStride, d0, vl);
+            __riscv_vse16_v_i16m1(d + 1 * dstStride, d1, vl);
+            __riscv_vse16_v_i16m1(d + 2 * dstStride, d2, vl);
+            __riscv_vse16_v_i16m1(d + 3 * dstStride, d3, vl);
+
+            *s0[0] = *s0[4];
+            *s0[1] = *s0[5];
+            *s0[2] = *s0[6];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+
+        if(height & 2)
+        {
+            load_u8x8xn<2>(s, s0 + 3, srcStride, vl);
+
+            vint16m1_t d0 = filter4_s16x8<coeff4>(s0, c, filter, vl);
+            vint16m1_t d1 = filter4_s16x8<coeff4>(s0 + 1, c, filter, vl);
+
+            __riscv_vse16_v_i16m1(d + 0 * dstStride, d0, vl);
+            __riscv_vse16_v_i16m1(d + 1 * dstStride, d1, vl);
+        }
+
+        src += vl;
+        dst += vl;
     }
 }
 
@@ -466,20 +663,19 @@ template<int N, int width, int height>
 void interp_horiz_ps_rvv(const pixel *src, intptr_t srcStride, int16_t *dst,
                           intptr_t dstStride, int coeffIdx, int isRowExt)
 {
-    int16_t tStride = 1;
     if (N == 8)
     {
         switch (coeffIdx)
         {
         case 1:
-            return interp8_ps_rvv<1, width, height>(src, srcStride, dst,
-                                                           dstStride, isRowExt, tStride);
+            return interp8_horiz_ps_rvv<1, width, height>(src, srcStride, dst,
+                                                           dstStride, isRowExt);
         case 2:
-            return interp8_ps_rvv<2, width, height>(src, srcStride, dst,
-                                                           dstStride, isRowExt, tStride);
+            return interp8_horiz_ps_rvv<2, width, height>(src, srcStride, dst,
+                                                           dstStride, isRowExt);
         case 3:
-            return interp8_ps_rvv<3, width, height>(src, srcStride, dst,
-                                                           dstStride, isRowExt, tStride);
+            return interp8_horiz_ps_rvv<3, width, height>(src, srcStride, dst,
+                                                           dstStride, isRowExt);
         }
     }
     else
@@ -487,15 +683,15 @@ void interp_horiz_ps_rvv(const pixel *src, intptr_t srcStride, int16_t *dst,
         switch (coeffIdx)
         {
         case 4:
-            return interp4_ps_rvv<true, width, height>(src, srcStride,
+            return interp4_horiz_ps_rvv<true, width, height>(src, srcStride,
                                                               dst, dstStride,
                                                               coeffIdx,
-                                                              isRowExt, tStride);
+                                                              isRowExt);
         default:
-            return interp4_ps_rvv<false, width, height>(src, srcStride,
+            return interp4_horiz_ps_rvv<false, width, height>(src, srcStride,
                                                                dst, dstStride,
                                                                coeffIdx,
-                                                               isRowExt, tStride);
+                                                               isRowExt);
         }
     }
 }
@@ -504,20 +700,19 @@ template<int N, int width, int height>
 void interp_vert_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
                           intptr_t dstStride, int coeffIdx)
 {
-    int16_t tStride = srcStride;
     if (N == 8)
     {
         switch (coeffIdx)
         {
         case 1:
-            return interp8_pp_rvv<1, width, height>(src, srcStride, dst,
-                                                           dstStride, tStride);
+            return interp8_vert_pp_rvv<1, width, height>(src, srcStride, dst,
+                                                           dstStride);
         case 2:
-            return interp8_pp_rvv<2, width, height>(src, srcStride, dst,
-                                                           dstStride, tStride);
+            return interp8_vert_pp_rvv<2, width, height>(src, srcStride, dst,
+                                                           dstStride);
         case 3:
-            return interp8_pp_rvv<3, width, height>(src, srcStride, dst,
-                                                           dstStride, tStride);
+            return interp8_vert_pp_rvv<3, width, height>(src, srcStride, dst,
+                                                           dstStride);
         }
     }
     else
@@ -525,13 +720,13 @@ void interp_vert_pp_rvv(const pixel *src, intptr_t srcStride, pixel *dst,
         switch (coeffIdx)
         {
         case 4:
-            return interp4_pp_rvv<true, width, height>(src, srcStride,
+            return interp4_vert_pp_rvv<true, width, height>(src, srcStride,
                                                               dst, dstStride,
-                                                              coeffIdx, tStride);
+                                                              coeffIdx);
         default:
-            return interp4_pp_rvv<false, width, height>(src, srcStride,
+            return interp4_vert_pp_rvv<false, width, height>(src, srcStride,
                                                                dst, dstStride,
-                                                               coeffIdx, tStride);
+                                                               coeffIdx);
         }
     }
 }
@@ -540,20 +735,19 @@ template<int N, int width, int height>
 void interp_vert_ps_rvv(const pixel *src, intptr_t srcStride, int16_t *dst,
                          intptr_t dstStride, int coeffIdx)
 {
-    int16_t tStride = srcStride;
     if (N == 8)
     {
         switch (coeffIdx)
         {
         case 1:
-            return interp8_ps_rvv<1, width, height>(src, srcStride, dst,
-                                                          dstStride, 0, tStride);
+            return interp8_vert_ps_rvv<1, width, height>(src, srcStride, dst,
+                                                          dstStride);
         case 2:
-            return interp8_ps_rvv<2, width, height>(src, srcStride, dst,
-                                                          dstStride, 0, tStride);
+            return interp8_vert_ps_rvv<2, width, height>(src, srcStride, dst,
+                                                          dstStride);
         case 3:
-            return interp8_ps_rvv<3, width, height>(src, srcStride, dst,
-                                                          dstStride, 0, tStride);
+            return interp8_vert_ps_rvv<3, width, height>(src, srcStride, dst,
+                                                          dstStride);
         }
     }
     else
@@ -561,13 +755,13 @@ void interp_vert_ps_rvv(const pixel *src, intptr_t srcStride, int16_t *dst,
         switch (coeffIdx)
         {
         case 4:
-            return interp4_ps_rvv<true, width, height>(src, srcStride,
+            return interp4_vert_ps_rvv<true, width, height>(src, srcStride,
                                                              dst, dstStride,
-                                                             coeffIdx, 0, tStride);
+                                                             coeffIdx);
         default:
-            return interp4_ps_rvv<false, width, height>(src, srcStride,
+            return interp4_vert_ps_rvv<false, width, height>(src, srcStride,
                                                               dst, dstStride,
-                                                              coeffIdx, 0, tStride);
+                                                              coeffIdx);
         }
     }
 }
@@ -576,7 +770,6 @@ template<int coeffIdx, int width, int height>
 void interp8_vert_sp_rvv(const int16_t *src, intptr_t srcStride, pixel *dst,
                           intptr_t dstStride)
 {
-    assert(X265_DEPTH == 8);
     const int headRoom = IF_INTERNAL_PREC - X265_DEPTH;
     const int shift0 = IF_FILTER_PREC + headRoom;
     const int offset = (1 << (shift0 - 1)) + (IF_INTERNAL_OFFS << IF_FILTER_PREC);
@@ -590,37 +783,63 @@ void interp8_vert_sp_rvv(const int16_t *src, intptr_t srcStride, pixel *dst,
     vint32m2_t c = __riscv_vmv_v_x_i32m2(offset, vl);
     vint16m1_t maxVal = __riscv_vmv_v_x_i16m1((1 << X265_DEPTH) - 1, vl);
 
-    vint32m2_t t0, t1, t2, t3, t4, t5, t6, t7;
-    vint32m2_t r0, r1, r2, r3, r4, r5, r6, r7;
-    vint32m2_t *s0[8] = {&t0, &t1, &t2, &t3, &t4, &t5, &t6, &t7};
-    vint32m2_t *s1[8] = {&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7};
+    vint32m2_t t0, t1, t2, t3, t4, t5, t6;
+    vint32m2_t r0, r1, r2, r3;
+    vint32m2_t *s0[11] = {&t0, &t1, &t2, &t3, &t4, &t5, &t6, &r0, &r1, &r2, &r3};
 
-    for (int row = 0; row < height; row += 2)
+    for (int col = 0; col < width; col += vl)
     {
-        for (int col = 0; col < width; col += vl)
+        vl = __riscv_vsetvl_e32m2(width - col);
+        const int16_t *s = src;
+        uint8_t *d = dst;
+
+        load_s16x8xn<7>(s, s0, srcStride, vl);
+
+        s += 7 * srcStride;
+
+        for (int row = 0; row < height; row += 4)
         {
-            vl = __riscv_vsetvl_e32m2(width - col);
-            load_s16x8xn<8>(src + col + 0 * srcStride, s0, srcStride, vl);
-            load_s16x8xn<8>(src + col + 1 * srcStride, s1, srcStride, vl);
+            load_s16x8xn<4>(s, s0 + 7, srcStride, vl);
 
             vint32m2_t d0 = filter8_s32x8<coeffIdx>(s0, c, vl);
-            vint32m2_t d1 = filter8_s32x8<coeffIdx>(s1, c, vl);
+            vint32m2_t d1 = filter8_s32x8<coeffIdx>(s0 + 1, c, vl);
+            vint32m2_t d2 = filter8_s32x8<coeffIdx>(s0 + 2, c, vl);
+            vint32m2_t d3 = filter8_s32x8<coeffIdx>(s0 + 3, c, vl);
 
             vint16m1_t d0_i16 = __riscv_vnclip_wv_i16m1(d0, shift, 2, vl);
             vint16m1_t d1_i16 = __riscv_vnclip_wv_i16m1(d1, shift, 2, vl);
+            vint16m1_t d2_i16 = __riscv_vnclip_wv_i16m1(d2, shift, 2, vl);
+            vint16m1_t d3_i16 = __riscv_vnclip_wv_i16m1(d3, shift, 2, vl);
 
             d0_i16 = __riscv_vmin_vv_i16m1(__riscv_vmax_vv_i16m1(d0_i16, zero, vl), maxVal, vl);
             d1_i16 = __riscv_vmin_vv_i16m1(__riscv_vmax_vv_i16m1(d1_i16, zero, vl), maxVal, vl);
+            d2_i16 = __riscv_vmin_vv_i16m1(__riscv_vmax_vv_i16m1(d2_i16, zero, vl), maxVal, vl);
+            d3_i16 = __riscv_vmin_vv_i16m1(__riscv_vmax_vv_i16m1(d3_i16, zero, vl), maxVal, vl);
 
-            vuint8mf2_t d0_u8 = __riscv_vncvt_x_x_w_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d0_i16), vl);
-            vuint8mf2_t d1_u8 = __riscv_vncvt_x_x_w_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d1_i16), vl);
+            vuint8mf2_t d0_u8 = __riscv_vnsrl_wx_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d0_i16), 0, vl);
+            vuint8mf2_t d1_u8 = __riscv_vnsrl_wx_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d1_i16), 0, vl);
+            vuint8mf2_t d2_u8 = __riscv_vnsrl_wx_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d2_i16), 0, vl);
+            vuint8mf2_t d3_u8 = __riscv_vnsrl_wx_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d3_i16), 0, vl);
 
-            __riscv_vse8_v_u8mf2(dst + col + 0 * dstStride, d0_u8, vl);
-            __riscv_vse8_v_u8mf2(dst + col + 1 * dstStride, d1_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 0 * dstStride, d0_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 1 * dstStride, d1_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 2 * dstStride, d2_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 3 * dstStride, d3_u8, vl);
+
+            *s0[0] = *s0[4];
+            *s0[1] = *s0[5];
+            *s0[2] = *s0[6];
+            *s0[3] = *s0[7];
+            *s0[4] = *s0[8];
+            *s0[5] = *s0[9];
+            *s0[6] = *s0[10];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
         }
 
-        src += 2 * srcStride;
-        dst += 2 * dstStride;
+        src += vl;
+        dst += vl;
     }
 }
 
@@ -643,20 +862,60 @@ void interp4_vert_sp_rvv(const int16_t *src, intptr_t srcStride, uint8_t *dst,
     vint32m2_t c = __riscv_vmv_v_x_i32m2(offset, vl);
     vint16m1_t maxVal = __riscv_vmv_v_x_i16m1((1 << X265_DEPTH) - 1, vl);
 
-    vint32m2_t t0, t1, t2, t3, r0, r1, r2, r3;
-    vint32m2_t *s0[4] = {&t0, &t1, &t2, &t3};
-    vint32m2_t *s1[4] = {&r0, &r1, &r2, &r3};
+    vint32m2_t t0, t1, t2, t3, t4, t5, t6;
+    vint32m2_t *s0[7] = {&t0, &t1, &t2, &t3, &t4, &t5, &t6};
 
-    for (int row = 0; row < height; row += 2)
+    for (int col = 0; col < width; col += vl)
     {
-        for (int col = 0; col < width; col += vl)
+        vl = __riscv_vsetvl_e32m2(width - col);
+        const int16_t *s = src;
+        uint8_t *d = dst;
+        load_s16x8xn<3>(s, s0, srcStride, vl);
+        s += 3 * srcStride;
+
+        for (int row = 0; row + 4 <= height; row += 4)
         {
-            vl = __riscv_vsetvl_e32m2(width - col);
-            load_s16x8xn<4>(src + col + 0 * srcStride, s0, srcStride, vl);
-            load_s16x8xn<4>(src + col + 1 * srcStride, s1, srcStride, vl);
+           load_s16x8xn<4>(s, s0 + 3, srcStride, vl);
 
             vint32m2_t d0 = filter4_s32x8<coeff4>(s0, c, filter, vl);
-            vint32m2_t d1 = filter4_s32x8<coeff4>(s1, c, filter, vl);
+            vint32m2_t d1 = filter4_s32x8<coeff4>(s0 + 1, c, filter, vl);
+            vint32m2_t d2 = filter4_s32x8<coeff4>(s0 + 2, c, filter, vl);
+            vint32m2_t d3 = filter4_s32x8<coeff4>(s0 + 3, c, filter, vl);
+
+            vint16m1_t d0_i16 = __riscv_vnclip_wv_i16m1(d0, shift, 2, vl);
+            vint16m1_t d1_i16 = __riscv_vnclip_wv_i16m1(d1, shift, 2, vl);
+            vint16m1_t d2_i16 = __riscv_vnclip_wv_i16m1(d2, shift, 2, vl);
+            vint16m1_t d3_i16 = __riscv_vnclip_wv_i16m1(d3, shift, 2, vl);
+
+            d0_i16 = __riscv_vmin_vv_i16m1(__riscv_vmax_vv_i16m1(d0_i16, zero, vl), maxVal, vl);
+            d1_i16 = __riscv_vmin_vv_i16m1(__riscv_vmax_vv_i16m1(d1_i16, zero, vl), maxVal, vl);
+            d2_i16 = __riscv_vmin_vv_i16m1(__riscv_vmax_vv_i16m1(d2_i16, zero, vl), maxVal, vl);
+            d3_i16 = __riscv_vmin_vv_i16m1(__riscv_vmax_vv_i16m1(d3_i16, zero, vl), maxVal, vl);
+
+            vuint8mf2_t d0_u8 = __riscv_vnsrl_wx_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d0_i16), 0, vl);
+            vuint8mf2_t d1_u8 = __riscv_vnsrl_wx_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d1_i16), 0, vl);
+            vuint8mf2_t d2_u8 = __riscv_vnsrl_wx_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d2_i16), 0, vl);
+            vuint8mf2_t d3_u8 = __riscv_vnsrl_wx_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d3_i16), 0, vl);
+
+            __riscv_vse8_v_u8mf2(d + 0 * dstStride, d0_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 1 * dstStride, d1_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 2 * dstStride, d2_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 3 * dstStride, d3_u8, vl);
+
+            *s0[0] = *s0[4];
+            *s0[1] = *s0[5];
+            *s0[2] = *s0[6];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+
+        if(height & 2)
+        {
+            load_s16x8xn<2>(s, s0 + 3, srcStride, vl);
+
+            vint32m2_t d0 = filter4_s32x8<coeff4>(s0, c, filter, vl);
+            vint32m2_t d1 = filter4_s32x8<coeff4>(s0 + 1, c, filter, vl);
 
             vint16m1_t d0_i16 = __riscv_vnclip_wv_i16m1(d0, shift, 2, vl);
             vint16m1_t d1_i16 = __riscv_vnclip_wv_i16m1(d1, shift, 2, vl);
@@ -664,15 +923,15 @@ void interp4_vert_sp_rvv(const int16_t *src, intptr_t srcStride, uint8_t *dst,
             d0_i16 = __riscv_vmin_vv_i16m1(__riscv_vmax_vv_i16m1(d0_i16, zero, vl), maxVal, vl);
             d1_i16 = __riscv_vmin_vv_i16m1(__riscv_vmax_vv_i16m1(d1_i16, zero, vl), maxVal, vl);
 
-            vuint8mf2_t d0_u8 = __riscv_vncvt_x_x_w_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d0_i16), vl);
-            vuint8mf2_t d1_u8 = __riscv_vncvt_x_x_w_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d1_i16), vl);
+            vuint8mf2_t d0_u8 = __riscv_vnsrl_wx_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d0_i16), 0, vl);
+            vuint8mf2_t d1_u8 = __riscv_vnsrl_wx_u8mf2(__riscv_vreinterpret_v_i16m1_u16m1(d1_i16), 0, vl);
 
-            __riscv_vse8_v_u8mf2(dst + col + 0 * dstStride, d0_u8, vl);
-            __riscv_vse8_v_u8mf2(dst + col + 1 * dstStride, d1_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 0 * dstStride, d0_u8, vl);
+            __riscv_vse8_v_u8mf2(d + 1 * dstStride, d1_u8, vl);
         }
 
-        src += 2 * srcStride;
-        dst += 2 * dstStride;
+        src += vl;
+        dst += vl;
     }
 }
 
@@ -721,31 +980,52 @@ void interp8_vert_ss_rvv(const int16_t *src, intptr_t srcStride, int16_t *dst,
     vuint16m1_t shift = __riscv_vmv_v_x_u16m1(IF_FILTER_PREC, vl);
     vint32m2_t c = __riscv_vmv_v_x_i32m2(0, vl);
 
-    vint32m2_t t0, t1, t2, t3, t4, t5, t6, t7;
-    vint32m2_t r0, r1, r2, r3, r4, r5, r6, r7;
-    vint32m2_t *s0[8] = {&t0, &t1, &t2, &t3, &t4, &t5, &t6, &t7};
-    vint32m2_t *s1[8] = {&r0, &r1, &r2, &r3, &r4, &r5, &r6, &r7};
+    vint32m2_t t0, t1, t2, t3, t4, t5, t6;
+    vint32m2_t r0, r1, r2, r3;
+    vint32m2_t *s0[11] = {&t0, &t1, &t2, &t3, &t4, &t5, &t6, &r0, &r1, &r2, &r3};
 
-    for (int row = 0; row < height; row += 2)
+    for (int col = 0; col < width; col += vl)
     {
-        for (int col = 0; col < width; col += vl)
+        vl = __riscv_vsetvl_e32m2(width - col);
+        const int16_t *s = src;
+        int16_t *d = dst;
+
+        load_s16x8xn<7>(s, s0, srcStride, vl);
+        s += 7 * srcStride;
+
+        for (int row = 0; row < height; row += 4)
         {
-            vl = __riscv_vsetvl_e32m2(width - col);
-            load_s16x8xn<8>(src + col + 0 * srcStride, s0, srcStride, vl);
-            load_s16x8xn<8>(src + col + 1 * srcStride, s1, srcStride, vl);
+            load_s16x8xn<4>(s, s0 + 7, srcStride, vl);
 
             vint32m2_t d0 = filter8_s32x8<coeffIdx>(s0, c, vl);
-            vint32m2_t d1 = filter8_s32x8<coeffIdx>(s1, c, vl);
+            vint32m2_t d1 = filter8_s32x8<coeffIdx>(s0 + 1, c, vl);
+            vint32m2_t d2 = filter8_s32x8<coeffIdx>(s0 + 2, c, vl);
+            vint32m2_t d3 = filter8_s32x8<coeffIdx>(s0 + 3, c, vl);
 
             vint16m1_t d0_i16 = __riscv_vnclip_wv_i16m1(d0, shift, 2, vl);
             vint16m1_t d1_i16 = __riscv_vnclip_wv_i16m1(d1, shift, 2, vl);
+            vint16m1_t d2_i16 = __riscv_vnclip_wv_i16m1(d2, shift, 2, vl);
+            vint16m1_t d3_i16 = __riscv_vnclip_wv_i16m1(d3, shift, 2, vl);
 
-            __riscv_vse16_v_i16m1(dst + col + 0 * dstStride, d0_i16, vl);
-            __riscv_vse16_v_i16m1(dst + col + 1 * dstStride, d1_i16, vl);
+            __riscv_vse16_v_i16m1(d + 0 * dstStride, d0_i16, vl);
+            __riscv_vse16_v_i16m1(d + 1 * dstStride, d1_i16, vl);
+            __riscv_vse16_v_i16m1(d + 2 * dstStride, d2_i16, vl);
+            __riscv_vse16_v_i16m1(d + 3 * dstStride, d3_i16, vl);
+
+            *s0[0] = *s0[4];
+            *s0[1] = *s0[5];
+            *s0[2] = *s0[6];
+            *s0[3] = *s0[7];
+            *s0[4] = *s0[8];
+            *s0[5] = *s0[9];
+            *s0[6] = *s0[10];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
         }
 
-        src += 2 * srcStride;
-        dst += 2 * dstStride;
+        src += vl;
+        dst += vl;
     }
 }
 
@@ -763,30 +1043,60 @@ void interp4_vert_ss_rvv(const int16_t *src, intptr_t srcStride, int16_t *dst,
     vuint16m1_t shift = __riscv_vmv_v_x_u16m1(IF_FILTER_PREC, vl);
     vint32m2_t c = __riscv_vmv_v_x_i32m2(0, vl);
 
-    vint32m2_t t0, t1, t2, t3, r0, r1, r2, r3;
-    vint32m2_t *s0[4] = {&t0, &t1, &t2, &t3};
-    vint32m2_t *s1[4] = {&r0, &r1, &r2, &r3};
+    vint32m2_t t0, t1, t2, t3, t4, t5, t6;
+    vint32m2_t *s0[7] = {&t0, &t1, &t2, &t3, &t4, &t5, &t6};
 
-    for (int row = 0; row < height; row += 2)
+    for (int col = 0; col < width; col += vl)
     {
-        for (int col = 0; col < width; col += vl)
+        vl = __riscv_vsetvl_e32m2(width - col);
+        const int16_t *s = src;
+        int16_t *d = dst;
+        load_s16x8xn<3>(s, s0, srcStride, vl);
+        s += 3 * srcStride;
+
+        for (int row = 0; row + 4 <= height; row += 4)
         {
-            vl = __riscv_vsetvl_e32m2(width - col);
-            load_s16x8xn<4>(src + col + 0 * srcStride, s0, srcStride, vl);
-            load_s16x8xn<4>(src + col + 1 * srcStride, s1, srcStride, vl);
+            load_s16x8xn<4>(s, s0 + 3, srcStride, vl);
 
             vint32m2_t d0 = filter4_s32x8<coeff4>(s0, c, filter, vl);
-            vint32m2_t d1 = filter4_s32x8<coeff4>(s1, c, filter, vl);
+            vint32m2_t d1 = filter4_s32x8<coeff4>(s0 + 1, c, filter, vl);
+            vint32m2_t d2 = filter4_s32x8<coeff4>(s0 + 2, c, filter, vl);
+            vint32m2_t d3 = filter4_s32x8<coeff4>(s0 + 3, c, filter, vl);
+
+            vint16m1_t d0_i16 = __riscv_vnclip_wv_i16m1(d0, shift, 2, vl);
+            vint16m1_t d1_i16 = __riscv_vnclip_wv_i16m1(d1, shift, 2, vl);
+            vint16m1_t d2_i16 = __riscv_vnclip_wv_i16m1(d2, shift, 2, vl);
+            vint16m1_t d3_i16 = __riscv_vnclip_wv_i16m1(d3, shift, 2, vl);
+
+            __riscv_vse16_v_i16m1(d + 0 * dstStride, d0_i16, vl);
+            __riscv_vse16_v_i16m1(d + 1 * dstStride, d1_i16, vl);
+            __riscv_vse16_v_i16m1(d + 2 * dstStride, d2_i16, vl);
+            __riscv_vse16_v_i16m1(d + 3 * dstStride, d3_i16, vl);
+
+            *s0[0] = *s0[4];
+            *s0[1] = *s0[5];
+            *s0[2] = *s0[6];
+
+            s += 4 * srcStride;
+            d += 4 * dstStride;
+        }
+
+        if(height & 2)
+        {
+            load_s16x8xn<2>(s, s0 + 3, srcStride, vl);
+
+            vint32m2_t d0 = filter4_s32x8<coeff4>(s0, c, filter, vl);
+            vint32m2_t d1 = filter4_s32x8<coeff4>(s0 + 1, c, filter, vl);
 
             vint16m1_t d0_i16 = __riscv_vnclip_wv_i16m1(d0, shift, 2, vl);
             vint16m1_t d1_i16 = __riscv_vnclip_wv_i16m1(d1, shift, 2, vl);
 
-            __riscv_vse16_v_i16m1(dst + col + 0 * dstStride, d0_i16, vl);
-            __riscv_vse16_v_i16m1(dst + col + 1 * dstStride, d1_i16, vl);
+            __riscv_vse16_v_i16m1(d + 0 * dstStride, d0_i16, vl);
+            __riscv_vse16_v_i16m1(d + 1 * dstStride, d1_i16, vl);
         }
 
-        src += 2 * srcStride;
-        dst += 2 * dstStride;
+        src += vl;
+        dst += vl;
     }
 }
 

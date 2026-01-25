@@ -26,12 +26,42 @@
 
 #include <stdint.h>
 
+extern "C" {
+    void transpose4x4_rvv_u8(uint8_t* dst, const uint8_t* src, intptr_t dstride, intptr_t sstride);
+    void transpose8x8_rvv_u8(uint8_t* dst, const uint8_t* src, intptr_t dstride, intptr_t sstride);
+
+    void transpose4x4_rvv_u16(uint16_t* dst, const uint16_t* src, intptr_t dstride, intptr_t sstride);
+    void transpose8x8_rvv_u16(uint16_t* dst, const uint16_t* src, intptr_t dstride, intptr_t sstride);
+
+    void transpose16x16_rvv_u8(uint8_t* dst, const uint8_t* src, intptr_t dstride, intptr_t sstride);
+}
+
 namespace X265_NS
 {
-void transpose8x8_rvv(uint8_t *dst, const uint8_t *src, intptr_t dstride, intptr_t sstride);
-void transpose16x16_rvv(uint8_t *dst, const uint8_t *src, intptr_t dstride, intptr_t sstride);
+
+// overload
+inline void transpose4x4_rvv(uint8_t* dst, const uint8_t* src, intptr_t dstride, intptr_t sstride) {
+    transpose4x4_rvv_u8(dst, src, dstride, sstride);
+}
+
+inline void transpose4x4_rvv(uint16_t* dst, const uint16_t* src, intptr_t dstride, intptr_t sstride) {
+    transpose4x4_rvv_u16(dst, src, dstride, sstride);
+}
+
+inline void transpose8x8_rvv(uint8_t* dst, const uint8_t* src, intptr_t dstride, intptr_t sstride) {
+    transpose8x8_rvv_u8(dst, src, dstride, sstride);
+}
+
+inline void transpose8x8_rvv(uint16_t* dst, const uint16_t* src, intptr_t dstride, intptr_t sstride) {
+    transpose8x8_rvv_u16(dst, src, dstride, sstride);
+}
+
+inline void transpose16x16_rvv(uint8_t* dst, const uint8_t* src, intptr_t dstride, intptr_t sstride) {
+    transpose16x16_rvv_u8(dst, src, dstride, sstride);
+}
+
 void transpose32x32_rvv(uint8_t *dst, const uint8_t *src, intptr_t dstride, intptr_t sstride);
-void transpose8x8_rvv(uint16_t *dst, const uint16_t *src, intptr_t dstride, intptr_t sstride);
+
 void transpose16x16_rvv(uint16_t *dst, const uint16_t *src, intptr_t dstride, intptr_t sstride);
 void transpose32x32_rvv(uint16_t *dst, const uint16_t *src, intptr_t dstride, intptr_t sstride);
 }

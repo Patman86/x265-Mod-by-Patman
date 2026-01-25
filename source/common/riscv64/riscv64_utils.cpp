@@ -29,71 +29,8 @@
 
 namespace X265_NS
 {
+
 #if !HIGH_BIT_DEPTH
-void transpose8x8_rvv(uint8_t *dst, const uint8_t *src, intptr_t dstride, intptr_t sstride)
-{
-    size_t vl = 8;
-
-    vuint8m1_t a0 = __riscv_vle8_v_u8m1(src + 0 * sstride, vl);
-    vuint8m1_t a1 = __riscv_vle8_v_u8m1(src + 1 * sstride, vl);
-    vuint8m1_t a2 = __riscv_vle8_v_u8m1(src + 2 * sstride, vl);
-    vuint8m1_t a3 = __riscv_vle8_v_u8m1(src + 3 * sstride, vl);
-    vuint8m1_t a4 = __riscv_vle8_v_u8m1(src + 4 * sstride, vl);
-    vuint8m1_t a5 = __riscv_vle8_v_u8m1(src + 5 * sstride, vl);
-    vuint8m1_t a6 = __riscv_vle8_v_u8m1(src + 6 * sstride, vl);
-    vuint8m1_t a7 = __riscv_vle8_v_u8m1(src + 7 * sstride, vl);
-
-    vuint8m1x2_t v0 = __riscv_vcreate_v_u8m1x2(a0, a1);
-    vuint8m1x2_t v2 = __riscv_vcreate_v_u8m1x2(a2, a3);
-    vuint8m1x2_t v4 = __riscv_vcreate_v_u8m1x2(a4, a5);
-    vuint8m1x2_t v6 = __riscv_vcreate_v_u8m1x2(a6, a7);
-
-    __riscv_vssseg2e8_v_u8m1x2(dst, dstride, v0, vl);
-    __riscv_vssseg2e8_v_u8m1x2(dst + 2, dstride, v2, vl);
-    __riscv_vssseg2e8_v_u8m1x2(dst + 4, dstride, v4, vl);
-    __riscv_vssseg2e8_v_u8m1x2(dst + 6, dstride, v6, vl);
-}
-
-void transpose16x16_rvv(uint8_t *dst, const uint8_t *src, intptr_t dstride, intptr_t sstride)
-{
-    size_t vl = 16;
-    vuint8m1_t a0 = __riscv_vle8_v_u8m1(src + 0 * sstride, vl);
-    vuint8m1_t a1 = __riscv_vle8_v_u8m1(src + 1 * sstride, vl);
-    vuint8m1_t a2 = __riscv_vle8_v_u8m1(src + 2 * sstride, vl);
-    vuint8m1_t a3 = __riscv_vle8_v_u8m1(src + 3 * sstride, vl);
-    vuint8m1_t a4 = __riscv_vle8_v_u8m1(src + 4 * sstride, vl);
-    vuint8m1_t a5 = __riscv_vle8_v_u8m1(src + 5 * sstride, vl);
-    vuint8m1_t a6 = __riscv_vle8_v_u8m1(src + 6 * sstride, vl);
-    vuint8m1_t a7 = __riscv_vle8_v_u8m1(src + 7 * sstride, vl);
-
-    vuint8m1_t a8 = __riscv_vle8_v_u8m1(src + 8 * sstride, vl);
-    vuint8m1_t a9 = __riscv_vle8_v_u8m1(src + 9 * sstride, vl);
-    vuint8m1_t aA = __riscv_vle8_v_u8m1(src + 10 * sstride, vl);
-    vuint8m1_t aB = __riscv_vle8_v_u8m1(src + 11 * sstride, vl);
-    vuint8m1_t aC = __riscv_vle8_v_u8m1(src + 12 * sstride, vl);
-    vuint8m1_t aD = __riscv_vle8_v_u8m1(src + 13 * sstride, vl);
-    vuint8m1_t aE = __riscv_vle8_v_u8m1(src + 14 * sstride, vl);
-    vuint8m1_t aF = __riscv_vle8_v_u8m1(src + 15 * sstride, vl);
-
-    vuint8m1x2_t v0 = __riscv_vcreate_v_u8m1x2(a0, a1);
-    vuint8m1x2_t v2 = __riscv_vcreate_v_u8m1x2(a2, a3);
-    vuint8m1x2_t v4 = __riscv_vcreate_v_u8m1x2(a4, a5);
-    vuint8m1x2_t v6 = __riscv_vcreate_v_u8m1x2(a6, a7);
-    __riscv_vssseg2e8_v_u8m1x2(dst, dstride, v0, vl);
-    __riscv_vssseg2e8_v_u8m1x2(dst + 2, dstride, v2, vl);
-    __riscv_vssseg2e8_v_u8m1x2(dst + 4, dstride, v4, vl);
-    __riscv_vssseg2e8_v_u8m1x2(dst + 6, dstride, v6, vl);
-
-    vuint8m1x2_t v8 = __riscv_vcreate_v_u8m1x2(a8, a9);
-    vuint8m1x2_t v10 = __riscv_vcreate_v_u8m1x2(aA, aB);
-    vuint8m1x2_t v12 = __riscv_vcreate_v_u8m1x2(aC, aD);
-    vuint8m1x2_t v14 = __riscv_vcreate_v_u8m1x2(aE, aF);
-    __riscv_vssseg2e8_v_u8m1x2(dst + 8,  dstride, v8, vl);
-    __riscv_vssseg2e8_v_u8m1x2(dst + 10, dstride, v10, vl);
-    __riscv_vssseg2e8_v_u8m1x2(dst + 12, dstride, v12, vl);
-    __riscv_vssseg2e8_v_u8m1x2(dst + 14, dstride, v14, vl);
-}
-
 void transpose32x32_rvv(uint8_t *dst, const uint8_t *src, intptr_t dstride, intptr_t sstride)
 {
     transpose16x16_rvv(dst, src, dstride, sstride);
@@ -116,33 +53,8 @@ void transpose32x32_rvv(uint8_t *dst, const uint8_t *src, intptr_t dstride, intp
     }
 
 }
+
 #else
-void transpose8x8_rvv(uint16_t *dst, const uint16_t *src, intptr_t dstride, intptr_t sstride)
-{
-    size_t vl = 8;
-
-    vuint16m1_t a0 = __riscv_vle16_v_u16m1(src + 0 * sstride, vl);
-    vuint16m1_t a1 = __riscv_vle16_v_u16m1(src + 1 * sstride, vl);
-    vuint16m1_t a2 = __riscv_vle16_v_u16m1(src + 2 * sstride, vl);
-    vuint16m1_t a3 = __riscv_vle16_v_u16m1(src + 3 * sstride, vl);
-
-    vuint16m1_t a4 = __riscv_vle16_v_u16m1(src + 4 * sstride, vl);
-    vuint16m1_t a5 = __riscv_vle16_v_u16m1(src + 5 * sstride, vl);
-    vuint16m1_t a6 = __riscv_vle16_v_u16m1(src + 6 * sstride, vl);
-    vuint16m1_t a7 = __riscv_vle16_v_u16m1(src + 7 * sstride, vl);
-
-    vuint16m1x2_t v0 = __riscv_vcreate_v_u16m1x2 (a0, a1);
-    vuint16m1x2_t v2 = __riscv_vcreate_v_u16m1x2 (a2, a3);
-    vuint16m1x2_t v4 = __riscv_vcreate_v_u16m1x2 (a4, a5);
-    vuint16m1x2_t v6 = __riscv_vcreate_v_u16m1x2 (a6, a7);
-
-    // Notice: uint16_t* seg_addr = (uint16_t*) (bstride*i + (char*)base);
-    __riscv_vssseg2e16_v_u16m1x2(dst, 2 * dstride, v0, vl);
-    __riscv_vssseg2e16_v_u16m1x2(dst + 2, 2 * dstride, v2, vl);
-    __riscv_vssseg2e16_v_u16m1x2(dst + 4, 2 * dstride, v4, vl);
-    __riscv_vssseg2e16_v_u16m1x2(dst + 6, 2 * dstride, v6, vl);
-}
-
 void transpose16x16_rvv(uint16_t *dst, const uint16_t *src, intptr_t dstride, intptr_t sstride)
 {
     transpose8x8_rvv(dst, src, dstride, sstride);
@@ -183,8 +95,7 @@ void transpose32x32_rvv(uint16_t *dst, const uint16_t *src, intptr_t dstride, in
                 transpose8x8_rvv(dst + 8 * i + 8 * j * dstride, src + 8 * j + 8 * i * sstride, dstride, sstride);
                 for (int k = 0; k < 8; k++)
                 {
-                    __riscv_vse16_v_u16m1(dst + 8 * j + (8 * i + k) * dstride,
-                              __riscv_vle16_v_u16m1(tmp + 8 * k, vl), vl);
+                    __riscv_vse16_v_u16m1(dst + 8 * j + (8 * i + k) * dstride, __riscv_vle16_v_u16m1(tmp + 8 * k, vl), vl);
                 }
             }
             else

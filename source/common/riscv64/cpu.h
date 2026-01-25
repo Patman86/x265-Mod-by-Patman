@@ -34,14 +34,37 @@
 
 #define HWCAP_RISCV64_RVV     (1 << ('V' - 'A'))
 
+static int parse_proc_cpuinfo(const char *flag) {
+    FILE *file = fopen("/proc/cpuinfo", "r");
+    if (file == NULL)
+        return 0;
+
+    char line[1024];
+    int found = 0;
+
+    while (fgets(line, sizeof(line), file)) {
+        if (strstr(line, flag) != NULL) {
+            found = 1;
+            break;
+        }
+    }
+
+    fclose(file);
+    return found;
+}
+
 static inline uint32_t riscv64_cpu_detect()
 {
     uint32_t flags = 0;
 
     unsigned long hwcap = getauxval(AT_HWCAP);
 
-    if (hwcap & HWCAP_RISCV64_RVV)
+    if (hwcap & HWCAP_RISCV64_RVV) {
         flags |= X265_CPU_RVV;
+
+        if (parse_proc_cpuinfo("zbb"))
+            flags |= X265_CPU_ZBB;
+    }
 
     return flags;
 }
@@ -61,6 +84,7 @@ static inline uint32_t riscv64_cpu_detect()
 
 #if HAVE_RVV
     flags |= X265_CPU_RVV;
+    flags |= X265_CPU_ZBB;
 #endif
     return flags;
 }
