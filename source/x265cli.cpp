@@ -515,6 +515,74 @@ namespace X265_NS {
         output = NULL;
     }
 
+    static void seconds_to_hms(int sec, int &hh, int &mm, int &ss)
+    {
+        if (sec < 0) sec = 0;
+        hh = sec / 3600;
+        mm = (sec / 60) % 60;
+        ss = sec % 60;
+    }
+
+    static int precision_for_fps(double fps)
+    {
+        return fps > 999.5 ? 0 : fps > 99.5 ? 1 : fps > 9.95 ? 2 : 3;
+    }
+
+    static int precision_for_bitrate(double kbps)
+    {
+        return kbps > 9999.5 ? 0 : kbps > 999.5 ? 1 : 2;
+    }
+
+    static void formatSizeKBMBGB(double bytes, double &num, const char* &unit, int &prec)
+    {
+        const double KB = 1024.0;
+        const double MB = 1024.0 * KB;
+        const double GB = 1024.0 * MB;
+
+        if (bytes >= GB)
+        {
+            num  = bytes / GB;
+            unit = "G";
+        }
+        else if (bytes >= MB)
+        {
+            num  = bytes / MB;
+            unit = "M";
+        }
+        else
+        {
+            num  = bytes / KB;
+            unit = "K";
+        }
+
+        if (num >= 1000.0)
+            prec = 0;
+        else if (num >= 100.0)
+            prec = 1;
+        else
+            prec = 2;
+    }
+
+    static void format_current_and_est_size(double totalBytes,
+                                            int framesDone, int framesTotal,
+                                            double &curNum, const char* &curUnit, int &curPrec,
+                                            double &estNum, const char* &estUnit, int &estPrec)
+    {
+        formatSizeKBMBGB(totalBytes, curNum, curUnit, curPrec);
+
+        if (framesDone > 0 && framesTotal > 0)
+        {
+            double estBytes = totalBytes * (double)framesTotal / (double)framesDone;
+            formatSizeKBMBGB(estBytes, estNum, estUnit, estPrec);
+        }
+        else
+        {
+            estNum  = 0.0;
+            estUnit = "K";
+            estPrec = 2;
+        }
+    }
+
     void CLIOptions::printStatus(uint32_t frameNum)
     {
         setlocale(LC_NUMERIC, "en_US.utf8");
@@ -524,44 +592,67 @@ namespace X265_NS {
         if (!bProgress || !frameNum || (prevUpdateTime && time - prevUpdateTime < UPDATE_INTERVAL))
             return;
 
-        int64_t elapsed = time - startTime;
-        double fps = elapsed > 0 ? frameNum * 1000000. / elapsed : 0;
-        float bitrate = 0.008f * totalbytes * (param->fpsNum / param->fpsDenom) / ((float)frameNum);
-        int ete, ete_hh = 0, ete_mm = 0, ete_ss = 0, eta, eta_hh = 0, eta_mm = 0, eta_ss = 0, fps_prec, bitrate_prec, file_prec, estsz_prec = 0;
-        double percentage = 0., estsz = 0., file_num, estsz_num = 0.;
-        const char *file_unit, *estsz_unit = "";
-        fps_prec     = fps > 999.5 ? 0 : fps > 99.5 ? 1 : fps > 9.95 ? 2 : 3;
-        bitrate_prec = bitrate > 9999.5 ? 0 : bitrate > 999.5 ? 1 : 2;
-        file_prec    = totalbytes < 1000000000 ? 2 : totalbytes < 10000000000 ? 1 : 0;
-        file_num     = totalbytes < 1000000 ? (double) totalbytes / 1000. : (double) totalbytes / 1000000.;
-        file_unit    = totalbytes < 1000000 ? "K": "M";
-        if (framesToBeEncoded)
+        int64_t elapsed = time - startTime; // usec
+        double fps = elapsed > 0 ? (double)frameNum * 1000000.0 / (double)elapsed : 0.0;
+
+        double seconds = (double)frameNum * (double)param->fpsDenom / (double)param->fpsNum;
+        double bitrateKbps = (seconds > 0.0)
+            ? ((double)totalbytes * 8.0 / 1000.0) / seconds
+            : 0.0;
+
+        int fps_prec     = precision_for_fps(fps);
+        int bitrate_prec = precision_for_bitrate(bitrateKbps);
+
+        int totalFramesPlanned = param->chunkEnd ? param->chunkEnd : param->totalFrames;
+
+        double file_num = 0.0, estsz_num = 0.0;
+        const char *file_unit = "", *estsz_unit = "";
+        int file_prec = 0, estsz_prec = 0;
+
+        format_current_and_est_size((double)totalbytes,
+                                    (int)frameNum, framesToBeEncoded,
+                                    file_num, file_unit, file_prec,
+                                    estsz_num, estsz_unit, estsz_prec);
+
+        if (framesToBeEncoded > 0 && totalFramesPlanned > 0)
         {
-            ete        = (int)(elapsed / 1000000);
-            eta        = (int)(elapsed * (framesToBeEncoded - frameNum) / ((int64_t)frameNum * 1000000));
-            percentage = 100. * frameNum / (param->chunkEnd ? param->chunkEnd : param->totalFrames);
-            ete_hh     = ete / 3600;
-            ete_mm     = (ete / 60) % 60;
-            ete_ss     = ete % 60;
-            eta_hh     = eta / 3600;
-            eta_mm     = (eta / 60) % 60;
-            eta_ss     = eta % 60;
-            estsz      = (double) totalbytes * framesToBeEncoded / (frameNum * 1000.);
-            estsz_prec = estsz < 1000000 ? 2 : estsz < 10000000 ? 1 : 0;
-            estsz_num = estsz < 1000 ? estsz : estsz / 1000;
-            estsz_unit = estsz < 1000 ? "K" : "M";
-            snprintf(buf, sizeof(buf), "x265 [%.1f%%] %d/%d Frames @ %.*f FPS | %.*f kb/s | %d:%02d:%02d [-%d:%02d:%02d] | %.*f %sB [%.*f %sB]",
-                    percentage, frameNum, (param->chunkEnd ? param->chunkEnd : param->totalFrames), fps_prec, fps, bitrate_prec, bitrate,
-                    ete_hh, ete_mm, ete_ss,
-                    eta_hh, eta_mm, eta_ss,
-                    file_prec, file_num, file_unit,
-                    estsz_prec, estsz_num, estsz_unit);
+            int ete_sec = (int)(elapsed / 1000000);
+            int eta_sec = 0;
+
+            if (frameNum > 1)
+            {
+                eta_sec = (int)((double)elapsed * (double)(framesToBeEncoded - frameNum)
+                                / ((double)frameNum * 1000000.0));
+            }
+
+            double percentage = 100.0 * (double)frameNum / (double)totalFramesPlanned;
+
+            int ete_hh, ete_mm, ete_ss;
+            int eta_hh, eta_mm, eta_ss;
+            seconds_to_hms(ete_sec, ete_hh, ete_mm, ete_ss);
+            seconds_to_hms(eta_sec, eta_hh, eta_mm, eta_ss);
+
+            snprintf(buf, sizeof(buf),
+                     "x265 [%.1f%%] %d/%d Frames @ %.*f FPS | %.*f kb/s | "
+                     "%d:%02d:%02d [-%d:%02d:%02d] | %.*f %sB [%.*f %sB]",
+                     percentage,
+                     frameNum, totalFramesPlanned,
+                     fps_prec, fps,
+                     bitrate_prec, bitrateKbps,
+                     ete_hh, ete_mm, ete_ss,
+                     eta_hh, eta_mm, eta_ss,
+                     file_prec, file_num, file_unit,
+                     estsz_prec, estsz_num, estsz_unit);
         }
         else
-            snprintf(buf, sizeof(buf), "x265 %d Frames @ %.*f FPS | %.*f kb/s | %d:%02d:%02d | %.*f %sB",
-                    frameNum, fps_prec, fps, bitrate_prec, bitrate,
-                    ete_hh, ete_mm, ete_ss,
-                    file_prec, file_num, file_unit);
+        {
+            snprintf(buf, sizeof(buf),
+                     "x265 %d Frames @ %.*f FPS | %.*f kb/s | %.*f %sB",
+                     frameNum,
+                     fps_prec, fps,
+                     bitrate_prec, bitrateKbps,
+                     file_prec, file_num, file_unit);
+        }
         fprintf(stderr, "%s  \r", buf + 5);
         SetConsoleTitle(buf);
         fflush(stderr); // needed in windows
