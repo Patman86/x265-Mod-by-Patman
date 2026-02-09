@@ -168,6 +168,8 @@ protected:
         }
     };
 
+    void intraRDRefine(const CUData& parentCTU, const CUGeom& cuGeom);
+
     /* refine RD based on QP for rd-levels 5 and 6 */
     void qprdRefine(const CUData& parentCTU, const CUGeom& cuGeom, int32_t qp, int32_t lqp);
 

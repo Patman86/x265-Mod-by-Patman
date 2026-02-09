@@ -463,65 +463,245 @@ void Analysis::tryLossless(const CUGeom& cuGeom)
 
 void Analysis::qprdRefine(const CUData& parentCTU, const CUGeom& cuGeom, int32_t qp, int32_t lqp)
 {
-    uint32_t depth = cuGeom.depth;
-    ModeDepth& md = m_modeDepth[depth];
-    md.bestMode = NULL;
+    uint32_t  depth = cuGeom.depth;
+    ModeDepth &md   = m_modeDepth[depth];
+    md.bestMode     = NULL;
 
     bool bDecidedDepth = parentCTU.m_cuDepth[cuGeom.absPartIdx] == depth;
 
-    int bestCUQP = qp;
-    int lambdaQP = lqp;
+    int bestCUQP  = qp;
+    int lambdaQP  = lqp;
+
     bool doQPRefine = (bDecidedDepth && depth <= m_slice->m_pps->maxCuDQPDepth) || (!bDecidedDepth && depth == m_slice->m_pps->maxCuDQPDepth);
+
     if (m_param->analysisLoadReuseLevel >= 7)
         doQPRefine = false;
-    if (doQPRefine)
+
+    if (!doQPRefine)
     {
-        uint64_t bestCUCost, origCUCost, cuCost, cuPrevCost;
-
-        int cuIdx = (cuGeom.childOffset - 1) / 3;
-        bestCUCost = origCUCost = cacheCost[cuIdx];
-
-        int direction = m_param->bOptCUDeltaQP ? 1 : 2;
-
-        for (int dir = direction; dir >= -direction; dir -= (direction * 2))
-        {
-            if (m_param->bOptCUDeltaQP && ((dir != 1) || ((qp + 3) >= (int32_t)parentCTU.m_meanQP)))
-                break;
-
-            int threshold = 1;
-            int failure = 0;
-            cuPrevCost = origCUCost;
-
-            int modCUQP = qp + dir;
-            while (modCUQP >= m_param->rc.qpMin && modCUQP <= QP_MAX_SPEC)
-            {
-                if (m_param->bOptCUDeltaQP && modCUQP > (int32_t)parentCTU.m_meanQP)
-                    break;
-
-                recodeCU(parentCTU, cuGeom, modCUQP, qp);
-                cuCost = md.bestMode->rdCost;
-
-                COPY2_IF_LT(bestCUCost, cuCost, bestCUQP, modCUQP);
-                if (cuCost < cuPrevCost)
-                    failure = 0;
-                else if (cuCost > cuPrevCost)
-                    failure++;
-
-                if (failure > threshold)
-                    break;
-
-                cuPrevCost = cuCost;
-                modCUQP += dir;
-            }
-        }
-        lambdaQP = bestCUQP;
+        recodeCU(parentCTU, cuGeom, bestCUQP, lambdaQP);
+        md.bestMode->cu.copyToPic(depth);
+        md.bestMode->reconYuv.copyToPicYuv(*m_frame->m_reconPic[0], parentCTU.m_cuAddr, cuGeom.absPartIdx);
+        return;
     }
 
-    recodeCU(parentCTU, cuGeom, bestCUQP, lambdaQP);
+    if (!md.bestMode || md.bestMode->cu.isSkipped(0) || cuGeom.log2CUSize <= 2)
+    {
+        recodeCU(parentCTU, cuGeom, bestCUQP, lambdaQP);
+        md.bestMode->cu.copyToPic(depth);
+        md.bestMode->reconYuv.copyToPicYuv(*m_frame->m_reconPic[0], parentCTU.m_cuAddr, cuGeom.absPartIdx);
+        return;
+    }
 
-    /* Copy best data to encData CTU and recon */
+    CUData &cu = md.bestMode->cu;
+
+    if (cu.isSkipped(0))
+    {
+        recodeCU(parentCTU, cuGeom, bestCUQP, lambdaQP);
+        md.bestMode->cu.copyToPic(depth);
+        md.bestMode->reconYuv.copyToPicYuv(*m_frame->m_reconPic[0], parentCTU.m_cuAddr, cuGeom.absPartIdx);
+        return;
+    }
+
+    if (cu.getQtRootCbf(0) == 0)
+    {
+        recodeCU(parentCTU, cuGeom, bestCUQP, lambdaQP);
+        md.bestMode->cu.copyToPic(depth);
+        md.bestMode->reconYuv.copyToPicYuv(*m_frame->m_reconPic[0], parentCTU.m_cuAddr, cuGeom.absPartIdx);
+        return;
+    }
+
+    if (cuGeom.log2CUSize <= 2)
+    {
+        recodeCU(parentCTU, cuGeom, bestCUQP, lambdaQP);
+        md.bestMode->cu.copyToPic(depth);
+        md.bestMode->reconYuv.copyToPicYuv(*m_frame->m_reconPic[0], parentCTU.m_cuAddr, cuGeom.absPartIdx);
+        return;
+    }
+
+    bool isIntra = cu.isIntra(0);
+    bool isB     = (m_slice->m_sliceType == B_SLICE);
+
+    uint64_t bestCUCost, origCUCost, cuCost, cuPrevCost;
+
+    int cuIdx = (cuGeom.childOffset - 1) / 3;
+    bestCUCost = origCUCost = cacheCost[cuIdx];
+
+    int direction = m_param->bOptCUDeltaQP ? 1 : 2;
+
+    int cbfSum = 0;
+    for (uint32_t i = 0; i < cuGeom.numPartitions; i++)
+    {
+        cbfSum += cu.getCbf(i, TEXT_LUMA,     0);
+        cbfSum += cu.getCbf(i, TEXT_CHROMA_U, 0);
+        cbfSum += cu.getCbf(i, TEXT_CHROMA_V, 0);
+    }
+
+    int maxDeltaQP = 2;
+
+    if ((m_limitTU & X265_TU_LIMIT_NEIGH) && cuGeom.log2CUSize >= 4)
+        maxDeltaQP = 1;
+
+    if (isB && maxDeltaQP > 1)
+        maxDeltaQP = 1;
+
+    if (m_param->psyRd > 0.5 && maxDeltaQP > 1)
+        maxDeltaQP = 1;
+
+    if (isIntra && maxDeltaQP > 1)
+        maxDeltaQP = 1;
+
+    int minQP = X265_MAX(m_param->rc.qpMin, qp - maxDeltaQP);
+    int maxQP = X265_MIN(QP_MAX_SPEC,       qp + maxDeltaQP);
+
+    int prevQP = (int)parentCTU.m_meanQP;
+    int dirToPrev = (prevQP > qp) ? +1 : (prevQP < qp ? -1 : 0);
+
+    int residualClass = 0;
+    if (cbfSum <= (int)cuGeom.numPartitions)
+        residualClass = -1;
+    else if (cbfSum >= (int)cuGeom.numPartitions * 2)
+        residualClass = +1;
+
+    int firstDir  = direction;
+    int secondDir = -direction;
+
+    if (residualClass < 0)
+    {
+        firstDir  = -1;
+        secondDir = +1;
+    }
+    else if (residualClass > 0)
+    {
+        firstDir  = +1;
+        secondDir = -1;
+    }
+
+    if (isB)
+    {
+        firstDir  = +1;
+        secondDir = +1;
+    }
+
+    for (int dirSign = 0; dirSign < 2; dirSign++)
+    {
+        int dir = (dirSign == 0) ? firstDir : secondDir;
+
+        if (m_param->bOptCUDeltaQP && dir != 1)
+            continue;
+
+        if (dirSign == 1 && dir == firstDir)
+            continue;
+
+        if (m_param->bOptCUDeltaQP && dir == 1 && (qp + 3) >= prevQP)
+            break;
+
+        int baseThresh = (maxDeltaQP <= 1) ? 0 : 1;
+        int threshold  = baseThresh;
+
+        if (dirToPrev != 0 && dir == dirToPrev && maxDeltaQP > 1)
+            threshold++;
+
+        int failure  = 0;
+        cuPrevCost   = origCUCost;
+
+        int modCUQP = qp + dir;
+        while (modCUQP >= minQP && modCUQP <= maxQP)
+        {
+            if (m_param->bOptCUDeltaQP &&
+                modCUQP > prevQP)
+                break;
+
+            recodeCU(parentCTU, cuGeom, modCUQP, qp);
+            cuCost = md.bestMode->rdCost;
+
+            COPY2_IF_LT(bestCUCost, cuCost, bestCUQP, modCUQP);
+
+            if (cuCost < cuPrevCost)
+                failure = 0;
+            else
+                failure++;
+
+            if (failure > threshold)
+                break;
+
+            cuPrevCost = cuCost;
+            modCUQP   += dir;
+        }
+    }
+
+    lambdaQP = bestCUQP;
+    setLambdaFromQP(parentCTU, lambdaQP);
+
+    recodeCU(parentCTU, cuGeom, bestCUQP, lambdaQP);
     md.bestMode->cu.copyToPic(depth);
     md.bestMode->reconYuv.copyToPicYuv(*m_frame->m_reconPic[0], parentCTU.m_cuAddr, cuGeom.absPartIdx);
+}
+
+void Analysis::intraRDRefine(const CUData& parentCTU, const CUGeom& cuGeom)
+{
+    uint32_t depth = cuGeom.depth;
+    ModeDepth &md  = m_modeDepth[depth];
+
+    if (!md.bestMode || !md.bestMode->cu.isIntra(0))
+        return;
+
+    if (cuGeom.log2CUSize < 3)
+        return;
+
+    Mode bestMode = *md.bestMode;
+    uint64_t bestCost = md.bestMode->rdCost;
+
+    const CUData &cu = md.bestMode->cu;
+    const uint32_t absPartIdx = cuGeom.absPartIdx;
+    const uint8_t curLumaMode = cu.m_lumaIntraDir[absPartIdx];
+    const uint8_t curChroma   = cu.m_chromaIntraDir[absPartIdx];
+
+    uint8_t candModes[8];
+    int numCand = 0;
+
+    auto pushMode = [&](uint8_t m)
+    {
+        for (int i = 0; i < numCand; i++)
+            if (candModes[i] == m)
+                return;
+        candModes[numCand++] = m;
+    };
+
+    pushMode(curLumaMode);
+
+    if (parentCTU.m_cuAbove)
+        pushMode(parentCTU.m_cuAbove->m_lumaIntraDir[absPartIdx]);
+    if (parentCTU.m_cuLeft)
+        pushMode(parentCTU.m_cuLeft->m_lumaIntraDir[absPartIdx]);
+
+    pushMode(DC_IDX);
+    pushMode(PLANAR_IDX);
+
+    for (int i = 0; i < numCand; i++)
+    {
+        uint8_t mode = candModes[i];
+
+        Mode test = md.pred[PRED_INTRA];
+        test.initCosts();
+        test.cu.initSubCU(parentCTU, cuGeom, cu.m_qp[absPartIdx]);
+
+        test.cu.setPartSizeSubParts(SIZE_2Nx2N);
+        test.cu.setPredModeSubParts(MODE_INTRA);
+        test.cu.setLumaIntraDirSubParts(mode, 0, depth);
+        test.cu.setChromIntraDirSubParts(curChroma, 0, depth);
+
+        checkIntra(test, cuGeom, SIZE_2Nx2N);
+        encodeResAndCalcRdInterCU(test, cuGeom);
+
+        if (test.rdCost < bestCost)
+        {
+            bestCost = test.rdCost;
+            bestMode = test;
+        }
+    }
+
+    *md.bestMode = bestMode;
 }
 
 #if ENABLE_SCC_EXT
@@ -533,6 +713,11 @@ uint64_t Analysis::compressIntraCU(const CUData& parentCTU, const CUGeom& cuGeom
     uint32_t depth = cuGeom.depth;
     ModeDepth& md = m_modeDepth[depth];
     md.bestMode = NULL;
+
+    if (m_param->intraRefine >= 1 && m_param->rdLevel >= 4 && !m_param->analysisLoadReuseLevel)
+    {
+        intraRDRefine(parentCTU, cuGeom);
+    }
 
     MV iMVCandList[4][10];
     memset(iMVCandList, 0, sizeof(MV) * 4 * 10);
