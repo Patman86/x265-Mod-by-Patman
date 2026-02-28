@@ -103,6 +103,8 @@ namespace X265_NS {
         H1("   --dither                      Enable dither if downscaling to 8 bit pixels. Default disabled\n");
         H0("   --[no-]copy-pic               Copy buffers of input picture in frame. Default %s\n", OPT(param->bCopyPicToFrame));
         H0("   --reader-options              Pass reader-specific options to input file reader\n");
+        H0("   --binary-units                Use binary units (KiB/MiB/GiB) for size display\n");
+        H0("   --show-gb                     Additionally show size in GB/GiB\n");
 #ifdef ENABLE_AVISYNTH
         H0("\nAvisynth reader options:\n");
         H0("     library                     Use custom Avisynth library (full path to Avisynth library is required)\n");
@@ -156,6 +158,7 @@ namespace X265_NS {
         H0("   --dynamic-rd <0..4.0>         Strength of dynamic RD, 0 to disable. Default %.2f\n", param->dynamicRd);
         H0("   --[no-]ssim-rd                Enable ssim rate-distortion optimization, 0 to disable. Default %s\n", OPT(param->bSsimRd));
         H0("   --[no-]rd-refine              Enable QP-based RD refinement for rd levels 5 and 6. Default %s\n", OPT(param->bEnableRdRefine));
+        H0("   --[no-]intra-rd-refine        Enable additional RD refinement of intra prediction modes at higher rd-levels. Default %s\n", OPT(param->bIntraRDRefine));
         H0("   --[no-]early-skip             Enable early SKIP detection. Default %s\n", OPT(param->bEnableEarlySkip));
         H0("   --rskip <Integer>             Enable recursion skip for an early exit from CTU analysis during inter-prediction.\n"
            "                                     - 0: disabled.\n"
@@ -533,38 +536,71 @@ namespace X265_NS {
         return kbps > 9999.5 ? 0 : kbps > 999.5 ? 1 : 2;
     }
 
-    static void formatSizeKBMB(double bytes, double &num, const char* &unit, int &prec)
-    {
-        const double KB = 1000.0;
-        const double MB = 1000.0 * KB;
+static void formatSize(double bytes, bool binary, bool showGB, double &num, const char* &unit, int &prec)
+{
+    // SI
+    const double KB = 1000.0;
+    const double MB = 1000.0 * KB;
+    const double GB = 1000.0 * MB;
 
-        if (bytes >= MB)
+    // binary
+    const double KiB = 1024.0;
+    const double MiB = 1024.0 * KiB;
+    const double GiB = 1024.0 * MiB;
+
+    if (!binary)
+    {
+        if (showGB && bytes >= GB)
         {
-            num  = bytes / MB;
+            num = bytes / GB;
+            unit = "G";
+        }
+        else if (bytes >= MB)
+        {
+            num = bytes / MB;
             unit = "M";
         }
         else
         {
-            num  = bytes / KB;
+            num = bytes / KB;
             unit = "K";
         }
-
-        if (num >= 1000.0)
-            prec = 0;
-        else if (num >= 100.0)
-            prec = 1;
+    }
+    else
+    {
+        if (showGB && bytes >= GiB)
+        {
+            num = bytes / GiB;
+            unit = "Gi";
+        }
+        else if (bytes >= MiB)
+        {
+            num = bytes / MiB;
+            unit = "Mi";
+        }
         else
-            prec = 2;
+        {
+            num = bytes / KiB;
+            unit = "Ki";
+        }
     }
 
-    static void format_current_and_est_size(double totalBytes, int framesDone, int framesTotal, double &curNum, const char* &curUnit, int &curPrec, double &estNum, const char* &estUnit, int &estPrec)
+    if (num >= 1000.0)
+        prec = 0;
+    else if (num >= 100.0)
+        prec = 1;
+    else
+        prec = 2;
+}
+
+    static void format_current_and_est_size(double totalBytes, int framesDone, int framesTotal, double &curNum, const char* &curUnit, int &curPrec, double &estNum, const char* &estUnit, int &estPrec, bool binary, bool showGB)
     {
-        formatSizeKBMB(totalBytes, curNum, curUnit, curPrec);
+        formatSize(totalBytes, binary, showGB, curNum, curUnit, curPrec);
 
         if (framesDone > 0 && framesTotal > 0)
         {
             double estBytes = totalBytes * (double)framesTotal / (double)framesDone;
-            formatSizeKBMB(estBytes, estNum, estUnit, estPrec);
+            formatSize(estBytes, binary, showGB, estNum, estUnit, estPrec);
         }
         else
         {
@@ -598,7 +634,7 @@ namespace X265_NS {
         const char *file_unit = "", *estsz_unit = "";
         int file_prec = 0, estsz_prec = 0;
 
-        format_current_and_est_size((double)totalbytes, (int)frameNum, framesToBeEncoded, file_num, file_unit, file_prec, estsz_num, estsz_unit, estsz_prec);
+        format_current_and_est_size((double)totalbytes, (int)frameNum, framesToBeEncoded, file_num, file_unit, file_prec, estsz_num, estsz_unit, estsz_prec, bUseBinaryUnits, bShowGB);
 
         if (framesToBeEncoded > 0 && totalFramesPlanned > 0)
         {
@@ -914,6 +950,8 @@ namespace X265_NS {
                 OPT("output-depth")   /* handled above */;
                 OPT("recon-y4m-exec") reconPlayCmd = optarg;
                 OPT("reader-options") this->readerOpts = optarg;
+                OPT("binary-units") this->bUseBinaryUnits = true;
+                OPT("show-gb") this->bShowGB = true;
                 OPT("svt")    /* handled above */;
                 OPT("qpfile")
                 {

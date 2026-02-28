@@ -94,6 +94,8 @@ static const struct option long_options[] =
     { "frame-skip",     required_argument, NULL, 0 },
     { "frames",         required_argument, NULL, 'f' },
     { "reader-options", required_argument, NULL, 0 },
+    { "binary-units",         no_argument, NULL, 0 },
+    { "show-gb",              no_argument, NULL, 0 },
     { "recon",          required_argument, NULL, 'r' },
     { "recon-depth",    required_argument, NULL, 0 },
     { "no-wpp",               no_argument, NULL, 0 },
@@ -215,6 +217,8 @@ static const struct option long_options[] =
     { "no-psy-rdoq",          no_argument, NULL, 0 },
     { "rd-refine",            no_argument, NULL, 0 },
     { "no-rd-refine",         no_argument, NULL, 0 },
+    { "intra-rd-refine",      no_argument, NULL, 0 },
+    { "no-intra-rd-refine",   no_argument, NULL, 0 },
     { "scaling-list",   required_argument, NULL, 0 },
     { "lossless",             no_argument, NULL, 0 },
     { "no-lossless",          no_argument, NULL, 0 },
@@ -436,6 +440,8 @@ static const struct option long_options[] =
         int64_t startTime;
         int64_t prevUpdateTime;
         const char* readerOpts;
+        bool bUseBinaryUnits; // false = kB/MB/GB, true = KiB/MiB/GiB
+        bool bShowGB; // true = additionally display GB/GiB
 
         int argCnt;
         char** orgArgv;
@@ -491,6 +497,8 @@ static const struct option long_options[] =
             numRefs = 0;
             argCnt = 0;
             readerOpts = NULL;
+            bUseBinaryUnits = false;
+            bShowGB = false;
             orgArgv = NULL;
             argString = NULL;
             stringPool = NULL;
