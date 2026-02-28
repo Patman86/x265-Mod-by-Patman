@@ -1660,6 +1660,13 @@ typedef struct x265_param
      * Default disabled */
     int       bEnableRdRefine;
 
+    /* Perform an additional RD-based refinement of intra prediction modes.
+     * After the normal intra CU analysis, a small set of candidate intra
+     * modes (current, neighbours and basic modes) is re-evaluated at the
+     * same QP to find a lower RD cost without changing quantisation.
+     * Only effective at higher rd-levels (rd-level >= 4). Default disabled. */
+    int       bIntraRDRefine;
+
     /* If save, write per-frame analysis information into analysis buffers.
      * If load, read analysis information into analysis buffer and use this
      * analysis information to reduce the amount of work the encoder must perform.

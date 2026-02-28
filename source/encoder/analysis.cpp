@@ -714,7 +714,7 @@ uint64_t Analysis::compressIntraCU(const CUData& parentCTU, const CUGeom& cuGeom
     ModeDepth& md = m_modeDepth[depth];
     md.bestMode = NULL;
 
-    if (m_param->intraRefine >= 1 && m_param->rdLevel >= 4 && !m_param->analysisLoadReuseLevel)
+    if (m_param->bIntraRDRefine && m_param->rdLevel >= 4 && !m_param->analysisLoadReuseLevel)
     {
         intraRDRefine(parentCTU, cuGeom);
     }

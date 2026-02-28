@@ -291,6 +291,7 @@ void x265_param_default(x265_param* param)
     param->bCULossless = 0;
     param->bEnableTemporalSubLayers = 0;
     param->bEnableRdRefine = 0;
+    param->bIntraRDRefine = 0;
     param->bMultiPassOptRPS = 0;
     param->bSsimRd = 0;
 
@@ -1143,6 +1144,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
             p->psyRdoq = 0.0;
     }
     OPT("rd-refine") p->bEnableRdRefine = atobool(value);
+    OPT("intra-rd-refine") p->bIntraRDRefine = atobool(value);
     OPT("signhide") p->bEnableSignHiding = atobool(value);
     OPT("b-intra") p->bIntraInBFrames = atobool(value);
     OPT("lft") p->bEnableLoopFilter = atobool(value); /* DEPRECATED */
@@ -2367,6 +2369,7 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     s += snprintf(s, bufSize - (s - buf), " psy-rd=%.2f", p->psyRd);
     s += snprintf(s, bufSize - (s - buf), " psy-rdoq=%.2f", p->psyRdoq);
     BOOL(p->bEnableRdRefine, "rd-refine");
+    BOOL(p->bIntraRDRefine, "intra-rd-refine");
     BOOL(p->bLossless, "lossless");
     s += snprintf(s, bufSize - (s - buf), " cbqpoffs=%d", p->cbQpOffset);
     s += snprintf(s, bufSize - (s - buf), " crqpoffs=%d", p->crQpOffset);
