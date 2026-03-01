@@ -536,62 +536,62 @@ namespace X265_NS {
         return kbps > 9999.5 ? 0 : kbps > 999.5 ? 1 : 2;
     }
 
-static void formatSize(double bytes, bool binary, bool showGB, double &num, const char* &unit, int &prec)
-{
-    // SI
-    const double KB = 1000.0;
-    const double MB = 1000.0 * KB;
-    const double GB = 1000.0 * MB;
-
-    // binary
-    const double KiB = 1024.0;
-    const double MiB = 1024.0 * KiB;
-    const double GiB = 1024.0 * MiB;
-
-    if (!binary)
+    static void formatSize(double bytes, bool binary, bool showGB, double &num, const char* &unit, int &prec)
     {
-        if (showGB && bytes >= GB)
+        // SI
+        const double KB = 1000.0;
+        const double MB = 1000.0 * KB;
+        const double GB = 1000.0 * MB;
+
+        // binary
+        const double KiB = 1024.0;
+        const double MiB = 1024.0 * KiB;
+        const double GiB = 1024.0 * MiB;
+
+        if (!binary)
         {
-            num = bytes / GB;
-            unit = "G";
-        }
-        else if (bytes >= MB)
-        {
-            num = bytes / MB;
-            unit = "M";
+            if (showGB && bytes >= GB)
+            {
+                num = bytes / GB;
+                unit = "G";
+            }
+            else if (bytes >= MB)
+            {
+                num = bytes / MB;
+                unit = "M";
+            }
+            else
+            {
+                num = bytes / KB;
+                unit = "K";
+            }
         }
         else
         {
-            num = bytes / KB;
-            unit = "K";
+            if (showGB && bytes >= GiB)
+            {
+                num = bytes / GiB;
+                unit = "Gi";
+            }
+            else if (bytes >= MiB)
+            {
+                num = bytes / MiB;
+                unit = "Mi";
+            }
+            else
+            {
+                num = bytes / KiB;
+                unit = "Ki";
+            }
         }
-    }
-    else
-    {
-        if (showGB && bytes >= GiB)
-        {
-            num = bytes / GiB;
-            unit = "Gi";
-        }
-        else if (bytes >= MiB)
-        {
-            num = bytes / MiB;
-            unit = "Mi";
-        }
-        else
-        {
-            num = bytes / KiB;
-            unit = "Ki";
-        }
-    }
 
-    if (num >= 1000.0)
-        prec = 0;
-    else if (num >= 100.0)
-        prec = 1;
-    else
-        prec = 2;
-}
+        if (num >= 1000.0)
+            prec = 0;
+        else if (num >= 100.0)
+            prec = 1;
+        else
+            prec = 2;
+    }
 
     static void format_current_and_est_size(double totalBytes, int framesDone, int framesTotal, double &curNum, const char* &curUnit, int &curPrec, double &estNum, const char* &estUnit, int &estPrec, bool binary, bool showGB)
     {
@@ -631,7 +631,7 @@ static void formatSize(double bytes, bool binary, bool showGB, double &num, cons
         int totalFramesPlanned = param->chunkEnd ? param->chunkEnd : param->totalFrames;
 
         double file_num = 0.0, estsz_num = 0.0;
-        const char *file_unit = "", *estsz_unit = "";
+        const char *file_unit, *estsz_unit;
         int file_prec = 0, estsz_prec = 0;
 
         format_current_and_est_size((double)totalbytes, (int)frameNum, framesToBeEncoded, file_num, file_unit, file_prec, estsz_num, estsz_unit, estsz_prec, bUseBinaryUnits, bShowGB);
