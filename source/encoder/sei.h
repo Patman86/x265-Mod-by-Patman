@@ -204,83 +204,171 @@ public:
     int32_t     m_chroma_scaling_from_luma;
     int32_t     m_grain_scale_shift;
     uint16_t    m_grain_seed;
+    bool        subsamplingX;
+    bool        subsamplingY;
+    bool        predict_scaling_flag;
+    bool        predict_y_scaling_flag;
+    bool        predict_cb_scaling_flag;
+    bool        predict_cr_scaling_flag;
+    int         units_resolution_log2;
+    int         horz_resolution;
+    int         vert_resolution;
+    bool        luma_only_flag;
+    int         point_y_value_increment_bits;
+    int         point_y_scaling_bits;
+    int         point_cb_value_increment_bits;
+    int         point_cb_scaling_bits;
+    int         point_cr_value_increment_bits;
+    int         point_cr_scaling_bits;
+    int         cb_scaling_offset;
+    int         cr_scaling_offset;
+    int         payload_size;
+    int         payload_bits;
 
-    void writeSEI(const SPS&)
+    void writeSEI(const SPS& sps)
     {
-        WRITE_CODE(0x26, 8, "country_code");
+        WRITE_CODE(0xB5, 8, "country_code");
         WRITE_CODE(0x5890, 16, "provider_code");
-        WRITE_CODE(0x0001, 16, "provider_oriented_code");
-        WRITE_FLAG(m_apply_grain, "afgs1_enable_flag");
-        WRITE_CODE(m_grain_seed, 16, "grain_seed");
+        WRITE_CODE(0x0001, 8, "provider_oriented_code");
+        WRITE_FLAG(1, "afgs1_enable_flag");
+        WRITE_CODE(0, 4, "reserved_4bits");
+        WRITE_CODE(0, 3, "num_film_grain_sets_minus1");
+        WRITE_FLAG(payload_size < 4 ? 1 : 0, "payload_less_than_4byte_flag");
+        WRITE_CODE(payload_size, payload_bits, "payload_size");
+
         WRITE_CODE(0, 3, "film_grain_param_set_idx");
-        WRITE_CODE(m_update_grain, 1, "update_grain");
+        WRITE_FLAG(m_apply_grain, "apply_grain_flag");
+        WRITE_CODE(m_grain_seed, 16, "grain_seed");
+        WRITE_FLAG(1, "update_grain_flag");
+        WRITE_CODE(units_resolution_log2, 4, "apply_units_resolution_log2");
+        WRITE_CODE(horz_resolution, 12, "apply_horz_resolution");
+        WRITE_CODE(vert_resolution, 12, "apply_vert_resolution");
+        WRITE_FLAG(luma_only_flag, "luma_only_flag");
+        if (!luma_only_flag) {
+            WRITE_FLAG(subsamplingX, "subsampling_x");
+            WRITE_FLAG(subsamplingY, "subsampling_y");
+        }
+        WRITE_FLAG(sps.vuiParameters.videoSignalTypePresentFlag, "video_signal_characteristics_flag");
+        if (sps.vuiParameters.videoSignalTypePresentFlag)
+        {
+            WRITE_CODE(m_bitDepth - 8, 3, "bit_depth_minus8");
+            WRITE_FLAG(sps.vuiParameters.colourDescriptionPresentFlag, "cicp_info_present_flag");
+            if (sps.vuiParameters.colourDescriptionPresentFlag)
+            {
+                WRITE_CODE(sps.vuiParameters.colourPrimaries, 8, "colour_primaries");
+                WRITE_CODE(sps.vuiParameters.transferCharacteristics, 8, "transfer_characteristics");
+                WRITE_CODE(sps.vuiParameters.matrixCoefficients, 8, "matrix_coefficients");
+                WRITE_FLAG(sps.vuiParameters.videoFullRangeFlag, "video_full_range_flag");
+            }
+        }
+        WRITE_FLAG(predict_scaling_flag, "predict_scaling_flag");
+        if (predict_scaling_flag) {
+            WRITE_FLAG(predict_y_scaling_flag, "predict_y_scaling_flag");
+        }
+
         WRITE_CODE(m_num_y_points, 4, "num_y_points");
-        if (m_num_y_points)
-        {
-            for (int i = 0; i < m_num_y_points; i++)
-            {
-                for (int j = 0; j < 2; j++)
-                {
-                    WRITE_CODE(m_scaling_points_y[i][j], 8, "scaling_points_y[i][j]");
+        if (m_num_y_points) {
+            WRITE_CODE(point_y_value_increment_bits - 1, 3, "point_y_value_increment_bits_minus1");
+            int bitsIncr = point_y_value_increment_bits;
+            WRITE_CODE(point_y_scaling_bits - 5, 2, "point_y_scaling_bits_minus5");
+            int bitsScal = point_y_scaling_bits;
+            for (int i = 0; i < m_num_y_points; i++) {
+                if (i)
+                    WRITE_CODE(m_scaling_points_y[i][0] - m_scaling_points_y[i - 1][0], bitsIncr, "point_y_value_increment[i]");
+                else
+                    WRITE_CODE(m_scaling_points_y[i][0], bitsIncr, "point_y_value_increment[i]");
+                WRITE_CODE(m_scaling_points_y[i][1], bitsScal, "point_y_scaling[i]");
+            }
+        }
+
+        if (!luma_only_flag)
+            WRITE_FLAG(m_chroma_scaling_from_luma, "chroma_scaling_from_luma");
+
+        if (luma_only_flag || m_chroma_scaling_from_luma) {
+            m_num_cb_points = 0;
+            m_num_cr_points = 0;
+        }
+        else {
+            if (predict_scaling_flag)
+                WRITE_FLAG(predict_cb_scaling_flag, "predict_cb_scaling_flag");
+
+            WRITE_CODE(m_num_cb_points, 4, "num_cb_points");
+            if (m_num_cb_points) {
+                WRITE_CODE(point_cb_value_increment_bits - 1, 3, "point_cb_value_increment_bits_minus1");
+                int bitsIncr = point_cb_value_increment_bits;
+                WRITE_CODE(point_cb_scaling_bits - 5, 2, "point_cb_scaling_bits_minus5");
+                int bitsScal = point_cb_scaling_bits;
+                WRITE_CODE(cb_scaling_offset, 8, "cb_scaling_offset");
+
+                for (int i = 0; i < m_num_cb_points; i++) {
+                    if (i)
+                        WRITE_CODE(m_scaling_points_cb[i][0] - m_scaling_points_cb[i - 1][0], bitsIncr, "point_cb_value_increment[i]");
+                    else
+                        WRITE_CODE(m_scaling_points_cb[i][0], bitsIncr, "point_cb_value_increment[i]");
+                    WRITE_CODE(m_scaling_points_cb[i][1], bitsScal, "point_cb_scaling[i]");
+                }
+            }
+
+            if (predict_scaling_flag)
+                WRITE_FLAG(predict_cr_scaling_flag, "predict_cr_scaling_flag");
+
+            WRITE_CODE(m_num_cr_points, 4, "num_cr_points");
+            if (m_num_cr_points) {
+                WRITE_CODE(point_cr_value_increment_bits - 1, 3, "point_cr_value_increment_bits_minus1");
+                int bitsIncr = point_cr_value_increment_bits;
+                WRITE_CODE(point_cr_scaling_bits - 5, 2, "point_cr_scaling_bits_minus5");
+                int bitsScal = point_cr_scaling_bits;
+                WRITE_CODE(cr_scaling_offset, 8, "cr_scaling_offset");
+
+                for (int i = 0; i < m_num_cr_points; i++) {
+                    if (i)
+                        WRITE_CODE(m_scaling_points_cr[i][0] - m_scaling_points_cr[i - 1][0], bitsIncr, "point_cr_value_increment[i]");
+                    else
+                        WRITE_CODE(m_scaling_points_cr[i][0], bitsIncr, "point_cr_value_increment[i]");
+                    WRITE_CODE(m_scaling_points_cr[i][1], bitsScal, "point_cr_scaling[i]");
                 }
             }
         }
-        WRITE_FLAG(m_num_cb_points == 0 && m_num_cr_points == 0, "luma_only_flag");
-        WRITE_FLAG(0, "chroma_scaling_from_luma");
-        WRITE_CODE(m_num_cb_points, 4, "num_cb_points");
-        if (m_num_cb_points)
-        {
-            for (int i = 0; i < m_num_cb_points; i++)
-            {
-                for (int j = 0; j < 2; j++)
-                {
-                    WRITE_CODE(m_scaling_points_cb[i][j], 8, "scaling_points_cb[i][j]");
-                }
-            }
-        }
-        WRITE_CODE(m_num_cr_points, 4, "num_cr_points");
-        if (m_num_cr_points)
-        {
-            for (int i = 0; i < m_num_cr_points; i++)
-            {
-                for (int j = 0; j < 2; j++)
-                {
-                    WRITE_CODE(m_scaling_points_cr[i][j], 8, "scaling_points_cr[i][j]");
-                }
-            }
-        }
-        WRITE_CODE(m_scaling_shift - 8, 2, "scaling_shift");
+
+        WRITE_CODE(m_scaling_shift - 8, 2, "grain_scaling_minus8");
         WRITE_CODE(m_ar_coeff_lag, 2, "ar_coeff_lag");
-        if (m_num_y_points)
+        int bits_per_ar_coef = 8;
+        if (m_num_y_points || predict_y_scaling_flag)
         {
+            WRITE_CODE(bits_per_ar_coef - 5, 2, "bits_per_ar_coeff_y_minus5");
+
             for (int i = 0; i < 24; i++)
             {
-                WRITE_CODE(m_ar_coeffs_y[i] + 128, 8, "ar_coeff_y[i]");
+                WRITE_CODE(m_ar_coeffs_y[i] + (1 << (bits_per_ar_coef - 1)), bits_per_ar_coef, "ar_coeff_y[i]");
             }
         }
-        if (m_num_cb_points || m_chroma_scaling_from_luma)
+        if (m_num_cb_points || m_chroma_scaling_from_luma || predict_cb_scaling_flag)
         {
+            WRITE_CODE(bits_per_ar_coef - 5, 2, "bits_per_ar_coeff_cb_minus5");
+
             for (int i = 0; i < 25; i++)
             {
-                WRITE_CODE(m_ar_coeffs_cb[i] + 128, 8, "ar_coeff_cb[i]");
+                WRITE_CODE(m_ar_coeffs_cb[i] + (1 << (bits_per_ar_coef - 1)), bits_per_ar_coef, "ar_coeff_cb[i]");
             }
         }
-        if (m_num_cr_points || m_chroma_scaling_from_luma)
+        if (m_num_cr_points || m_chroma_scaling_from_luma || predict_cr_scaling_flag)
         {
+            WRITE_CODE(bits_per_ar_coef - 5, 2, "bits_per_ar_coeff_cr_minus5");
+
             for (int i = 0; i < 25; i++)
             {
-                WRITE_CODE(m_ar_coeffs_cr[i] + 128, 8, "ar_coeff_cr[i]");
+                WRITE_CODE(m_ar_coeffs_cr[i] + (1 << (bits_per_ar_coef - 1)), bits_per_ar_coef, "ar_coeff_cr[i]");
             }
         }
         WRITE_CODE(m_ar_coeff_shift - 6, 2, "ar_coeff_shift");
         WRITE_CODE(m_grain_scale_shift, 2, "grain_scale_shift");
-        if (m_num_cb_points)
+        if (m_num_cb_points && !predict_cb_scaling_flag)
         {
             WRITE_CODE(m_cb_mult, 8, "cb_mult");
             WRITE_CODE(m_cb_luma_mult, 8, "cb_luma_mult");
             WRITE_CODE(m_cb_offset, 9, "cb_offset");
         }
-        if (m_num_cr_points)
+        if (m_num_cr_points && !predict_cr_scaling_flag)
         {
             WRITE_CODE(m_cr_mult, 8, "cr_mult");
             WRITE_CODE(m_cr_luma_mult, 8, "cr_luma_mult");

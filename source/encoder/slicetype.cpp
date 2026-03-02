@@ -1333,7 +1333,10 @@ void Lookahead::findJob(int /*workerThreadID*/)
     slicetypeDecide();
 
     m_inputLock.acquire();
-    if (m_outputSignalRequired)
+    m_sliceTypeBusy = false;
+    m_helpWanted = true;
+
+    if (m_outputSignalRequired && m_outputQueue.size())
     {
         m_outputSignal.trigger();
         m_outputSignalRequired = false;
