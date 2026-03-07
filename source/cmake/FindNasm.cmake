@@ -20,6 +20,6 @@ if(NASM_EXECUTABLE)
 endif()
 
 # Provide standardized success/failure messages
-find_package_handle_standard_args(nasm
+find_package_handle_standard_args(Nasm
     REQUIRED_VARS NASM_EXECUTABLE
     VERSION_VAR NASM_VERSION_STRING)

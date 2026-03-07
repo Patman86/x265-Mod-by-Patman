@@ -122,6 +122,7 @@ bool PicYuv::create(x265_param* param, bool picAlloc, pixel *pixelbuf)
     return true;
 
 fail:
+    this->destroy();
     return false;
 }
 
@@ -255,9 +256,14 @@ fail:
 
 void PicYuv::destroy()
 {
-    X265_FREE(m_picBuf[0]);
-    X265_FREE(m_picBuf[1]);
-    X265_FREE(m_picBuf[2]);
+    for (int i = 0; i < MAX_NUM_COMPONENT; i++)
+    {
+        if (m_picBuf[i])
+        {
+            x265_free(m_picBuf[i]);
+            m_picBuf[i] = NULL;
+        }
+    }
 }
 
 /* Copy pixels from an x265_picture into internal PicYuv instance.

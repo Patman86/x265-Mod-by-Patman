@@ -191,7 +191,10 @@ regardless of the amount of frame parallelism.
 
 By default frame parallelism and WPP are enabled together. The number of
 frame threads used is auto-detected from the (hyperthreaded) CPU core
-count, but may be manually specified via :option:`--frame-threads`
+count, but may be manually specified via :option:`--frame-threads`. When
+:option:`--threaded-me` is enabled, the auto-detected frame thread count
+is derived from the thread fraction available after the ThreadedME
+pool is allocated.
 
 	+-------+--------+
 	| Cores | Frames |
@@ -245,6 +248,40 @@ bonded task groups to measure single frame cost estimates using slices.
 The main slicetypeDecide() function itself is also performed by a worker
 thread if your encoder has a thread pool, else it runs within the
 context of the thread which calls the x265_encoder_encode().
+
+Threaded Motion Estimation
+==========================
+
+The Threaded Motion Estimation module improves parallelism by offloading
+motion estimation (which often dominates encoding time) to a dedicated
+thread pool for pre-processing ahead of WPP.
+
+In the default flow, MVP derivation requires motion vectors from adjacent
+CTUs. This helps compression efficiency but introduces stalls (as described
+in the WPP section), which limits parallelism. Threaded ME relaxes this
+dependency and uses a different algorithm to unlock additional parallelism.
+
+In this algorithm, CTUs from different rows are processed in parallel as soon
+as external row dependencies are resolved. The steps are:
+
+1. For MVP derivation, motion vectors from neighboring PUs and colocated MVs
+   from the reference frame are used when available.
+2. If these are not valid, a median MV from colocated CTUs in reference
+   frames is evaluated.
+3. If the median MV is also unavailable (for example, when the reference
+   frame is an I-slice), a 109-point diamond search is performed on the full
+   CTU and, when available, on the four CU quadrants at depth=1. The
+   resulting vectors are used as MVPs for their respective regions.
+4. Using these MVP seeds, motion estimation is then run for every PU shape
+   enabled by the active configuration, and the resulting MVs are written to
+   a lookup table.
+5. During inter prediction, motion vectors from this precomputed lookup table
+   are used for prediction.
+
+ThreadedME has higher threading demand because it must maintain a lead over WPP
+to minimize stalls. It computes MVs for CTUs across rows within a frame and
+across frames across frame encoders. It is therefore recommended primarily for
+many-core systems where threading resources can be balanced.
 
 SAO
 ===

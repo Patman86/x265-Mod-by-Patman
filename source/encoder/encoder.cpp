@@ -39,6 +39,7 @@
 #include "ratecontrol.h"
 #include "dpb.h"
 #include "nal.h"
+#include "threadedme.h"
 
 #include "x265.h"
 
@@ -70,7 +71,7 @@ typedef struct
 
 DolbyVisionProfileSpec dovi[] =
 {
-    { 1, 1, 1, 1, 1, 5, 1,  2, 2, 2, 50 },
+    { 1, 1, 1, 1, 1, 5, 1, 16, 9, 15, 50 },
     { 1, 1, 1, 1, 1, 5, 0, 16, 9, 9, 81 },
     { 1, 1, 1, 1, 1, 5, 0,  1, 1, 1, 82 },
     { 1, 1, 1, 1, 1, 5, 0, 18, 9, 9, 84 }
@@ -132,6 +133,7 @@ Encoder::Encoder()
     m_numLumaWPBiFrames = 0;
     m_numChromaWPBiFrames = 0;
     m_lookahead = NULL;
+    m_threadedME = NULL;
     m_rateControl = NULL;
     m_dpb = NULL;
     m_numDelayedPic = 0;
@@ -263,7 +265,7 @@ void Encoder::create()
     bool allowPools = !strlen(p->numaPools) || strcmp(p->numaPools, "none");
 
     // Trim the thread pool if --wpp, --pme, and --pmode are disabled
-    if (!p->bEnableWavefront && !p->bDistributeModeAnalysis && !p->bDistributeMotionEstimation && !p->lookaheadSlices)
+    if (!p->bEnableWavefront && !p->bDistributeModeAnalysis && !p->bDistributeMotionEstimation && !p->lookaheadSlices && !p->bThreadedME)
         allowPools = false;
 
     m_numPools = 0;
@@ -275,7 +277,7 @@ void Encoder::create()
         {
             // auto-detect frame threads
             int cpuCount = ThreadPool::getCpuCount();
-            ThreadPool::getFrameThreadsCount(p, cpuCount);
+            p->frameNumThreads = ThreadPool::getFrameThreadsCount(p, cpuCount);
         }
     }
 
@@ -290,9 +292,12 @@ void Encoder::create()
             x265_log(p, X265_LOG_WARNING, "No thread pool allocated, --pmode disabled\n");
         if (p->lookaheadSlices)
             x265_log(p, X265_LOG_WARNING, "No thread pool allocated, --lookahead-slices disabled\n");
+        if (p->bThreadedME)
+            x265_log(p, X265_LOG_WARNING, "No thread pool allocated, --threaded-me disabled\n");
 
         // disable all pool features if the thread pool is disabled or unusable.
         p->bEnableWavefront = p->bDistributeModeAnalysis = p->bDistributeMotionEstimation = p->lookaheadSlices = 0;
+        p->bThreadedME = 0;
     }
 
     x265_log(p, X265_LOG_INFO, "Slices                                  : %d\n", p->maxSlices);
@@ -305,6 +310,8 @@ void Encoder::create()
         len += snprintf(buf + len,  sizeof(buf) - len, "%spmode", len ? "+" : "");
     if (p->bDistributeMotionEstimation)
         len += snprintf(buf + len, sizeof(buf) - len, "%spme ", len ? "+" : "");
+    if (p->bThreadedME)
+        len += snprintf(buf + len, sizeof(buf) - len, "%sthreaded-me", len ? "+": "");
     if (!len)
         strcpy(buf, "none");
 
@@ -316,17 +323,37 @@ void Encoder::create()
         m_frameEncoder[i]->m_nalList.m_annexB = !!m_param->bAnnexB;
     }
 
+    if (p->bThreadedME)
+    {
+        m_threadedME = new ThreadedME(m_param, *this);
+    }
+
     if (m_numPools)
     {
+        // First threadpool belongs to ThreadedME, if the feature is enabled
+        if (p->bThreadedME)
+        {
+            m_threadedME->m_pool = &m_threadPool[0];
+            m_threadedME->m_jpId = 0;
+
+            m_threadPool[0].m_numProviders = 1;
+            m_threadPool[0].m_jpTable[m_threadedME->m_jpId] = m_threadedME;
+        }
+
+        int numFrameThreadPools = (!m_param->bThreadedME) ? m_numPools : m_numPools - 1;
+
         for (int i = 0; i < m_param->frameNumThreads; i++)
         {
-            int pool = i % m_numPools;
+            // Since first pool belongs to ThreadedME
+            int pool = static_cast<int>(p->bThreadedME) + i % numFrameThreadPools;
             m_frameEncoder[i]->m_pool = &m_threadPool[pool];
             m_frameEncoder[i]->m_jpId = m_threadPool[pool].m_numProviders++;
             m_threadPool[pool].m_jpTable[m_frameEncoder[i]->m_jpId] = m_frameEncoder[i];
         }
-        for (int i = 0; i < m_numPools; i++)
-            m_threadPool[i].start();
+
+
+        for (int j = 0; j < m_numPools; j++)
+            m_threadPool[j].start();
     }
     else
     {
@@ -354,7 +381,7 @@ void Encoder::create()
         lookAheadThreadPool = ThreadPool::allocThreadPools(p, pools, 1);
     }
     else
-        lookAheadThreadPool = m_threadPool;
+        lookAheadThreadPool = (!m_param->bThreadedME) ? m_threadPool : &m_threadPool[1];
     m_lookahead = new Lookahead(m_param, lookAheadThreadPool);
     if (pools)
     {
@@ -366,6 +393,22 @@ void Encoder::create()
             lookAheadThreadPool[i].start();
     m_lookahead->m_numPools = pools;
     m_dpb = new DPB(m_param);
+
+    if (p->bThreadedME)
+    {
+        if (!m_threadedME->create())
+        {
+            m_param->bThreadedME = 0;
+            X265_FREE(m_threadedME);
+            m_threadedME = NULL;
+
+            x265_log(m_param, X265_LOG_ERROR, "Failed to create threadedME thread pool, --threaded-me disabled");
+        }
+        else
+        {
+            m_threadedME->start();
+        }
+    }
 
     m_rateControl = new RateControl(*m_param, this);
     if (!m_param->bResetZoneConfig)
@@ -480,6 +523,7 @@ void Encoder::create()
         m_aborted = true;
 
     initRefIdx();
+
     if (strlen(m_param->analysisSave) && m_param->bUseAnalysisFile)
     {
         char* temp = strcatFilename(m_param->analysisSave, ".temp");
@@ -590,7 +634,10 @@ void Encoder::stopJobs()
 
     if (m_lookahead)
         m_lookahead->stopJobs();
-    
+
+    if (m_threadedME)
+        m_threadedME->stopJobs();
+
     for (int i = 0; i < m_param->frameNumThreads; i++)
     {
         if (m_frameEncoder[i])
@@ -931,6 +978,12 @@ void Encoder::destroy()
     {
         m_lookahead->destroy();
         delete m_lookahead;
+    }
+
+    if (m_threadedME)
+    {
+        m_threadedME->destroy();
+        delete m_threadedME;
     }
 
     delete m_dpb;
@@ -2851,6 +2904,12 @@ void Encoder::printSummary()
         for (int i = 0; i < m_param->frameNumThreads; i++)
             cuStats.accumulate(m_frameEncoder[i]->m_cuStats, *m_param);
 
+        if (m_param->bThreadedME)
+        {
+            m_threadedME->collectStats();
+            cuStats.accumulate(m_threadedME->m_cuStats, *m_param);
+        }
+
         if (!cuStats.totalCTUTime)
             return;
 
@@ -2865,7 +2924,7 @@ void Encoder::printSummary()
             batchElapsedTime + coopSliceElapsedTime;
 
         int64_t totalWorkerTime = cuStats.totalCTUTime + cuStats.loopFilterElapsedTime + cuStats.pmodeTime +
-            cuStats.pmeTime + lookaheadWorkerTime + cuStats.weightAnalyzeTime;
+            cuStats.pmeTime + lookaheadWorkerTime + cuStats.weightAnalyzeTime + cuStats.tmeTime;
         int64_t elapsedEncodeTime = x265_mdate() - m_encodeStartTime;
 
         int64_t interRDOTotalTime = 0, intraRDOTotalTime = 0;
@@ -2896,6 +2955,12 @@ void Encoder::printSummary()
             x265_log(m_param, X265_LOG_INFO, "CU:       %.3lf slaves per PME master, each took an average of %.3lf ms\n",
                 (double)cuStats.countPMETasks / cuStats.countPMEMasters,
                 ELAPSED_MSEC(cuStats.pmeTime) / cuStats.countPMETasks);
+        }
+        else if (m_param->bThreadedME && cuStats.countTmeTasks)
+        {
+            x265_log(m_param, X265_LOG_INFO, "CU: %%%05.2lf time spent in motion estimation, averaging %.3lf CU inter modes per CTU\n",
+                100.0 * (cuStats.motionEstimationElapsedTime + cuStats.tmeTime) / totalWorkerTime,
+                (double)cuStats.countMotionEstimate / cuStats.totalCTUs);
         }
         else
         {
@@ -2983,6 +3048,11 @@ void Encoder::printSummary()
             cuStats.totalCTUs, m_param->maxCUSize, m_param->maxCUSize,
             ELAPSED_SEC(totalWorkerTime),
             cuStats.totalCTUs / ELAPSED_SEC(totalWorkerTime));
+
+        if (m_param->bThreadedME && cuStats.countTmeBlockedCTUs)
+            x265_log(m_param, X265_LOG_INFO, "CU: " X265_LL " CTUs blocked by ThreadedME, %%%05.2lf of total CTUs\n",
+                cuStats.countTmeBlockedCTUs,
+                100.0 * cuStats.countTmeBlockedCTUs / cuStats.totalCTUs);
 
         if (m_threadPool)
             x265_log(m_param, X265_LOG_INFO, "CU: %.3lf average worker utilization, %%%05.2lf of theoretical maximum utilization\n",
@@ -3183,6 +3253,10 @@ void Encoder::finishFrameStats(Frame* curFrame, FrameEncoder *curEncoder, x265_f
             frameStats->totalCTUTime = ELAPSED_MSEC(0, curEncoder->m_totalWorkerElapsedTime[layer]);
             frameStats->stallTime = ELAPSED_MSEC(0, curEncoder->m_totalNoWorkerTime[layer]);
             frameStats->totalFrameTime = ELAPSED_MSEC(curFrame->m_encodeStartTime, x265_mdate());
+
+            frameStats->tmeTime = curEncoder->m_totalThreadedMETime[layer];
+            frameStats->tmeWaitTime = curEncoder->m_totalThreadedMEWait[layer];
+
             if (curEncoder->m_totalActiveWorkerCount)
                 frameStats->avgWPP = (double)curEncoder->m_totalActiveWorkerCount / curEncoder->m_activeWorkerCountSamples;
             else

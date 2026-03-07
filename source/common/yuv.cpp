@@ -28,6 +28,7 @@
 #include "shortyuv.h"
 #include "picyuv.h"
 #include "primitives.h"
+#define BUFFER_PADDING 8
 
 using namespace X265_NS;
 
@@ -54,7 +55,7 @@ bool Yuv::create(uint32_t size, int csp)
 
     if (csp == X265_CSP_I400)
     {
-        CHECKED_MALLOC(m_buf[0], pixel, size * size + 8);
+        CHECKED_MALLOC(m_buf[0], pixel, size * size + BUFFER_PADDING);
         m_buf[1] = m_buf[2] = 0;
         m_csize = 0;
         return true;
@@ -67,11 +68,13 @@ bool Yuv::create(uint32_t size, int csp)
         size_t sizeC = sizeL >> (m_vChromaShift + m_hChromaShift);
 
         X265_CHECK((sizeC & 15) == 0, "invalid size");
+        size_t totalSize = sizeL + sizeC * 2 + 8 + BUFFER_PADDING;
 
         // memory allocation (padded for SIMD reads)
-        CHECKED_MALLOC(m_buf[0], pixel, sizeL + sizeC * 2 + 8);
+        CHECKED_MALLOC(m_buf[0], pixel, totalSize);
         m_buf[1] = m_buf[0] + sizeL;
         m_buf[2] = m_buf[0] + sizeL + sizeC;
+        X265_CHECK(m_buf[2] + sizeC <= m_buf[0] + totalSize, "Buffer overflow detected");
         return true;
     }
 

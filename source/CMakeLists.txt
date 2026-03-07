@@ -16,10 +16,13 @@ endif()
 if(POLICY CMP0069)
    cmake_policy(SET CMP0069 NEW)
 endif()
+if (POLICY CMP0075)
+    cmake_policy(SET CMP0075 NEW) # CMAKE_REQUIRED_LIBRARIES warning
+endif()
+
+cmake_minimum_required (VERSION 2.8.8...3.10) # OBJECT libraries require 2.8.8
 
 project (x265)
-cmake_minimum_required (VERSION 3.9)
-
 include(CheckIncludeFiles)
 include(CheckFunctionExists)
 include(CheckSymbolExists)
@@ -34,7 +37,7 @@ option(STATIC_LINK_CRT "Statically link C and C++ runtimes for release builds" O
 option(ENABLE_LTO "Attempt to enable Link Time Optimization if available" OFF)
 mark_as_advanced(FPROFILE_USE FPROFILE_GENERATE NATIVE_BUILD)
 # X265_BUILD must be incremented each time the public API is changed
-set(X265_BUILD 215)
+set(X265_BUILD 216)
 configure_file("${PROJECT_SOURCE_DIR}/x265.def.in"
                "${PROJECT_BINARY_DIR}/x265.def")
 configure_file("${PROJECT_SOURCE_DIR}/x265_config.h.in"

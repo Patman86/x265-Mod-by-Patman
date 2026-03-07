@@ -201,6 +201,12 @@ Logging/Statistic Options
 	enough ahead for the necessary reference data to be available. This
 	is more of a problem for P frames where some blocks are much more
 	expensive than others.
+
+	**Total ThreadedME Wait Time (ms)** Total time this frame waited for
+	ThreadedME to complete CTUs required for compression.
+
+	**Total ThreadedME Time (ms)** Total time spent by ThreadedME worker
+	threads on this frame.
 	
 .. option:: --csv-log-level <integer>
 
@@ -300,13 +306,24 @@ Performance Options
 	64-bit machines, or 16 for 32-bit machines. If the total number of threads
 	in the system doesn't obey this constraint, we may spawn fewer threads
 	than cores which has been empirically shown to be better for performance. 
+	However, when :option:`--threaded-me` is enabled, this behavior is 
+	overridden and a single thread pool larger than 64 threads may be
+	created. ThreadedME is a singleton job provider, and multiple frame
+	encoders may push work to it concurrently.
 
-	If the four pool features: :option:`--wpp`, :option:`--pmode(deprecated)`,
-	:option:`--pme(deprecated)` and :option:`--lookahead-slices` are all disabled,
-	then :option:`--pools` is ignored and no thread pools are created.
+	If the five pool features: :option:`--wpp`, :option:`--pmode(deprecated)`,
+	:option:`--pme(deprecated)`, :option:`--lookahead-slices` and :option:`--threaded-me`
+	are all disabled, then :option:`--pools` is ignored and no thread pools are created.
 
-	If "none" is specified, then all four of the thread pool features are
+	If "none" is specified, then all of the thread pool features are
 	implicitly disabled.
+
+	When :option:`--threaded-me` is enabled, x265 estimates the number of
+	threads to assign to ThreadedME based on motion estimation workload and
+	spawns a dedicated threadpool (threadpool 0) for it. This pool may span
+	multiple NUMA nodes when the ThreadedME allocation target requires it. The remaining
+	threads are then used to create the other pools, which are assigned to
+	frame encoders and lookahead.
 
 	Frame encoders are distributed between the available thread pools,
 	and the encoder will never generate more thread pools than
@@ -382,6 +399,24 @@ Performance Options
 	on the output bitstream.
 	
 	Default disabled
+
+.. option:: --threaded-me, --no-threaded-me
+
+	Threaded motion estimation. Uses a dedicated thread pool to pre-compute
+	motion estimation and evaluate PU combinations for CTUs in parallel.
+	It relaxes inter-frame CTU dependencies to increase parallelism, which
+	can reduce compression efficiency. Recommended on many-core CPUs when
+	encode speed is prioritized over compression efficiency.
+
+	If VBV options are enabled, Threaded ME is automatically disabled and a 
+	warning is emitted.
+
+	This feature is implicitly disabled when no thread pool is present.
+
+	--threaded-me provides speedups on many-core CPUs, accompanied by a
+	compression efficiency loss.
+    
+	Default disabled.
 
 .. option:: --preset, -p <integer|string>
 
@@ -2386,6 +2421,7 @@ VUI fields must be manually specified.
 	12. chroma-derived-nc
 	13. chroma-derived-c
 	14. ictcp
+	15. ipt-pq-c2
 
 .. option:: --chromaloc <0..5>
 

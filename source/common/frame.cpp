@@ -36,6 +36,7 @@ Frame::Frame()
     m_reconRowFlag = NULL;
     m_reconColCount = NULL;
     m_countRefEncoders = 0;
+    m_ctuMEFlags = NULL;
     m_encData = NULL;
     for (int i = 0; i < NUM_RECON_VERSION; i++)
         m_reconPic[i] = NULL;
@@ -180,9 +181,10 @@ bool Frame::create(x265_param *param, float* quantOffsets)
     {
         X265_CHECK((m_reconColCount == NULL), "m_reconColCount was initialized");
         m_numRows = (m_fencPic->m_picHeight + param->maxCUSize - 1)  / param->maxCUSize;
+        int32_t m_numCols = (m_fencPic->m_picWidth + param->maxCUSize - 1)  / param->maxCUSize;
         m_reconRowFlag = new ThreadSafeInteger[m_numRows];
         m_reconColCount = new ThreadSafeInteger[m_numRows];
-
+        m_ctuMEFlags = new ThreadSafeInteger[m_numRows * m_numCols];
         if (quantOffsets)
         {
             int32_t cuCount = (param->rc.qgSize == 8) ? m_lowres.maxBlocksInRowFullRes * m_lowres.maxBlocksInColFullRes :
@@ -357,6 +359,12 @@ void Frame::destroy()
     {
         delete[] m_reconColCount;
         m_reconColCount = NULL;
+    }
+
+    if (m_ctuMEFlags)
+    {
+        delete[] m_ctuMEFlags;
+        m_ctuMEFlags = NULL;
     }
 
     if (m_quantOffsets)

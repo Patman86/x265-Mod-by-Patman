@@ -181,7 +181,7 @@ public:
     int     m_qpConstant[3];
     int     m_lastNonBPictType;
     int     m_framesDone;        /* # of frames passed through RateCotrol already */
-
+    int64_t m_iBits;
     double  m_cplxrSum;          /* sum of bits*qscale/rceq */
     double  m_wantedBitsWindow;  /* target bitrate * window */
     double  m_accumPQp;          /* for determining I-frame quant */
@@ -197,6 +197,8 @@ public:
     int64_t m_totalBits;        /* total bits used for already encoded frames (after ammortization) */
     int64_t m_encodedBits;      /* bits used for encoded frames (without ammortization) */
     int64_t m_encodedSegmentBits;      /* bits used for encoded frames in a segment*/
+    double  m_movingSumComplexitySeg[3];
+    int     m_frameCountSeg[3];
     double  m_segDur;
     double  m_fps;
     int64_t m_satdCostWindow[50];
@@ -204,6 +206,7 @@ public:
     int     m_sliderPos;
     int64_t m_lastRemovedSatdCost;
     double  m_movingAvgSum;
+    int     m_totalframesInSegment;
 
     /* To detect a pattern of low detailed static frames in single pass ABR using satdcosts */
     int64_t m_lastBsliceSatdCost;
@@ -314,7 +317,7 @@ protected:
     double rateEstimateQscale(Frame* pic, RateControlEntry *rce); // main logic for calculating QP based on ABR
     double tuneAbrQScaleFromFeedback(double qScale);
     double tuneQScaleForZone(RateControlEntry *rce, double qScale); // Tune qScale to adhere to zone budget
-    double tuneQscaleForSBRC(Frame* curFrame, double q); // Tune qScale to adhere to segment budget
+    double tuneQscaleForSBRC(Frame* curFrame, double q); // Tune qScale to adhere to segment budget	
     void   accumPQpUpdate();
 
     int    getPredictorType(int lowresSliceType, int sliceType);

@@ -33,10 +33,14 @@
 #include "framedata.h"
 #include "svt.h"
 #include "temporalfilter.h"
+#include "threadedme.h"
+
 #ifdef ENABLE_HDR10_PLUS
     #include "dynamicHDR10/hdr10plus.h"
 #endif
+
 struct x265_encoder {};
+
 namespace X265_NS {
 // private namespace
 extern const char g_sliceTypeToChar[3];
@@ -212,6 +216,7 @@ public:
     x265_param*        m_zoneParam;
     RateControl*       m_rateControl;
     Lookahead*         m_lookahead;
+    ThreadedME*        m_threadedME;
     AdaptiveFrameDuplication* m_dupBuffer[DUP_BUFFER];      // picture buffer of size 2
     /*Frame duplication: Two pictures used to compute PSNR */
     pixel*             m_dupPicOne[3];

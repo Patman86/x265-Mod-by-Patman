@@ -2319,8 +2319,8 @@ void Entropy::codeCoeffNxN(const CUData& cu, const coeff_t* coeff, uint32_t absP
     int scanPosSigOff = scanPosLast - (lastScanSet << MLS_CG_SIZE) - 1;
     ALIGN_VAR_32(uint16_t, absCoeff[(1 << MLS_CG_SIZE) + 1]);   // extra 2 bytes(+1) space for AVX2 assembly, +1 because (numNonZero<=1) in costCoeffNxN path
     uint32_t numNonZero = 1;
-    unsigned long lastNZPosInCG;
-    unsigned long firstNZPosInCG;
+    unsigned long lastNZPosInCG = 0;
+    unsigned long firstNZPosInCG = 0;
 
 #if _DEBUG
     // Unnecessary, for Valgrind-3.10.0 only
@@ -2410,6 +2410,7 @@ void Entropy::codeCoeffNxN(const CUData& cu, const coeff_t* coeff, uint32_t absP
             if (m_bitIf)
             {
                 ALIGN_VAR_32(uint16_t, tmpCoeff[SCAN_SET_SIZE]);
+                memset(tmpCoeff, 0, sizeof(tmpCoeff));
 
                 // TODO: accelerate by PABSW
                 for (int i = 0; i < MLS_CG_SIZE; i++)
@@ -2488,7 +2489,7 @@ void Entropy::codeCoeffNxN(const CUData& cu, const coeff_t* coeff, uint32_t absP
         numNonZero = coeffNum[subSet];
         if (numNonZero > 0)
         {
-            uint32_t idx;
+            uint32_t idx = 0;
             X265_CHECK(subCoeffFlag > 0, "subCoeffFlag is zero\n");
             BSR(lastNZPosInCG, subCoeffFlag);
             BSF(firstNZPosInCG, subCoeffFlag);

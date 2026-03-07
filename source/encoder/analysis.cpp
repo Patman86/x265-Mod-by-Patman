@@ -72,14 +72,37 @@ using namespace X265_NS;
 
 Analysis::Analysis()
 {
+    m_bTryLossless = false;
+    m_bChromaSa8d = false;
+    m_bHD = false;
+
+    memset(m_modeFlag, 0, sizeof(m_modeFlag));
+    memset(m_checkMergeAndSkipOnly, 0, sizeof(m_checkMergeAndSkipOnly));
+
+    for (int i = 0; i < NUM_CU_DEPTH; i++)
+    {
+        m_modeDepth[i].bestMode = NULL;
+        memset(m_modeDepth[i].pred, 0, sizeof(m_modeDepth[i].pred));
+    }
+
     m_reuseInterDataCTU = NULL;
     m_reuseRef = NULL;
-    m_bHD = false;
-    m_modeFlag[0] = false;
-    m_modeFlag[1] = false;
-    m_checkMergeAndSkipOnly[0] = false;
-    m_checkMergeAndSkipOnly[1] = false;
+    m_reuseDepth = NULL;
+    m_reuseModes = NULL;
+    m_reusePartSize = NULL;
+    m_reuseMergeFlag = NULL;
+    m_reuseMv[0] = NULL;
+    m_reuseMv[1] = NULL;
+    m_reuseMvpIdx[0] = NULL;
+    m_reuseMvpIdx[1] = NULL;
+    cacheCost = NULL;
+    m_additionalCtuInfo = NULL;
+    m_prevCtuInfoChange = NULL;
+
     m_evaluateInter = 0;
+    m_refineLevel = 0;
+
+    memset(m_splitRefIdx, 0, sizeof(m_splitRefIdx));
 }
 
 bool Analysis::create(ThreadLocalData *tld)
@@ -133,6 +156,153 @@ void Analysis::destroy()
         }
     }
     X265_FREE(cacheCost);
+}
+
+void Analysis::computeMVForPUs(CUData& ctu, const CUGeom& cuGeom, int qp, Frame& frame)
+{
+    int areaId = 0;
+    int finalIdx = 0;
+
+    uint32_t depth = cuGeom.depth;
+    uint32_t nextDepth = depth + 1;
+
+    uint32_t cuSize = 1 << cuGeom.log2CUSize;
+    bool mightSplit = (cuSize > m_param->minCUSize);
+
+    uint32_t cuX = ctu.m_cuPelX + g_zscanToPelX[cuGeom.absPartIdx];
+    uint32_t cuY = ctu.m_cuPelY + g_zscanToPelY[cuGeom.absPartIdx];
+
+    if (cuSize != m_param->maxCUSize)
+    {
+        uint32_t subCUSize = m_param->maxCUSize / 2;
+        areaId = (cuX >= subCUSize) + 2 * (cuY >= subCUSize) + 1;
+    }
+
+    if (mightSplit)
+    {
+        int nextQP = qp;
+        for (uint32_t subPartIdx = 0; subPartIdx < 4; subPartIdx++)
+        {
+            const CUGeom& childGeom = *(&cuGeom + cuGeom.childOffset + subPartIdx);
+            if (m_slice->m_pps->bUseDQP && nextDepth <= m_slice->m_pps->maxCuDQPDepth)
+                nextQP = setLambdaFromQP(ctu, calculateQpforCuSize(ctu, childGeom));
+
+            computeMVForPUs(ctu, childGeom, nextQP, frame);
+        }
+    }
+
+    ModeDepth& md = m_modeDepth[cuGeom.depth];
+    CUData& cu = md.pred[PRED_2Nx2N].cu;
+
+    for (int i = 0; i < MAX_NUM_PU_SIZES; i++)
+    {
+        const PUBlock& pu = g_puLookup[i];
+        int startIdx = g_puStartIdx[pu.width + pu.height][static_cast<int>(pu.partsize)];
+
+        if (pu.width > cuSize || pu.height > cuSize || (pu.width != cuSize && pu.height != cuSize))
+            continue;
+
+        if (!m_param->bEnableAMP && pu.isAmp)
+            continue;
+        if (!m_param->bEnableRectInter && pu.width != pu.height && !pu.isAmp)
+            continue;
+
+        int blockWidth = pu.isAmp ? X265_MAX(pu.width, pu.height) : pu.width;
+        int blockHeight = pu.isAmp ? blockWidth : pu.height;
+
+        int numColsCTU = m_param->maxCUSize / blockWidth;
+        int numRowsCTU = m_param->maxCUSize / blockHeight;
+
+        int puOffset = 0;
+        if (pu.isAmp)
+            puOffset = numRowsCTU * numColsCTU;
+        else if (pu.partsize == SIZE_2NxN)
+            puOffset = numColsCTU;
+        else if (pu.partsize == SIZE_Nx2N)
+            puOffset = 1;
+
+        int col = (cuX - ctu.m_cuPelX) / blockWidth;
+        int row = (cuY - ctu.m_cuPelY) / blockHeight;
+
+        finalIdx = startIdx + row * numColsCTU + col;
+
+        int subIdx =finalIdx - startIdx;
+
+        int puRow = subIdx / numColsCTU;
+        int puCol = subIdx % numColsCTU;
+ 
+        int leftIdx = (puCol > 0) ? startIdx + puRow * numColsCTU + (puCol - 1) : -1;
+        int aboveIdx = (puRow > 0) ? startIdx + (puRow - 1) * numColsCTU + puCol : -1;
+        int aboveLeftIdx = (puRow > 0 && puCol > 0) ? startIdx + (puRow - 1) * numColsCTU + (puCol - 1) : -1;
+        int aboveRightIdx = (puRow > 0 && puCol < numColsCTU - 1) ? startIdx + (puRow - 1) * numColsCTU + (puCol + 1) : -1;
+
+        int neighborIdx[MD_ABOVE_LEFT + 1] = { leftIdx, aboveIdx, aboveRightIdx, -1, aboveLeftIdx};
+
+        cu.initSubCU(ctu, cuGeom, qp);
+        cu.setPartSizeSubParts(pu.partsize);
+        setLambdaFromQP(cu, qp);
+        puMotionEstimation(m_slice, cuGeom, cu, m_frame->m_fencPic, puOffset, pu.partsize, areaId, finalIdx, false, neighborIdx);
+    }
+}
+
+void Analysis::deriveMVsForCTU(CUData& ctu, const CUGeom& cuGeom, Frame& frame)
+{
+    m_slice = ctu.m_slice;
+    m_frame = &frame;
+    m_param = m_frame->m_param;
+
+    ModeDepth& md = m_modeDepth[0];
+
+    int numPredDir = m_slice->isInterP() ? 1 : 2;
+
+    // Full CTU
+    int baseQP = setLambdaFromQP(ctu, ctu.m_slice->m_pps->bUseDQP ? calculateQpforCuSize(ctu, cuGeom) : ctu.m_slice->m_sliceQp);
+
+    md.pred[PRED_2Nx2N].cu.initSubCU(ctu, cuGeom, baseQP);
+    md.pred[PRED_2Nx2N].cu.setPartSizeSubParts(SIZE_2Nx2N);
+
+    puMotionEstimation(m_slice, cuGeom, md.pred[PRED_2Nx2N].cu, frame.m_fencPic, 0, SIZE_2Nx2N, 0, 0, true);
+
+    // Sub-CUs
+    if (m_param->maxCUSize != m_param->minCUSize)
+    {
+        for (int sub = 0; sub < 4; sub++)
+        {
+            ModeDepth& md1 = m_modeDepth[1];
+
+            const CUGeom& childGeom = *(&cuGeom + cuGeom.childOffset + sub);
+            int qp = setLambdaFromQP(ctu, ctu.m_slice->m_pps->bUseDQP ? calculateQpforCuSize(ctu, childGeom) : ctu.m_slice->m_sliceQp);
+
+            md1.pred[PRED_2Nx2N].cu.initSubCU(ctu, childGeom, qp);
+            md1.pred[PRED_2Nx2N].cu.setPartSizeSubParts(SIZE_2Nx2N);
+
+            puMotionEstimation(m_slice, childGeom, md1.pred[PRED_2Nx2N].cu, frame.m_fencPic, 0, SIZE_2Nx2N, sub + 1, 0, true);
+        }
+    }
+
+    const Frame* colPic = m_slice->m_refFrameList[m_slice->isInterB() && !m_slice->m_colFromL0Flag][m_slice->m_colRefIdx];
+    const CUData* colCU = colPic->m_encData->getPicCTU(ctu.m_cuAddr);
+
+    for (int list = 0; list < numPredDir; list++)
+    {
+        int numRef = ctu.m_slice->m_numRefIdx[list];
+
+        for (int ref = 0; ref < numRef; ref++)
+        {
+            MV medianMv;
+            bool valid = ctu.getMedianColMV(colCU, colPic, list, ref, medianMv);
+            if (!valid)
+                continue;
+
+            for (int areaIdx = 0; areaIdx < 5; areaIdx++)
+            {
+                m_areaBestMV[areaIdx][list][ref] = medianMv;
+            }
+        }
+    }
+
+    computeMVForPUs(ctu, cuGeom, baseQP, frame);
+
 }
 
 Mode& Analysis::compressCTU(CUData& ctu, Frame& frame, const CUGeom& cuGeom, const Entropy& initialContext)

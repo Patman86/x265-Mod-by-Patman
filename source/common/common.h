@@ -354,6 +354,9 @@ typedef int16_t  coeff_t;      // transform coefficient
 
 #define MAX_MCSTF_TEMPORAL_WINDOW_LENGTH 8
 
+#define MAX_NUM_PUS_PER_CTU      593   // Maximum number of PUs in a 64x64 CTU
+#define MAX_NUM_PU_SIZES         24    // Number of distinct PU sizes in a 64x64 CTU
+
 namespace X265_NS {
 
 enum { SAO_NUM_OFFSET = 4 };

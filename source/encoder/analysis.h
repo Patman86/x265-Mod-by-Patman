@@ -130,6 +130,24 @@ public:
     Mode& compressCTU(CUData& ctu, Frame& frame, const CUGeom& cuGeom, const Entropy& initialContext);
     int32_t loadTUDepth(CUGeom cuGeom, CUData parentCTU);
 
+    /**
+     * @brief Build CTU-level and area-level MVP seeds used by threaded ME.
+     *
+     * Performs an initial 2Nx2N search on the full CTU (and first split depth
+     * when available), propagates temporal/colocated medians, and then drives
+     * per-PU motion estimation.
+     */
+    void deriveMVsForCTU(CUData& ctu, const CUGeom& cuGeom, Frame& frame);
+
+    /**
+     * @brief Recursively walk CU partitions and run ME for each enabled PU shape.
+     *
+     * Computes the PU index mapping (`finalIdx`) used by CTU MV storage and
+     * submits each PU to puMotionEstimation() with neighbor indices for MVP
+     * derivation.
+     */
+    void computeMVForPUs(CUData& ctu, const CUGeom& cuGeom, int qp, Frame& frame);
+
 protected:
     /* Analysis data for save/load mode, writes/reads data based on absPartIdx */
     x265_analysis_inter_data*  m_reuseInterDataCTU;

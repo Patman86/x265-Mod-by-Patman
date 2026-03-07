@@ -26,6 +26,7 @@
 #define X265_SLICE_H
 
 #include "common.h"
+#include "mv.h"
 
 namespace X265_NS {
 // private namespace
@@ -34,6 +35,8 @@ class Frame;
 class PicList;
 class PicYuv;
 class MotionReference;
+
+struct MEData;
 
 enum SliceType
 {
@@ -378,6 +381,7 @@ public:
     WeightParam m_weightPredTable[2][MAX_NUM_REF][3]; // [list][refIdx][0:Y, 1:U, 2:V]
     MotionReference (*m_mref)[MAX_NUM_REF + 1];
     RPS         m_rps;
+    MEData*     m_ctuMV;
 
     NalUnitType m_nalUnitType;
     SliceType   m_sliceType;
@@ -419,6 +423,7 @@ public:
         m_lastIDR = 0;
         m_sLFaseFlag = true;
         m_numRefIdx[0] = m_numRefIdx[1] = 0;
+        m_ctuMV = NULL;
         memset(m_refFrameList, 0, sizeof(m_refFrameList));
         memset(m_refReconPicList, 0, sizeof(m_refReconPicList));
         memset(m_refPOCList, 0, sizeof(m_refPOCList));

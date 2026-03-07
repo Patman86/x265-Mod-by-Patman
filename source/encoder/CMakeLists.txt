@@ -43,4 +43,5 @@ add_library(encoder OBJECT ../x265.h
     reference.cpp reference.h
     encoder.cpp encoder.h
     api.cpp
-    weightPrediction.cpp svt.h)
+    weightPrediction.cpp svt.h
+    threadedme.h threadedme.cpp)

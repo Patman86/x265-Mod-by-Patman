@@ -276,6 +276,8 @@ typedef struct x265_frame_stats
     double           decideWaitTime;
     double           row0WaitTime;
     double           wallTime;
+    int64_t          tmeTime;
+    int64_t          tmeWaitTime;
     double           refWaitWallTime;
     double           totalCTUTime;
     double           stallTime;
@@ -752,7 +754,7 @@ static const char * const x265_transfer_names[] = { "reserved", "bt709", "unknow
                                                     "log316", "iec61966-2-4", "bt1361e", "iec61966-2-1", "bt2020-10", "bt2020-12",
                                                     "smpte2084", "smpte428", "arib-std-b67", 0 };
 static const char * const x265_colmatrix_names[] = { "gbr", "bt709", "unknown", "", "fcc", "bt470bg", "smpte170m", "smpte240m",
-                                                     "ycgco", "bt2020nc", "bt2020c", "smpte2085", "chroma-derived-nc", "chroma-derived-c", "ictcp", 0 };
+                                                     "ycgco", "bt2020nc", "bt2020c", "smpte2085", "chroma-derived-nc", "chroma-derived-c", "ictcp", "ipt-pq-c2", 0 };
 static const char * const x265_sar_names[] = { "unknown", "1:1", "12:11", "10:11", "16:11", "40:33", "24:11", "20:11",
                                                "32:11", "80:33", "18:11", "15:11", "64:33", "160:99", "4:3", "3:2", "2:1", 0 };
 static const char * const x265_interlace_names[] = { "prog", "tff", "bff", 0 };
@@ -1172,6 +1174,15 @@ typedef struct x265_param
      * motion searches there will be to distribute. This option is often not a
      * win, particularly in video sequences with low motion. Default disabled */
     int       bDistributeMotionEstimation;
+
+    /* Use a dedicated threadpool to pre-process motion estimation. Evaluates all
+     * PU combinations for CTUs in parallel. Dependencies between CTUs in inter
+     * frames is broken to allow for more parallelism, and as result may cause
+     * drop in compression efficiency. Recommended for many core CPUs and when
+     * loss in compression efficiency is acceptable for speedup of encoding.
+     * Default disabled.
+     */
+    int       bThreadedME;
 
     /*== Logging Features ==*/
 
@@ -2348,6 +2359,13 @@ typedef struct x265_param
     int      searchRangeForLayer0;
     int      searchRangeForLayer1;
     int      searchRangeForLayer2;
+
+    /* Threaded ME */
+    /* Number of CTUs processed at once when a worker thread picks up a task from ThreadedME. */
+    int      tmeTaskBlockSize;
+    
+    /* Number of rows upto which ThreadedME processes tasks ahead of WPP */
+    int      tmeNumBufferRows;
 
     /*SBRC*/
     int      bEnableSBRC;

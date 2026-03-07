@@ -933,7 +933,7 @@ ret:
             {
                 general_log(m_param, NULL, X265_LOG_INFO, "aborted at input frame %d, output frame %d in %s\n",
                     m_cliopt.seek + inFrameCount, stats.encodedPictureCount, profileName);
-				m_input[MAX_VIEWS]->stopReader();
+                m_input[MAX_VIEWS]->stopReader();
             }
             api->param_free(m_param);
 

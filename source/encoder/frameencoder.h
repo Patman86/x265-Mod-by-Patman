@@ -41,6 +41,8 @@
 #include "reference.h"
 #include "nal.h"
 #include "temporalfilter.h"
+#include "threadedme.h"
+#include <queue>
 
 namespace X265_NS {
 // private x265 namespace
@@ -241,6 +243,9 @@ public:
     int64_t                  m_slicetypeWaitTime[MAX_LAYERS];        // total elapsed time waiting for decided frame
     int64_t                  m_totalWorkerElapsedTime[MAX_LAYERS];   // total elapsed time spent by worker threads processing CTUs
     int64_t                  m_totalNoWorkerTime[MAX_LAYERS];        // total elapsed time without any active worker threads
+    int64_t                  m_totalThreadedMEWait[MAX_LAYERS];      // total time spent waiting by CTUs for ThreadedME
+    int64_t                  m_totalThreadedMETime[MAX_LAYERS];      // total time spent processing by ThreadedME
+
 #if DETAILED_CU_STATS
     CUStats                  m_cuStats;
 #endif
@@ -266,6 +271,19 @@ public:
     NALList                  m_nalList;
 
     int                      m_sLayerId;
+
+    std::queue<CTUTask>      m_tmeTasks;
+    Lock                     m_tmeTasksLock;
+
+    struct TMEDependencyState
+    {
+        bool internal;
+        bool external;
+        bool isQueued;
+    };
+
+    std::vector<TMEDependencyState> m_tmeDeps;
+    Lock                     m_tmeDepLock;
 
     class WeightAnalysis : public BondedTaskGroup
     {

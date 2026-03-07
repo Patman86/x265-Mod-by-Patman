@@ -628,6 +628,155 @@ void MotionEstimate::StarPatternSearch(ReferencePlanes *ref,
     }
 }
 
+int MotionEstimate::diamondSearch(ReferencePlanes* ref, const MV& mvmin, const MV& mvmax, MV& outMV)
+{
+    int bcost = INT_MAX;
+    MV bmv(0, 0);
+    MV omv = bmv;
+
+    ALIGN_VAR_16(int, costs[16]);
+
+    intptr_t stride = ref->lumaStride;
+    pixel* fenc = fencPUYuv.m_buf[0];
+    pixel* fref = ref->fpelPlane[0] + blockOffset;
+
+    for (int16_t dist = 1; dist <= 4; dist <<= 1)
+    {
+        const int32_t top = omv.y - dist;
+        const int32_t bottom = omv.y + dist;
+        const int32_t left = omv.x - dist;
+        const int32_t right = omv.x + dist;
+        const int32_t top2 = omv.y - (dist >> 1);
+        const int32_t bottom2 = omv.y + (dist >> 1);
+        const int32_t left2 = omv.x - (dist >> 1);
+        const int32_t right2 = omv.x + (dist >> 1);
+
+        if (top >= mvmin.y && left >= mvmin.x && right <= mvmax.x && bottom <= mvmax.y)
+        {
+            COST_MV_X4(omv.x, top, omv.x, bottom, left, omv.y, right, omv.y);
+            COST_MV_X4(left2, top2, right2, top2, left2, bottom2, right2, bottom2);
+        }
+        else // check border for each mv
+        {
+            if (top >= mvmin.y) // check top
+            {
+                COST_MV(omv.x, top);
+            }
+            if (top2 >= mvmin.y) // check half top
+            {
+                if (left2 >= mvmin.x)  // check half left
+                {
+                    COST_MV(left2, top2);
+                }
+                if (right2 <= mvmax.x) // check half right
+                {
+                    COST_MV(right2, top2);
+                }
+            }
+            if (left >= mvmin.x) // check left
+            {
+                COST_MV(left, omv.y);
+            }
+            if (right <= mvmax.x) // check right
+            {
+                COST_MV(right, omv.y);
+            }
+            if (bottom2 <= mvmax.y) // check half bottom
+            {
+                if (left2 >= mvmin.x) // check half left
+                {
+                    COST_MV(left2, bottom2);
+                }
+                if (right2 <= mvmax.x) // check half right
+                {
+                    COST_MV(right2, bottom2);
+                }
+            }
+            if (bottom <= mvmax.y) // check bottom
+            {
+                COST_MV(omv.x, bottom);
+            }
+        }
+    }
+
+    for (int16_t dist = 8; dist <= 64; dist += 8)
+    {
+        const int32_t top = omv.y - dist;
+        const int32_t bottom = omv.y + dist;
+        const int32_t left = omv.x - dist;
+        const int32_t right = omv.x + dist;
+
+        if (top >= mvmin.y && left >= mvmin.x && right <= mvmax.x && bottom <= mvmax.y)
+        {
+            COST_MV_X4(omv.x, top, left, omv.y, right, omv.y, omv.x, bottom);
+
+            for (int16_t index = 1; index < 4; index++)
+            {
+                int32_t posYT = top + ((dist >> 2) * index);
+                int32_t posYB = bottom - ((dist >> 2) * index);
+                int32_t posXL = omv.x - ((dist >> 2) * index);
+                int32_t posXR = omv.x + ((dist >> 2) * index);
+
+                COST_MV_X4(posXL, posYT,
+                    posXR, posYT,
+                    posXL, posYB,
+                    posXR, posYB);
+            }
+        }
+        else // check border for each mv
+        {
+            if (top >= mvmin.y) // check top
+            {
+                COST_MV(omv.x, top);
+            }
+            if (left >= mvmin.x) // check left
+            {
+                COST_MV(left, omv.y);
+            }
+            if (right <= mvmax.x) // check right
+            {
+                COST_MV(right, omv.y);
+            }
+            if (bottom <= mvmax.y) // check bottom
+            {
+                COST_MV(omv.x, bottom);
+            }
+            for (int16_t index = 1; index < 4; index++)
+            {
+                int32_t posYT = top + ((dist >> 2) * index);
+                int32_t posYB = bottom - ((dist >> 2) * index);
+                int32_t posXL = omv.x - ((dist >> 2) * index);
+                int32_t posXR = omv.x + ((dist >> 2) * index);
+
+                if (posYT >= mvmin.y) // check top
+                {
+                    if (posXL >= mvmin.x) // check left
+                    {
+                        COST_MV(posXL, posYT);
+                    }
+                    if (posXR <= mvmax.x) // check right
+                    {
+                        COST_MV(posXR, posYT);
+                    }
+                }
+                if (posYB <= mvmax.y) // check bottom
+                {
+                    if (posXL >= mvmin.x) // check left
+                    {
+                        COST_MV(posXL, posYB);
+                    }
+                    if (posXR <= mvmax.x) // check right
+                    {
+                        COST_MV(posXR, posYB);
+                    }
+                }
+            }
+        }
+    }
+    outMV = bmv;
+    return bcost;
+}
+
 void MotionEstimate::refineMV(ReferencePlanes* ref,
                               const MV&        mvmin,
                               const MV&        mvmax,

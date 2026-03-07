@@ -1740,6 +1740,64 @@ uint32_t CUData::getInterMergeCandidates(uint32_t absPartIdx, uint32_t puIdx, MV
     return count;
 }
 
+bool CUData::getMedianColMV(const CUData* colCU, const Frame* colPic, int list, int ref, MV& outMV) const
+{
+    int mvCount = 0;
+    int mvX[MAX_NUM_PARTITIONS], mvY[MAX_NUM_PARTITIONS];
+
+    for (uint32_t partIdx = 0; partIdx < colCU->m_numPartitions; partIdx++)
+    {
+        uint32_t absPartAddr = partIdx & TMVP_UNIT_MASK;
+        if (colCU->m_predMode[partIdx] == MODE_NONE || colCU->isIntra(absPartAddr))
+            continue;
+
+        int8_t refIdx = colCU->m_refIdx[list][partIdx];
+        if (refIdx < 0)
+            continue;
+
+        MV rawMv = colCU->m_mv[list][partIdx];
+
+        int colPOC = colPic->m_encData->m_slice->m_poc;
+        int colRefPOC = colPic->m_encData->m_slice->m_refPOCList[list][refIdx];
+
+        int curPOC = m_slice->m_poc;
+        int curRefPOC = this->m_slice->m_refPOCList[list][ref];
+
+        MV scaledMv = scaleMvByPOCDist(rawMv, curPOC, curRefPOC, colPOC, colRefPOC);
+
+        if (mvCount >= MAX_NUM_PARTITIONS)
+            break;
+
+        mvX[mvCount] = scaledMv.x;
+        mvY[mvCount] = scaledMv.y;
+        mvCount++;
+    }
+
+    if (mvCount == 0)
+        return false;
+
+    size_t mid = mvCount >> 1;
+
+    std::nth_element(mvX, mvX + mid, mvX + mvCount);
+    std::nth_element(mvY, mvY + mid, mvY + mvCount);
+
+    if (mvCount & 1)
+    {
+        outMV.x = mvX[mid];
+        outMV.y = mvY[mid];
+    }
+    else
+    {
+        int lowerMaxX = *std::max_element(mvX, mvX + mid);
+        int lowerMaxY = *std::max_element(mvY, mvY + mid);
+
+        outMV.x = (lowerMaxX + mvX[mid]) >> 1;
+        outMV.y = (lowerMaxY + mvY[mid]) >> 1;
+    }
+
+    return true;
+}
+
 // Create the PMV list. Called for each reference index.
 #if (ENABLE_MULTIVIEW || ENABLE_SCC_EXT)
 int CUData::getPMV(InterNeighbourMV* neighbours, uint32_t picList, uint32_t refIdx, MV* amvpCand, MV* pmv, uint32_t puIdx, uint32_t absPartIdx) const

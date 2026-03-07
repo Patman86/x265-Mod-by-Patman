@@ -36,6 +36,8 @@
 #include "nal.h"
 #include "temporalfilter.h"
 
+#include <iostream>
+
 namespace X265_NS {
 void weightAnalyse(Slice& slice, Frame& frame, x265_param& param);
 
@@ -199,6 +201,8 @@ bool FrameEncoder::init(Encoder *top, int numRows, int numCols)
         BSR(tmp, (numRows * numCols - 1));
         m_sliceAddrBits = (uint16_t)(tmp + 1);
     }
+
+    m_tmeDeps.resize(m_numRows);
 
     m_retFrameBuffer = X265_MALLOC(Frame*, m_param->numLayers);
     for (int layer = 0; layer < m_param->numLayers; layer++)
@@ -447,6 +451,8 @@ void FrameEncoder::compressFrame(int layer)
     m_totalActiveWorkerCount = 0;
     m_activeWorkerCountSamples = 0;
     m_totalWorkerElapsedTime[layer] = 0;
+    m_totalThreadedMETime[layer] = 0;
+    m_totalThreadedMEWait[layer] = 0;
     m_totalNoWorkerTime[layer] = 0;
     m_countRowBlocks = 0;
     m_allRowsAvailableTime[layer] = 0;
@@ -915,7 +921,7 @@ void FrameEncoder::compressFrame(int layer)
      * compressed in a wave-front pattern if WPP is enabled. Row based loop
      * filters runs behind the CTU compression and reconstruction */
 
-    for (uint32_t sliceId = 0; sliceId < m_param->maxSlices; sliceId++)    
+    for (uint32_t sliceId = 0; sliceId < m_param->maxSlices; sliceId++)
         m_rows[m_sliceBaseRow[sliceId]].active = true;
     
     if (m_param->bEnableWavefront)
@@ -975,8 +981,16 @@ void FrameEncoder::compressFrame(int layer)
                             m_mref[l][ref].applyWeight(rowIdx, m_numRows, sliceEndRow, sliceId);
                     }
                 }
-
+                
                 enableRowEncoder(m_row_to_idx[row]); /* clear external dependency for this row */
+
+                if (m_top->m_threadedME && !slice->isIntra())
+                {
+                    ScopedLock lock(m_tmeDepLock);
+                    m_tmeDeps[row].external = true;
+                    m_top->m_threadedME->enqueueReadyRows(row, layer, this);
+                }
+
                 if (!rowInSlice)
                 {
                     m_row0WaitTime[layer] = x265_mdate();
@@ -1037,6 +1051,11 @@ void FrameEncoder::compressFrame(int layer)
 #if ENABLE_LIBVMAF
     vmafFrameLevelScore();
 #endif
+
+    m_tmeDepLock.acquire();
+    m_tmeDeps.clear();
+    m_tmeDeps.resize(m_numRows);
+    m_tmeDepLock.release();
 
     if (m_param->maxSlices > 1)
     {
@@ -1470,7 +1489,9 @@ void FrameEncoder::processRow(int row, int threadId, int layer)
     const uint32_t typeNum = m_idx_to_row[row & 1];
 
     if (!typeNum)
+    {
         processRowEncoder(realRow, m_tld[threadId], layer);
+    }
     else
     {
         m_frameFilter.processRow(realRow, layer);
@@ -1600,6 +1621,12 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
     if (tld.analysis.m_sliceMaxY < tld.analysis.m_sliceMinY)
         tld.analysis.m_sliceMaxY = tld.analysis.m_sliceMinY = 0;
 
+    if (m_top->m_threadedME && !slice->isIntra())
+    {
+        ScopedLock lock(m_tmeDepLock);
+        m_tmeDeps[row].internal = true;
+        m_top->m_threadedME->enqueueReadyRows(row, layer, this);
+    }
 
     while (curRow.completed < numCols)
     {
@@ -1665,6 +1692,26 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
         if (m_param->dynamicRd && (int32_t)(m_rce.qpaRc - m_rce.qpNoVbv) > 0)
             ctu->m_vbvAffected = true;
 
+        if (m_top->m_threadedME && slice->m_sliceType != I_SLICE)
+        {
+            int64_t waitStart = x265_mdate();
+            bool waited = false;
+
+            // Wait for threadedME to complete ME upto this CTU
+            while (m_frame[layer]->m_ctuMEFlags[cuAddr].get() == 0)
+            {
+#ifdef DETAILED_CU_STATS
+                tld.analysis.m_stats[m_jpId].countTmeBlockedCTUs++;
+#endif
+                m_frame[layer]->m_ctuMEFlags[cuAddr].waitForChange(0);
+                waited = true;
+            }
+
+            int64_t waitEnd = x265_mdate();
+            if (waited)
+                ATOMIC_ADD(&m_totalThreadedMEWait[layer], waitEnd - waitStart);
+        }
+            
         // Does all the CU analysis, returns best top level mode decision
         Mode& best = tld.analysis.compressCTU(*ctu, *m_frame[layer], m_cuGeoms[m_ctuGeomMap[cuAddr]], rowCoder);
 

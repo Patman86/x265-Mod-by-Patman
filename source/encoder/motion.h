@@ -99,6 +99,8 @@ public:
 
     int subpelCompare(ReferencePlanes* ref, const MV &qmv, pixelcmp_t);
 
+    int diamondSearch(ReferencePlanes* ref, const MV& mvmin, const MV& mvmax, MV& outMV);
+
 protected:
 
     inline void StarPatternSearch(ReferencePlanes *ref,

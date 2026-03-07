@@ -332,6 +332,8 @@ public:
     const CUData* getPUAboveRightAdi(uint32_t& arPartUnitIdx, uint32_t curPartUnitIdx, uint32_t partUnitOffset) const;
     const CUData* getPUBelowLeftAdi(uint32_t& blPartUnitIdx, uint32_t curPartUnitIdx, uint32_t partUnitOffset) const;
 
+    bool      getMedianColMV(const CUData* colCU, const Frame* colPic, int list, int ref, MV& mv) const;
+
 #if ENABLE_SCC_EXT
     void     initSubCU(const CUData& ctu, const CUGeom& cuGeom, int qp, MV lastIntraBCMv[2] = 0);
 

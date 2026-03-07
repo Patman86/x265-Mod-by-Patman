@@ -179,6 +179,7 @@ struct CUStats
     int64_t  pmodeBlockTime;                    // elapsed worker time blocked for pmode batch completion
     int64_t  weightAnalyzeTime;                 // elapsed worker time analyzing reference weights
     int64_t  totalCTUTime;                      // elapsed worker time in compressCTU (includes pmode master)
+    int64_t  tmeTime;                           // elapsed worker time in threadedME
 
     uint32_t skippedMotionReferences[NUM_CU_DEPTH];
     uint32_t totalMotionReferences[NUM_CU_DEPTH];
@@ -195,6 +196,8 @@ struct CUStats
     uint64_t countPModeTasks;
     uint64_t countPModeMasters;
     uint64_t countWeightAnalyze;
+    uint64_t countTmeTasks;
+    uint64_t countTmeBlockedCTUs;
     uint64_t totalCTUs;
 
     CUStats() { clear(); }
@@ -227,6 +230,7 @@ struct CUStats
         pmodeBlockTime += other.pmodeBlockTime;
         weightAnalyzeTime += other.weightAnalyzeTime;
         totalCTUTime += other.totalCTUTime;
+        tmeTime += other.tmeTime;
 
         countIntraAnalysis += other.countIntraAnalysis;
         countMotionEstimate += other.countMotionEstimate;
@@ -236,6 +240,8 @@ struct CUStats
         countPModeTasks += other.countPModeTasks;
         countPModeMasters += other.countPModeMasters;
         countWeightAnalyze += other.countWeightAnalyze;
+        countTmeTasks += other.countTmeTasks;
+        countTmeBlockedCTUs += other.countTmeBlockedCTUs;
         totalCTUs += other.totalCTUs;
 
         other.clear();
@@ -287,6 +293,8 @@ public:
     int32_t         m_sliceMinY;
 
     bool            m_vertRestriction;
+
+    MV              m_areaBestMV[5][2][MAX_NUM_REF];
 
 #if ENABLE_SCC_EXT
     int             m_ibcEnabled;
@@ -341,6 +349,16 @@ public:
 
     MV getLowresMV(const CUData& cu, const PredictionUnit& pu, int list, int ref);
 
+    /**
+     * @brief Run motion estimation for one PU partition shape and persist the best ME result.
+     *
+     * Used by Analysis threaded-ME flow. With isMVP=true this bootstraps area MVPs,
+     * and with isMVP=false it performs full PU ME using spatial/temporal neighbors
+     * and stores results into per-CTU MV slots addressed by finalIdx/puOffset.
+     */
+    void puMotionEstimation(const Slice* slice, const CUGeom& cuGeom, CUData& ctu, PicYuv* fencPic, int puOffset, PartSize part, int areaIdx, int finalIdx, 
+        bool isMVP ,  const int* neighborIdx = NULL);
+ 
 #if ENABLE_SCC_EXT
     void      predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChromaMC, uint32_t masks[2], MV* iMVCandList = NULL);
     bool      predIntraBCSearch(Mode& intraBCMode, const CUGeom& cuGeom, bool bChromaMC, PartSize ePartSize, bool testOnlyPred, bool bUse1DSearchFor8x8, IBC& ibc);

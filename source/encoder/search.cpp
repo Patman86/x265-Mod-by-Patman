@@ -33,6 +33,7 @@
 
 #include "analysis.h"  // TLD
 #include "framedata.h"
+#include "encoder.h"
 
 using namespace X265_NS;
 
@@ -220,6 +221,334 @@ int Search::setLambdaFromQP(const CUData& ctu, int qp, int lambdaQp)
     int quantQP = x265_clip3(QP_MIN, QP_MAX_SPEC, qp);
     m_quant.setQPforQuant(ctu, quantQP);
     return quantQP;
+}
+
+void Search::puMotionEstimation(const Slice* slice, const CUGeom& cuGeom, CUData& cu, PicYuv* fencPic, int puOffset, PartSize part, int areaIdx, int finalIdx, bool isMVP , const int* neighborIdx)
+{
+#ifdef DETAILED_CU_STATS
+    m_stats[cu.m_encData->m_frameEncoderID].countMotionEstimate++;
+#endif
+
+    int satdCost = 0;
+    int numPredDir = slice->isInterP() ? 1 : 2;
+    int searchRange = isMVP ? 32 : m_param->searchRange;
+
+    MV mvp(0,0);
+    MV mvzero(0,0);
+
+    MV mvc[(MD_ABOVE_LEFT + 1) * 2 + 2];
+    MV amvpCand[2][MAX_NUM_REF][AMVP_NUM_CANDS];
+
+    MotionData bestME[2];
+    bestME[0].cost = MAX_UINT;
+    bestME[1].cost = MAX_UINT;
+
+    int numPart = cu.getNumPartInter(0);
+    uint32_t lastMode = 0;
+
+    int row = cu.m_cuAddr / m_slice->m_sps->numCuInWidth;
+    int col = cu.m_cuAddr % m_slice->m_sps->numCuInWidth;
+
+    int numMvc = 0;
+    for (int puIdx = 0; puIdx < numPart; puIdx++)
+    {
+        PredictionUnit pu(cu, cuGeom, puIdx);
+
+        int pos = finalIdx + puIdx * puOffset;
+        int slotIdx = (col % m_slice->m_sps->numCuInWidth) * m_slice->m_sps->numCuInHeight + row;
+
+        InterNeighbourMV neighbours[6];
+        if(!isMVP)
+           cu.getNeighbourMV(puIdx, pu.puAbsPartIdx, neighbours);
+
+        for (int list = 0; list < numPredDir; list++)
+        {
+            int numIdx = slice->m_numRefIdx[list];
+            for (int ref = 0; ref < numIdx; ref++)
+            {
+                getBlkBits(part, slice->isInterP(), puIdx, lastMode, m_listSelBits);
+                uint32_t bits = m_listSelBits[list] + MVP_IDX_BITS;
+                bits += getTUBits(ref, numIdx);
+
+                MV mvmin, mvmax, outmv,mvp_lowres;;
+                mvp = !isMVP ? m_areaBestMV[areaIdx][list][ref] : mvp;
+
+                MV zeroMV[2] = {0,0};
+                const MV* amvp = zeroMV;
+                int mvpIdx = 0;
+
+                bool bLowresMVP = false;
+                if (!isMVP)
+                {
+                    for(int dir = MD_LEFT; dir <= MD_ABOVE_LEFT ; dir++)
+                    {
+                        int neighIdx = neighborIdx[dir];
+                        if (neighIdx >= 0)
+                        {
+                            MEData& neighborData = slice->m_ctuMV[slotIdx * MAX_NUM_PUS_PER_CTU + neighIdx];
+                            for (int i = 0; i < 2; i++)
+                            {
+                                neighbours[dir].mv[i] = neighborData.mv[i];
+                                neighbours[dir].refIdx[i] = neighborData.ref[i];
+                            }
+                            neighbours[dir].isAvailable = (neighborData.ref[0] >= 0 || neighborData.ref[1] >= 0);
+                        }
+                        else
+                        {
+                            for (int i = 0; i < 2; i++)
+                                neighbours[dir].refIdx[i] = -1;
+                            neighbours[dir].isAvailable = false;
+                        }
+                    }
+
+                    numMvc = cu.getPMV(neighbours, list, ref, amvpCand[list][ref], mvc);
+                    if (numMvc > 0)
+                    {
+                        amvp = amvpCand[list][ref];
+                        mvpIdx = selectMVP(cu, pu, amvp, list, ref);
+                        mvp = amvp[mvpIdx];                 
+                    }
+                    else if (slice->m_refFrameList[list][ref]->m_encData->m_slice->m_sliceType != I_SLICE)
+                    {
+                        MEData meData = slice->m_refFrameList[list][ref]->m_encData->m_slice->m_ctuMV[slotIdx * MAX_NUM_PUS_PER_CTU + pos];
+
+                        bool bi = (meData.ref[0] >= 0 && meData.ref[1] >= 0);
+                        bool uniL0 = (meData.ref[0] >= 0 && meData.ref[1] == REF_NOT_VALID);
+                        bool uniL1 = (meData.ref[1] >= 0 && meData.ref[0] == REF_NOT_VALID);
+
+                        if (uniL0)
+                            mvp = meData.mv[0];
+                        else if (uniL1)
+                            mvp = meData.mv[1];
+                        else if (bi)
+                            mvp = meData.mv[list];
+                    }
+                }
+
+                m_me.setMVP(mvp);
+
+                if (!strlen(m_param->analysisSave) && !strlen(m_param->analysisLoad))
+                {
+                    uint32_t blockX = cu.m_cuPelX + g_zscanToPelX[pu.puAbsPartIdx] + (pu.width  >> 1);
+                    uint32_t blockY = cu.m_cuPelY + g_zscanToPelY[pu.puAbsPartIdx] + (pu.height >> 1);
+
+                    if (blockX < m_slice->m_sps->picWidthInLumaSamples && blockY < m_slice->m_sps->picHeightInLumaSamples)
+                    {
+                        MV lmv = getLowresMV(cu, pu, list, ref);
+                        int layer = m_param->numViews > 1 ? m_frame->m_viewId : (m_param->numScalableLayers > 1) ? m_frame->m_sLayerId : 0;
+                        if (lmv.notZero() && !layer)
+                        {
+                            mvc[numMvc++] = lmv;
+                            bLowresMVP = true;
+                        }
+                        mvp_lowres = lmv;
+                    }
+                }
+
+                PicYuv* recon = slice->m_mref[list][ref].reconPic;
+                int offset = recon->getLumaAddr(cu.m_cuAddr, pu.cuAbsPartIdx + pu.puAbsPartIdx) - recon->getLumaAddr(0);
+
+                m_me.setSourcePU(fencPic->m_picOrg[0], fencPic->m_stride, offset, pu.width, pu.height, m_param->searchMethod, m_param->subpelRefine);
+                setSearchRange(cu, mvp, searchRange, mvmin, mvmax);
+
+                if (isMVP)
+                {
+                    satdCost = m_me.diamondSearch(&slice->m_mref[list][ref], mvmin, mvmax, outmv);
+                    m_areaBestMV[areaIdx][list][ref] = outmv;
+                }
+                else
+                {
+                    m_vertRestriction = slice->m_refPOCList[list][ref] == slice->m_poc;
+                    satdCost = m_me.motionEstimate(&slice->m_mref[list][ref], mvmin, mvmax, mvp, numMvc, mvc, m_param->searchRange, outmv, m_param->maxSlices, m_vertRestriction,
+                        m_param->bSourceReferenceEstimation ? m_slice->m_refFrameList[list][ref]->m_fencPic->getLumaAddr(0) : 0);
+
+                    if (bLowresMVP && mvp_lowres.notZero() && mvp_lowres != mvp)
+                    {
+                        MV outmv_lowres;
+                        bLowresMVP = false;
+                        setSearchRange(cu, mvp_lowres, m_param->searchRange, mvmin, mvmax);
+                        int lowresMvCost = m_me.motionEstimate(&slice->m_mref[list][ref],  mvmin, mvmax, mvp_lowres, numMvc, mvc, m_param->searchRange,outmv_lowres, m_param->maxSlices,
+                            m_vertRestriction, m_param->bSourceReferenceEstimation ? m_slice->m_refFrameList[list][ref]->m_fencPic->getLumaAddr(0): 0);
+
+                        if (lowresMvCost < satdCost)
+                        {
+                            outmv = outmv_lowres;
+                            satdCost = lowresMvCost;
+                            bLowresMVP = true;
+                        }
+                    }
+                }
+
+                bits += m_me.bitcost(outmv);
+                uint32_t mvCost = m_me.mvcost(outmv);
+                uint32_t cost = (satdCost - mvCost) + m_rdCost.getCost(bits);
+
+                if(!isMVP)
+                {
+                    if (bLowresMVP)
+                        updateMVP(mvp, outmv, bits, cost, mvp_lowres);
+
+                    mvp = checkBestMVP(amvp, outmv, mvpIdx, bits, cost);
+                }
+                if (cost < bestME[list].cost)
+                {
+                    bestME[list].mv = outmv;
+                    bestME[list].mvp = mvp;
+                    bestME[list].mvpIdx = 0;
+                    bestME[list].cost = cost;
+                    bestME[list].bits = bits;
+                    bestME[list].mvCost = mvCost;
+                    bestME[list].ref = ref;
+                }
+            }
+        }
+
+        if (isMVP)
+            return;
+
+        //Bi-Direction
+        MotionData bidir[2];
+        uint32_t bidirCost = MAX_UINT;
+        int bidirBits = 0;
+        Yuv& tmpPredYuv = m_rqt[cuGeom.depth].tmpPredYuv;
+
+        if (slice->isInterB() && !cu.isBipredRestriction() &&
+            cu.m_partSize[pu.puAbsPartIdx] != SIZE_2Nx2N && bestME[0].cost != MAX_UINT && bestME[1].cost != MAX_UINT && !isMVP)
+        {
+            bidir[0] = bestME[0];
+            bidir[1] = bestME[1];
+
+            if (m_me.bChromaSATD)
+            {
+                cu.m_mv[0][pu.puAbsPartIdx] = bidir[0].mv;
+                cu.m_refIdx[0][pu.puAbsPartIdx] = (int8_t)bidir[0].ref;
+                cu.m_mv[1][pu.puAbsPartIdx] = bidir[1].mv;
+                cu.m_refIdx[1][pu.puAbsPartIdx] = (int8_t)bidir[1].ref;
+                motionCompensation(cu, pu, tmpPredYuv, true, true);
+
+                satdCost = m_me.bufSATD(tmpPredYuv.getLumaAddr(pu.puAbsPartIdx), tmpPredYuv.m_size) +
+                    m_me.bufChromaSATD(tmpPredYuv, pu.puAbsPartIdx);
+            }
+            else
+            {
+                PicYuv* refPic0 = slice->m_refReconPicList[0][bestME[0].ref];
+                PicYuv* refPic1 = slice->m_refReconPicList[1][bestME[1].ref];
+                Yuv* bidirYuv = m_rqt[cuGeom.depth].bidirPredYuv;
+
+                predInterLumaPixel(pu, bidirYuv[0], *refPic0, bestME[0].mv);
+                predInterLumaPixel(pu, bidirYuv[1], *refPic1, bestME[1].mv);
+                primitives.pu[m_me.partEnum].pixelavg_pp[(tmpPredYuv.m_size % 64 == 0) && (bidirYuv[0].m_size % 64 == 0) && (bidirYuv[1].m_size % 64 == 0)](tmpPredYuv.m_buf[0], tmpPredYuv.m_size, bidirYuv[0].getLumaAddr(pu.puAbsPartIdx), bidirYuv[0].m_size,
+                    bidirYuv[1].getLumaAddr(pu.puAbsPartIdx), bidirYuv[1].m_size, 32);
+                satdCost = m_me.bufSATD(tmpPredYuv.m_buf[0], tmpPredYuv.m_size);
+            }
+
+            bidirBits = bestME[0].bits + bestME[1].bits + m_listSelBits[2] - (m_listSelBits[0] + m_listSelBits[1]);
+            bidirCost = satdCost + m_rdCost.getCost(bidirBits);
+
+            bool bTryZero = bestME[0].mv.notZero() || bestME[1].mv.notZero();
+            if (bTryZero)
+            {
+                MV mvmin, mvmax;
+                int merange = X265_MAX(m_param->sourceWidth, m_param->sourceHeight);
+                setSearchRange(cu, mvzero, merange, mvmin, mvmax);
+                mvmax.y += 2;
+                mvmin <<= 2;
+                mvmax <<= 2;
+
+                bTryZero &= bestME[0].mvp.checkRange(mvmin, mvmax);
+                bTryZero &= bestME[1].mvp.checkRange(mvmin, mvmax);
+            }
+            if (bTryZero)
+            {
+                if (m_me.bChromaSATD)
+                {
+                    cu.m_mv[0][pu.puAbsPartIdx] = mvzero;
+                    cu.m_refIdx[0][pu.puAbsPartIdx] = (int8_t)bidir[0].ref;
+                    cu.m_mv[1][pu.puAbsPartIdx] = mvzero;
+                    cu.m_refIdx[1][pu.puAbsPartIdx] = (int8_t)bidir[1].ref;
+                    motionCompensation(cu, pu, tmpPredYuv, true, true);
+
+                    satdCost = m_me.bufSATD(tmpPredYuv.getLumaAddr(pu.puAbsPartIdx), tmpPredYuv.m_size) +
+                        m_me.bufChromaSATD(tmpPredYuv, pu.puAbsPartIdx);
+                }
+                else
+                {
+                    const pixel* ref0 = m_slice->m_mref[0][bestME[0].ref].getLumaAddr(pu.ctuAddr, pu.cuAbsPartIdx + pu.puAbsPartIdx);
+                    const pixel* ref1 = m_slice->m_mref[1][bestME[1].ref].getLumaAddr(pu.ctuAddr, pu.cuAbsPartIdx + pu.puAbsPartIdx);
+                    intptr_t refStride = slice->m_mref[0][0].lumaStride;
+                    primitives.pu[m_me.partEnum].pixelavg_pp[(tmpPredYuv.m_size % 64 == 0) && (refStride % 64 == 0)](tmpPredYuv.m_buf[0], tmpPredYuv.m_size, ref0, refStride, ref1, refStride, 32);
+                    satdCost = m_me.bufSATD(tmpPredYuv.m_buf[0], tmpPredYuv.m_size);
+                }
+
+                MV mvp0 = bestME[0].mvp;
+                int mvpIdx0 = bestME[0].mvpIdx;
+                uint32_t bits0 = bestME[0].bits - m_me.bitcost(bestME[0].mv, mvp0) + m_me.bitcost(mvzero, mvp0);
+
+                MV mvp1 = bestME[1].mvp;
+                int mvpIdx1 = bestME[1].mvpIdx;
+                uint32_t bits1 = bestME[1].bits - m_me.bitcost(bestME[1].mv, mvp1) + m_me.bitcost(mvzero, mvp1);
+
+                uint32_t cost = satdCost + m_rdCost.getCost(bits0) + m_rdCost.getCost(bits1);
+
+                if (cost < bidirCost)
+                {
+                    bidir[0].mv = mvzero;
+                    bidir[1].mv = mvzero;
+                    bidir[0].mvp = mvp0;
+                    bidir[1].mvp = mvp1;
+                    bidir[0].mvpIdx = mvpIdx0;
+                    bidir[1].mvpIdx = mvpIdx1;
+                    bidirCost = cost;
+                    bidirBits = bits0 + bits1 + m_listSelBits[2] - (m_listSelBits[0] + m_listSelBits[1]);
+                }
+            }
+        }
+        MEData& outME = slice->m_ctuMV[slotIdx * MAX_NUM_PUS_PER_CTU + pos];
+
+        outME.ref[0] = REF_NOT_VALID;
+        outME.ref[1] = REF_NOT_VALID;
+
+        if (bidirCost < bestME[0].cost && bidirCost < bestME[1].cost)
+        {
+            lastMode = 2;
+
+            outME.mv[0] = bidir[0].mv;
+            outME.mv[1] = bidir[1].mv;
+            outME.mvp[0] = bidir[0].mvp;
+            outME.mvp[1] = bidir[1].mvp;
+            outME.mvCost[0] = bestME[0].mvCost;
+            outME.mvCost[1] = bestME[1].mvCost;
+            outME.ref[0] = bestME[0].ref;
+            outME.ref[1] = bestME[1].ref;
+
+            outME.bits = bidirBits;
+            outME.cost = bidirCost;
+        }
+        else if (bestME[0].cost <= bestME[1].cost)
+        {
+            lastMode = 0;
+
+            outME.mv[0] = bestME[0].mv;
+            outME.mvp[0] = bestME[0].mvp;
+            outME.mvCost[0] = bestME[0].mvCost;
+            outME.cost = bestME[0].cost;
+            outME.bits = bestME[0].bits;
+            outME.ref[0] = bestME[0].ref;
+            outME.ref[1] = REF_NOT_VALID;
+        }
+        else
+        {
+            lastMode = 1;
+
+            outME.mv[1] = bestME[1].mv;
+            outME.mvp[1] = bestME[1].mvp;
+            outME.mvCost[1] = bestME[1].mvCost;
+            outME.cost = bestME[1].cost;
+            outME.bits = bestME[1].bits;
+            outME.ref[1] = bestME[1].ref;
+            outME.ref[0] = REF_NOT_VALID;
+        }
+    }
 }
 
 #if CHECKED_BUILD || _DEBUG
@@ -2438,7 +2767,7 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
             /* if no peer threads were bonded, fall back to doing unidirectional
              * searches ourselves without overhead of singleMotionEstimation() */
         }
-        if (bDoUnidir)
+        if (bDoUnidir && !m_param->bThreadedME)
         {
             interMode.bestME[puIdx][0].ref = interMode.bestME[puIdx][1].ref = -1;
             uint32_t refMask = refMasks[puIdx] ? refMasks[puIdx] : (uint32_t)-1;
@@ -2550,7 +2879,7 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
 
         if (slice->isInterB() && !cu.isBipredRestriction() &&  /* biprediction is possible for this PU */
             cu.m_partSize[pu.puAbsPartIdx] != SIZE_2Nx2N &&    /* 2Nx2N biprediction is handled elsewhere */
-            bestME[0].cost != MAX_UINT && bestME[1].cost != MAX_UINT)
+            bestME[0].cost != MAX_UINT && bestME[1].cost != MAX_UINT && !m_param->bThreadedME)
         {
             bidir[0] = bestME[0];
             bidir[1] = bestME[1];
@@ -2650,8 +2979,107 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
             }
         }
 
+        uint32_t bestCost = MAX_INT;
+        bool isMerge = false;
+        bool isBidir = false;
+        bool uniL0 = false;
+        bool uniL1 = false;
+
+        if (m_param->bThreadedME)
+        {
+            int cuSize = 1 << cu.m_log2CUSize[0];
+
+            int lookupWidth = pu.width;
+            int lookupHeight = pu.height;
+
+            bool isAmp = cu.m_partSize[0] >= SIZE_2NxnU;
+
+            if (isAmp)
+            {
+                if (cu.m_partSize[0] == SIZE_2NxnU || cu.m_partSize[0] == SIZE_2NxnD)
+                    lookupHeight = (puIdx) ? (pu.width - pu.height) : pu.height;
+                else
+                    lookupWidth = (puIdx) ? (pu.height - pu.width) : pu.width;
+            }
+
+            int startIdx = g_puStartIdx[lookupWidth + lookupHeight][static_cast<int>(cu.m_partSize[0])];
+
+            int alignWidth = isAmp ? cuSize : pu.width;
+            int alignHeight = isAmp ? cuSize : pu.height;
+
+            int numPUX = m_param->maxCUSize / alignWidth;
+            int numPUY = m_param->maxCUSize / alignHeight;
+
+            int puOffset = isAmp ? (puIdx * numPUX * numPUY) : (cu.m_partSize[0] == SIZE_2NxN ? (puIdx * numPUX) : puIdx);
+ 
+            int relX = (cu.m_cuPelX / alignWidth) % numPUX;
+            int relY = (cu.m_cuPelY / alignHeight) % numPUY;
+
+            int index = startIdx + (relY * numPUX + relX) + puOffset;
+
+            int row = cu.m_cuAddr / m_slice->m_sps->numCuInWidth;
+            int col = cu.m_cuAddr % m_slice->m_sps->numCuInWidth;
+
+            int slotIdx = (col % m_slice->m_sps->numCuInWidth) * m_slice->m_sps->numCuInHeight + row;
+
+            MEData meData = slice->m_ctuMV[slotIdx * MAX_NUM_PUS_PER_CTU + index];
+
+            bestME[0].ref = meData.ref[0];
+            bestME[1].ref = meData.ref[1];
+
+            isBidir = (bestME[0].ref >= 0 && bestME[1].ref >= 0);
+            uniL0 = (bestME[0].ref >= 0 && bestME[1].ref == REF_NOT_VALID);
+            uniL1 = (bestME[1].ref >= 0 && bestME[0].ref == REF_NOT_VALID);
+
+            if(isBidir)
+            {
+                cu.getPMV(interMode.interNeighbours, 0, bestME[0].ref, interMode.amvpCand[0][bestME[0].ref], mvc);
+                cu.getPMV(interMode.interNeighbours, 1, bestME[1].ref, interMode.amvpCand[1][bestME[1].ref], mvc);
+
+                bidir[0].mv = meData.mv[0];
+                bidir[1].mv = meData.mv[1];
+                bidir[0].mvp = interMode.amvpCand[0][bestME[0].ref][0];
+                bidir[1].mvp = interMode.amvpCand[1][bestME[1].ref][0];
+                bidir[0].mvCost = meData.mvCost[0];
+                bidir[1].mvCost = meData.mvCost[1];
+                bidirCost = meData.cost;
+                bidirBits = meData.bits;
+
+                bestCost = bidirCost;
+            }
+            else if (uniL0)
+            {
+                cu.getPMV(interMode.interNeighbours, 0, bestME[0].ref, interMode.amvpCand[0][bestME[0].ref], mvc);
+
+                bestME[0].mv = meData.mv[0];
+                bestME[0].mvp = interMode.amvpCand[0][bestME[0].ref][0];
+                bestME[0].mvCost = meData.mvCost[0];
+                bestME[0].cost = meData.cost;
+                bestME[0].bits = meData.bits;
+
+                bestCost = bestME[0].cost;
+            }
+            else if (uniL1)
+            {
+                cu.getPMV(interMode.interNeighbours, 1, bestME[1].ref, interMode.amvpCand[1][bestME[1].ref], mvc);
+
+                bestME[1].mv = meData.mv[1];
+                bestME[1].mvp = interMode.amvpCand[1][bestME[1].ref][0];
+                bestME[1].mvCost = meData.mvCost[1];
+                bestME[1].cost = meData.cost;
+                bestME[1].bits = meData.bits;
+
+                bestCost = bestME[1].cost;
+            }
+            else
+                x265_log(NULL, X265_LOG_ERROR, "Invalid ME mode");
+
+            if (mrgCost < bestCost)
+                isMerge = true;
+        }
+
         /* select best option and store into CU */
-        if (mrgCost < bidirCost && mrgCost < bestME[0].cost && mrgCost < bestME[1].cost)
+        if ((mrgCost < bidirCost && mrgCost < bestME[0].cost && mrgCost < bestME[1].cost) || isMerge)
         {
             cu.m_mergeFlag[pu.puAbsPartIdx] = true;
             cu.m_mvpIdx[0][pu.puAbsPartIdx] = merge.index; /* merge candidate ID is stored in L0 MVP idx */
@@ -2663,7 +3091,7 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
 
             totalmebits += merge.bits;
         }
-        else if (bidirCost < bestME[0].cost && bidirCost < bestME[1].cost)
+        else if ((bidirCost < bestME[0].cost && bidirCost < bestME[1].cost) || isBidir)
         {
             lastMode = 2;
 
@@ -2681,7 +3109,7 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
 
             totalmebits += bidirBits;
         }
-        else if (bestME[0].cost <= bestME[1].cost)
+        else if ((bestME[0].cost <= bestME[1].cost) || uniL0)
         {
             lastMode = 0;
 
