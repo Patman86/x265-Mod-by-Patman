@@ -31,6 +31,7 @@ option(FPROFILE_GENERATE "Compile executable to generate usage data" OFF)
 option(FPROFILE_USE "Compile executable using generated usage data" OFF)
 option(NATIVE_BUILD "Target the build CPU" OFF)
 option(STATIC_LINK_CRT "Statically link C and C++ runtimes for release builds" OFF)
+option(ENABLE_LTO "Attempt to enable Link Time Optimization if available" OFF)
 mark_as_advanced(FPROFILE_USE FPROFILE_GENERATE NATIVE_BUILD)
 # X265_BUILD must be incremented each time the public API is changed
 set(X265_BUILD 215)
@@ -213,6 +214,19 @@ if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
     set(GCC 1)
 endif()
 
+# Distinguish clang-cl (MSVC style) vs. clang (GCC style)
+set(CLANG_MSVC 0)
+set(CLANG_GNU 0)
+if(CLANG)
+    if(WIN32 AND MSVC)
+        # clang-cl with MSVC toolchain / generator
+        set(CLANG_MSVC 1)
+    else()
+        # "normal" clang / AppleClang in GCC/Unix style
+        set(CLANG_GNU 1)
+    endif()
+endif()
+
 if(INTEL_CXX AND WIN32)
     # treat icl roughly like MSVC
     set(MSVC 1)
@@ -224,7 +238,15 @@ if(MSVC)
             string(REPLACE "/MD" "/MT" ${CompilerFlag} "${${CompilerFlag}}")
         endforeach()
     endif(STATIC_LINK_CRT)
-    add_definitions(/W4)  # Full warnings
+
+    if(CLANG_MSVC)
+        # clang-cl: slightly less aggressive MSVC-style warnings
+        add_definitions(/W3)
+    else()
+        # pure MSVC
+        add_definitions(/W4)
+    endif()
+
     add_definitions(/Ob2) # always inline
     add_definitions(/MP)  # multithreaded build
 
@@ -244,7 +266,7 @@ endif()
 
 if(INTEL_CXX AND UNIX)
     set(GCC 1) # treat icpc roughly like gcc
-elseif(CLANG)
+elseif(CLANG_GNU)
     set(GCC 1) # treat clang roughly like gcc
 elseif(CMAKE_COMPILER_IS_GNUCXX)
     set(GCC 1)
@@ -278,7 +300,7 @@ endif()
 if(GCC)
     add_definitions(-Wall -Wextra -Wshadow)
     add_definitions(-D__STDC_LIMIT_MACROS=1)
-    if(NOT INTEL_CXX AND NOT CLANG AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 8.0)
+    if(NOT INTEL_CXX AND NOT CLANG_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 8.0)
         add_definitions(-Wno-class-memaccess)
     endif()
     if(ENABLE_HDR10_PLUS)
@@ -312,7 +334,7 @@ if(GCC)
         string(FIND "${CMAKE_CXX_FLAGS}" "-march" marchPos)
         if(marchPos LESS "0")
             add_definitions(-march=i686)
-            if(WIN32 AND NOT INTEL_CXX AND NOT CLANG AND
+            if(WIN32 AND NOT INTEL_CXX AND NOT CLANG_GNU AND
                CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 6.0 AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 7.0)
                 add_definitions(-mpreferred-stack-boundary=2)
             endif()
@@ -383,7 +405,6 @@ int main() { return 0; }")
 
             check_c_source_compiles("${SVE_COMPILATION_TEST}" SVE_COMPILATION_C_TEST_COMPILED)
             check_cxx_source_compiles("${SVE_COMPILATION_TEST}" SVE_COMPILATION_CXX_TEST_COMPILED)
-
             # Check if arm_neon_sve_bridge.h is available.
             set(SVE_HEADER_TEST "
 #ifndef __ARM_NEON_SVE_BRIDGE
@@ -510,7 +531,6 @@ int main() {
   asm volatile(".option arch, +v; vsetvli t0, a0, e32, m1, ta, ma");
   return 0;
 }]])
-
             check_c_source_compiles("${RVV_COMPILATION_TEST}" RVV_COMPILATION_C_TEST_COMPILED)
             check_cxx_source_compiles("${RVV_COMPILATION_TEST}" RVV_COMPILATION_CXX_TEST_COMPILED)
 
@@ -551,7 +571,6 @@ int main() {
                 message(STATUS "Disabling RVV intrinsic")
             endif()
         endif()
-
         set(RISCV64_ARGS -O2)
     endif()
     if(ENABLE_PIC)
@@ -736,9 +755,10 @@ if(ENABLE_SVT_HEVC)
     endif(SVTHEVC_FOUND)
 endif(ENABLE_SVT_HEVC)
 
-option(ENABLE_LTO "Attempt to enable Link Time Optimization if available" OFF)
 if(ENABLE_LTO)
+    cmake_policy(SET CMP0069 NEW)
     add_definitions(-DENABLE_LTO)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif(ENABLE_LTO)
 
 # this option can only be used when linking multiple libx265 libraries
@@ -1201,29 +1221,6 @@ if(ENABLE_CLI)
     if(MSVC)
         set(CMAKE_EXE_LINKER_FLAGS "/MANIFEST:NO")
     endif(MSVC)
-    if(ENABLE_LTO)
-        if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.9)
-            include(CheckIPOSupported)
-            check_ipo_supported(RESULT x265_ipo_supported OUTPUT error_msg)
-            if(x265_ipo_supported AND NOT DEFINED CMAKE_INTERPROCEDURAL_OPTIMIZATION)
-                set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-            else()
-                message(SEND_ERROR "LTO unavailable: ${error_msg}")
-            endif()
-        else()
-            if(MSVC)
-                set(CMAKE_C_FLAGS "/LTCG:INCREMENTAL")
-                set(CMAKE_CXX_FLAGS "/LTCG:INCREMENTAL")
-                set(CMAKE_EXE_LINKER_FLAGS "/LTCG:INCREMENTAL")
-                set(CMAKE_SHARED_LINKER_FLAGS "/LTCG:INCREMENTAL")
-            else()
-                set(CMAKE_C_FLAGS "-flto")
-                set(CMAKE_CXX_FLAGS "-flto")
-                set(CMAKE_EXE_LINKER_FLAGS "-flto")
-                set(CMAKE_SHARED_LINKER_FLAGS "-flto")
-            endif()
-        endif()
-    endif(ENABLE_LTO)
 
     check_include_files(getopt.h HAVE_GETOPT_H)
     if(NOT HAVE_GETOPT_H)
