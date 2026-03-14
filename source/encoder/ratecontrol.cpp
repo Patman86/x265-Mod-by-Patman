@@ -71,7 +71,7 @@ namespace {
     }\
 }
 
-inline int calcScale(uint32_t x)
+inline int calcScale(uint64_t x)
 {
     static uint8_t lut[16] = {4, 0, 1, 0, 2, 0, 1, 0, 3, 0, 1, 0, 2, 0, 1, 0};
     int y, z = (((x & 0xffff) - 1) >> 27) & 16;
@@ -423,8 +423,8 @@ void RateControl::initVBV(const SPS& sps)
         x265_log(m_param, X265_LOG_WARNING, "VBV buffer size cannot be smaller than one frame, using %d kbit\n",
             m_param->rc.vbvBufferSize);
     }
-    int vbvBufferSize = m_param->rc.vbvBufferSize * 1000;
-    int vbvMaxBitrate = m_param->rc.vbvMaxBitrate * 1000;
+    uint64_t vbvBufferSize = m_param->rc.vbvBufferSize * 1000ULL;
+    uint64_t vbvMaxBitrate = m_param->rc.vbvMaxBitrate * 1000ULL;
 
     if (m_param->bEmitHRDSEI && !m_param->decoderVbvMaxRate)
     {
@@ -432,9 +432,9 @@ void RateControl::initVBV(const SPS& sps)
         vbvBufferSize = hrd->cpbSizeValue << (hrd->cpbSizeScale + CPB_SHIFT);
         vbvMaxBitrate = hrd->bitRateValue << (hrd->bitRateScale + BR_SHIFT);
     }
-    m_bufferRate = vbvMaxBitrate / m_fps;
-    m_vbvMaxRate = vbvMaxBitrate;
-    m_bufferSize = vbvBufferSize;
+    m_bufferRate = static_cast<double>(vbvMaxBitrate) / m_fps;
+    m_vbvMaxRate = static_cast<double>(vbvMaxBitrate);
+    m_bufferSize = static_cast<double>(vbvBufferSize);
     m_singleFrameVbv = m_bufferRate * 1.1 > m_bufferSize;
 
     if (m_param->rc.vbvBufferInit > 1.)
@@ -887,11 +887,11 @@ void RateControl::reconfigureRC()
             x265_log(m_param, X265_LOG_WARNING, "VBV buffer size cannot be smaller than one frame, using %d kbit\n",
                 m_param->rc.vbvBufferSize);
         }
-        int vbvBufferSize = m_param->rc.vbvBufferSize * 1000;
-        int vbvMaxBitrate = m_param->rc.vbvMaxBitrate * 1000;
-        m_bufferRate = vbvMaxBitrate / m_fps;
-        m_vbvMaxRate = vbvMaxBitrate;
-        m_bufferSize = vbvBufferSize;
+        uint64_t vbvBufferSize = m_param->rc.vbvBufferSize * 1000ULL;
+        uint64_t vbvMaxBitrate = m_param->rc.vbvMaxBitrate * 1000ULL;
+        m_bufferRate = static_cast<double>(vbvMaxBitrate) / m_fps;
+        m_vbvMaxRate = static_cast<double>(vbvMaxBitrate);
+        m_bufferSize = static_cast<double>(vbvBufferSize);
         m_singleFrameVbv = m_bufferRate * 1.1 > m_bufferSize;
     }
     if (m_param->rc.rateControlMode == X265_RC_CRF)
@@ -933,8 +933,8 @@ void RateControl::reconfigureRC()
 
 void RateControl::initHRD(SPS& sps)
 {
-    int vbvBufferSize = m_param->rc.vbvBufferSize * 1000;
-    int vbvMaxBitrate = m_param->rc.vbvMaxBitrate * 1000;
+    uint64_t vbvBufferSize = m_param->rc.vbvBufferSize * 1000ULL;
+    uint64_t vbvMaxBitrate = m_param->rc.vbvMaxBitrate * 1000ULL;
 
     // Init HRD
     HRDInfo* hrd = &sps.vuiParameters.hrdParameters;
@@ -946,12 +946,12 @@ void RateControl::initHRD(SPS& sps)
 
     // normalize HRD size and rate to the value / scale notation
     hrd->bitRateScale = x265_clip3(0, 15, calcScale(vbvMaxBitrate) - BR_SHIFT);
-    hrd->bitRateValue = (vbvMaxBitrate >> (hrd->bitRateScale + BR_SHIFT));
+    hrd->bitRateValue = static_cast<uint32_t>(vbvMaxBitrate >> (hrd->bitRateScale + BR_SHIFT));
 
     hrd->cpbSizeScale = x265_clip3(0, 15, calcScale(vbvBufferSize) - CPB_SHIFT);
-    hrd->cpbSizeValue = (vbvBufferSize >> (hrd->cpbSizeScale + CPB_SHIFT));
-    int bitRateUnscale = hrd->bitRateValue << (hrd->bitRateScale + BR_SHIFT);
-    int cpbSizeUnscale = hrd->cpbSizeValue << (hrd->cpbSizeScale + CPB_SHIFT);
+    hrd->cpbSizeValue = static_cast<uint32_t>(vbvBufferSize >> (hrd->cpbSizeScale + CPB_SHIFT));
+    uint64_t bitRateUnscale = (uint64_t)hrd->bitRateValue << (hrd->bitRateScale + BR_SHIFT);
+    uint64_t cpbSizeUnscale = (uint64_t)hrd->cpbSizeValue << (hrd->cpbSizeScale + CPB_SHIFT);
 
     // arbitrary
     #define MAX_DURATION 0.5

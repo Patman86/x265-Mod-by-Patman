@@ -449,7 +449,7 @@ static const struct option long_options[] =
         char** orgArgv;
         char** argString;
         char *stringPool;
-        char* inputfn[MAX_VIEWS] = {NULL};
+        char* inputfn[MAX_VIEWS];
 
         /* ABR ladder settings */
         bool isAbrLadderConfig;
@@ -470,6 +470,8 @@ static const struct option long_options[] =
                 input[i] = NULL;
             for (int i = 0; i < MAX_LAYERS; i++)
                 recon[i] = NULL;
+            for (int i = 0; i < MAX_VIEWS; i++)
+                inputfn[i] = NULL;
             output = NULL;
             qpfile = NULL;
             zoneFile = NULL;

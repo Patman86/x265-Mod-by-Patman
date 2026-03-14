@@ -356,6 +356,7 @@ typedef int16_t  coeff_t;      // transform coefficient
 
 #define MAX_NUM_PUS_PER_CTU      593   // Maximum number of PUs in a 64x64 CTU
 #define MAX_NUM_PU_SIZES         24    // Number of distinct PU sizes in a 64x64 CTU
+#define MIN_TME_THREADS          32    // Recommended number of threads for ThreadedME
 
 namespace X265_NS {
 
