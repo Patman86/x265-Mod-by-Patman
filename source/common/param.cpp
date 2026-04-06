@@ -2122,7 +2122,7 @@ void x265_print_params(x265_param* param)
     if (param->bThreadedME)
         x265_log(param, X265_LOG_INFO, "ThreadedME: task block / buf rows       : %d / %d\n", param->tmeTaskBlockSize, param->tmeNumBufferRows);
 
-    x265_log(param, X265_LOG_INFO, "Residual QT: max TU size, max depth         : %d / %d inter / %d intra\n",
+    x265_log(param, X265_LOG_INFO, "Residual QT: max TU size, max depth     : %d / %d inter / %d intra\n",
              param->maxTUSize, param->tuQTMaxInterDepth, param->tuQTMaxIntraDepth);
 
     if (param->bEnableHME)

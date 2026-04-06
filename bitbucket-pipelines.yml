@@ -1,0 +1,716 @@
+image: ubuntu:22.04
+
+definitions:
+  caches:
+    ccache: ~/.ccache
+
+  steps:
+    - step: &build-8bit
+        name: "Build 8-bit"
+        caches:
+          - ccache
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm ccache libnuma-dev git > /dev/null 2>&1
+          - export PATH="/usr/lib/ccache:$PATH"
+          - mkdir -p build/8bit && cd build/8bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=ON -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON -DENABLE_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          - make -j$(nproc)
+          - echo "--- Verify build artifacts ---"
+          - test -f x265 && echo "CLI binary OK"
+          - test -f libx265.so && echo "Shared library OK"
+          - test -f libx265.a && echo "Static library OK"
+          - ./x265 --version
+          - echo "--- Run TestBench (unit tests) ---"
+          - ./test/TestBench || (echo "TestBench FAILED"; exit 1)
+        artifacts:
+          - build/8bit/x265
+          - build/8bit/libx265.so*
+          - build/8bit/libx265.a
+
+    - step: &build-10bit
+        name: "Build 10-bit"
+        caches:
+          - ccache
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm ccache libnuma-dev git > /dev/null 2>&1
+          - export PATH="/usr/lib/ccache:$PATH"
+          - mkdir -p build/10bit && cd build/10bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DHIGH_BIT_DEPTH=ON -DENABLE_SHARED=OFF -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON -DENABLE_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          - make -j$(nproc)
+          - test -f x265 && echo "10-bit CLI binary OK"
+          - ./x265 --version
+          - ./test/TestBench || (echo "10-bit TestBench FAILED"; exit 1)
+        artifacts:
+          - build/10bit/libx265.a
+
+    - step: &build-12bit
+        name: "Build 12-bit"
+        caches:
+          - ccache
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm ccache libnuma-dev git > /dev/null 2>&1
+          - export PATH="/usr/lib/ccache:$PATH"
+          - mkdir -p build/12bit && cd build/12bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DHIGH_BIT_DEPTH=ON -DMAIN12=ON -DENABLE_SHARED=OFF -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON -DENABLE_TESTS=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          - make -j$(nproc)
+          - test -f x265 && echo "12-bit CLI binary OK"
+          - ./x265 --version
+          - ./test/TestBench || (echo "12-bit TestBench FAILED"; exit 1)
+        artifacts:
+          - build/12bit/libx265.a
+
+    - step: &build-multilib
+        name: "Build Multi-lib (8+10+12 bit)"
+        caches:
+          - ccache
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm ccache libnuma-dev git > /dev/null 2>&1
+          - export PATH="/usr/lib/ccache:$PATH"
+          - mkdir -p build/multilib
+          - mkdir -p build/multilib/12bit && cd build/multilib/12bit
+          - cmake ../../../source -DCMAKE_BUILD_TYPE=Release -DHIGH_BIT_DEPTH=ON -DMAIN12=ON -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DEXPORT_C_API=OFF -DENABLE_ASSEMBLY=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          - make -j$(nproc)
+          - cd ../../..
+          - mkdir -p build/multilib/10bit && cd build/multilib/10bit
+          - cmake ../../../source -DCMAKE_BUILD_TYPE=Release -DHIGH_BIT_DEPTH=ON -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DEXPORT_C_API=OFF -DENABLE_ASSEMBLY=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          - make -j$(nproc)
+          - cd ../../..
+          - mkdir -p build/multilib/8bit && cd build/multilib/8bit
+          - ln -sf ../../multilib/10bit/libx265.a libx265_main10.a
+          - ln -sf ../../multilib/12bit/libx265.a libx265_main12.a
+          - cmake ../../../source -DCMAKE_BUILD_TYPE=Release -DENABLE_SHARED=ON -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON -DEXTRA_LIB="x265_main10.a;x265_main12.a" -DEXTRA_LINK_FLAGS="-L." -DLINKED_10BIT=ON -DLINKED_12BIT=ON -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          - make -j$(nproc)
+          - test -f x265 && echo "Multi-lib CLI binary OK"
+          - ./x265 --version
+        artifacts:
+          - build/multilib/8bit/x265
+          - build/multilib/8bit/libx265.so*
+          - build/multilib/8bit/libx265.a
+
+    - step: &test-cli-presets
+        name: "Test CLI - All Presets & Tune Modes"
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm libnuma-dev ffmpeg > /dev/null 2>&1
+          - mkdir -p build/8bit && cd build/8bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON
+          - make -j$(nproc)
+          - cd ../..
+          - mkdir -p testdata
+          - ffmpeg -y -f lavfi -i testsrc=duration=2:size=416x240:rate=30 -pix_fmt yuv420p testdata/test_420_416x240.yuv
+          - X265=build/8bit/x265
+          - PASS=0
+          - FAIL=0
+          - TOTAL=0
+          - |
+            run_x265() {
+              local label="$1"; shift
+              echo "=== $label ==="
+              "$@" 2>&1 | tee /tmp/x265_last.log
+              local rc=${PIPESTATUS[0]}
+              local summary=$(grep "encoded" /tmp/x265_last.log | tail -1)
+              [ -n "$summary" ] && printf "  %-45s | %s\n" "$label" "$summary" >> /tmp/summary.log
+              return $rc
+            }
+            echo "" > /tmp/summary.log
+          - |
+            for preset in ultrafast superfast veryfast faster fast medium slow slower veryslow placebo; do
+              TOTAL=$((TOTAL + 1))
+              if run_x265 "Preset $preset" $X265 --preset $preset --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out_${preset}.hevc testdata/test_420_416x240.yuv; then
+                PASS=$((PASS + 1))
+              else
+                FAIL=$((FAIL + 1))
+              fi
+              rm -f /tmp/out_${preset}.hevc
+            done
+          - |
+            for tune in psnr ssim grain fastdecode zerolatency; do
+              TOTAL=$((TOTAL + 1))
+              if run_x265 "Tune $tune" $X265 --preset medium --tune $tune --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out_tune_${tune}.hevc testdata/test_420_416x240.yuv; then
+                PASS=$((PASS + 1))
+              else
+                FAIL=$((FAIL + 1))
+              fi
+              rm -f /tmp/out_tune_${tune}.hevc
+            done
+          - echo ""
+          - echo "==================== ENCODING SUMMARY ===================="
+          - cat /tmp/summary.log 2>/dev/null || true
+          - echo "=========================================================="
+          - echo "=== Preset/Tune Results $PASS/$TOTAL passed, $FAIL failed ==="
+          - mkdir -p summaries && cp /tmp/summary.log summaries/cli-presets.log 2>/dev/null || true
+          - test $FAIL -eq 0
+        artifacts:
+          - summaries/*.log
+
+    - step: &test-rate-control
+        name: "Test Rate Control Modes"
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm libnuma-dev ffmpeg > /dev/null 2>&1
+          - mkdir -p build/8bit && cd build/8bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON
+          - make -j$(nproc)
+          - cd ../..
+          - mkdir -p testdata
+          - ffmpeg -y -f lavfi -i testsrc=duration=3:size=832x480:rate=30 -pix_fmt yuv420p testdata/test_420_832x480.yuv
+          - X265=build/8bit/x265
+          - FAIL=0
+          - |
+            run_x265() {
+              local label="$1"; shift
+              echo "=== $label ==="
+              "$@" 2>&1 | tee /tmp/x265_last.log
+              local rc=${PIPESTATUS[0]}
+              local summary=$(grep "encoded" /tmp/x265_last.log | tail -1)
+              [ -n "$summary" ] && printf "  %-45s | %s\n" "$label" "$summary" >> /tmp/summary.log
+              return $rc
+            }
+            echo "" > /tmp/summary.log
+          - run_x265 "CRF Mode" $X265 --preset medium --crf 22 --ssim --psnr --input-res 832x480 --fps 30 --frames 60 -o /tmp/out_crf.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "CQP Mode" $X265 --preset medium --qp 28 --ssim --psnr --input-res 832x480 --fps 30 --frames 60 -o /tmp/out_cqp.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "ABR Mode" $X265 --preset medium --bitrate 1000 -F4 --ssim --psnr --input-res 832x480 --fps 30 --frames 60 -o /tmp/out_abr.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "VBV Constrained" $X265 --preset medium --bitrate 1000 --vbv-maxrate 1000 --vbv-bufsize 1000 -F4 --ssim --psnr --input-res 832x480 --fps 30 --frames 60 -o /tmp/out_vbv.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Strict CBR" $X265 --preset medium --bitrate 1000 --vbv-maxrate 1000 --vbv-bufsize 1000 --strict-cbr -F4 --ssim --psnr --input-res 832x480 --fps 30 --frames 60 -o /tmp/out_cbr.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "CRF + VBV" $X265 --preset medium --crf 22 --vbv-maxrate 2000 --vbv-bufsize 3000 --crf-max 32 --crf-min 18 --ssim --psnr --input-res 832x480 --fps 30 --frames 60 -o /tmp/out_crf_vbv.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Two-pass ABR pass1" $X265 --preset medium --bitrate 1000 --pass 1 -F4 --input-res 832x480 --fps 30 --frames 60 -o /dev/null testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Two-pass ABR pass2" $X265 --preset medium --bitrate 1000 --pass 2 -F4 --ssim --psnr --input-res 832x480 --fps 30 --frames 60 -o /tmp/out_2pass.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Multi-pass Opt Analysis pass1" $X265 --preset medium --bitrate 1000 --pass 1 --multi-pass-opt-analysis --input-res 832x480 --fps 30 --frames 60 -o /dev/null testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Multi-pass Opt Analysis pass2" $X265 --preset medium --bitrate 1000 --pass 2 --multi-pass-opt-analysis --ssim --psnr --input-res 832x480 --fps 30 --frames 60 -o /tmp/out_mp_opt.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - rm -f /tmp/out_*.hevc x265_2pass.log x265_2pass.log.cutree
+          - echo ""
+          - echo "==================== ENCODING SUMMARY ===================="
+          - cat /tmp/summary.log 2>/dev/null || true
+          - echo "=========================================================="
+          - echo "=== Rate Control Results FAIL=$FAIL ==="
+          - mkdir -p summaries && cp /tmp/summary.log summaries/rate-control.log 2>/dev/null || true
+          - test $FAIL -eq 0
+        artifacts:
+          - summaries/*.log
+
+    - step: &test-encoding-features
+        name: "Test Encoding Features"
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm libnuma-dev ffmpeg > /dev/null 2>&1
+          - mkdir -p build/8bit && cd build/8bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON
+          - make -j$(nproc)
+          - cd ../..
+          - mkdir -p testdata
+          - ffmpeg -y -f lavfi -i testsrc=duration=2:size=832x480:rate=30 -pix_fmt yuv420p testdata/test_420_832x480.yuv
+          - ffmpeg -y -f lavfi -i testsrc=duration=2:size=416x240:rate=30 -pix_fmt yuv422p testdata/test_422_416x240.yuv
+          - ffmpeg -y -f lavfi -i testsrc=duration=2:size=416x240:rate=30 -pix_fmt yuv444p testdata/test_444_416x240.yuv
+          - ffmpeg -y -f lavfi -i testsrc=duration=2:size=416x240:rate=30 -pix_fmt yuv420p testdata/test_420_416x240.yuv
+          - X265=build/8bit/x265
+          - FAIL=0
+          - |
+            run_x265() {
+              local label="$1"; shift
+              echo "=== $label ==="
+              "$@" 2>&1 | tee /tmp/x265_last.log
+              local rc=${PIPESTATUS[0]}
+              local summary=$(grep "encoded" /tmp/x265_last.log | tail -1)
+              [ -n "$summary" ] && printf "  %-45s | %s\n" "$label" "$summary" >> /tmp/summary.log
+              return $rc
+            }
+            echo "" > /tmp/summary.log
+          - run_x265 "Lossless" $X265 --preset ultrafast --lossless --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "CU Lossless" $X265 --preset medium --crf 22 --cu-lossless --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - |
+            for ctu in 16 32 64; do
+              run_x265 "CTU $ctu" $X265 --preset medium --ctu $ctu --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+            done
+          - |
+            for mcu in 8 16 32; do
+              run_x265 "Min-CU $mcu" $X265 --preset medium --min-cu-size $mcu --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+            done
+          - |
+            for aqmode in 0 1 2 3 4; do
+              run_x265 "AQ Mode $aqmode" $X265 --preset medium --aq-mode $aqmode --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+            done
+          - |
+            for me in dia hex umh star sea full; do
+              run_x265 "ME $me" $X265 --preset medium --me $me --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+            done
+          - run_x265 "SAO + Deblock" $X265 --preset medium --sao --deblock 2:2 --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "No SAO + No Deblock" $X265 --preset medium --no-sao --no-deblock --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Limit SAO" $X265 --preset medium --limit-sao --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Weighted P + B" $X265 --preset medium --weightp --weightb --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "B-frames 0" $X265 --preset medium --bframes 0 --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "B-frames 16" $X265 --preset medium --bframes 16 --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Infinite Keyint" $X265 --preset medium --keyint -1 --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Short Keyint" $X265 --preset medium --keyint 10 --min-keyint 5 --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Closed GOP" $X265 --preset medium --no-open-gop --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Constrained Intra" $X265 --preset medium --constrained-intra --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - |
+            for rd in 1 2 3 4 5 6; do
+              run_x265 "RD Level $rd" $X265 --preset medium --rd $rd --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+            done
+          - |
+            for rdoq in 0 1 2; do
+              run_x265 "RDOQ Level $rdoq" $X265 --preset medium --rdoq-level $rdoq --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+            done
+          - run_x265 "Scaling List Default" $X265 --preset medium --scaling-list default --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Noise Reduction" $X265 --preset medium --nr-intra 500 --nr-inter 300 -F4 --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Psy-RD + Psy-RDOQ" $X265 --preset medium --psy-rd 1.5 --psy-rdoq 1.0 --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "No Psy" $X265 --preset medium --no-psy-rd --no-psy-rdoq --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Multiple Slices" $X265 --preset medium --slices 4 --crf 28 --input-res 832x480 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Temporal Layers" $X265 --preset medium --temporal-layers 3 --b-adapt 0 --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "HEVC-AQ" $X265 --preset medium --hevc-aq --no-cutree --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "HME" $X265 --preset medium --hme --crf 28 --input-res 832x480 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Lowpass DCT" $X265 --preset medium --lowpass-dct --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Streaming Flags" $X265 --preset medium --hrd --aud --repeat-headers --bitrate 1000 --vbv-maxrate 1000 --vbv-bufsize 1000 -F4 --input-res 832x480 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "422 Input" $X265 --preset medium --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_422_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "444 Input" $X265 --preset medium --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_444_416x240.yuv || FAIL=$((FAIL + 1))
+          - rm -f /tmp/out.hevc
+          - echo ""
+          - echo "==================== ENCODING SUMMARY ===================="
+          - cat /tmp/summary.log 2>/dev/null || true
+          - echo "=========================================================="
+          - echo "=== Encoding Features Results FAIL=$FAIL ==="
+          - mkdir -p summaries && cp /tmp/summary.log summaries/encoding-features.log 2>/dev/null || true
+          - test $FAIL -eq 0
+        artifacts:
+          - summaries/*.log
+
+    - step: &test-analysis-save-load
+        name: "Test Analysis Save/Load & Segment Encoding"
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm libnuma-dev ffmpeg > /dev/null 2>&1
+          - mkdir -p build/8bit && cd build/8bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON
+          - make -j$(nproc)
+          - cd ../..
+          - mkdir -p testdata
+          - ffmpeg -y -f lavfi -i testsrc=duration=4:size=416x240:rate=30 -pix_fmt yuv420p testdata/test_420_416x240.yuv
+          - X265=build/8bit/x265
+          - FAIL=0
+          - |
+            run_x265() {
+              local label="$1"; shift
+              echo "=== $label ==="
+              "$@" 2>&1 | tee /tmp/x265_last.log
+              local rc=${PIPESTATUS[0]}
+              local summary=$(grep "encoded" /tmp/x265_last.log | tail -1)
+              [ -n "$summary" ] && printf "  %-45s | %s\n" "$label" "$summary" >> /tmp/summary.log
+              return $rc
+            }
+            echo "" > /tmp/summary.log
+          - run_x265 "Analysis Save (level 2)" $X265 --preset medium --analysis-save x265_analysis.dat --analysis-save-reuse-level 2 --bitrate 500 --input-res 416x240 --fps 30 --frames 60 -o /tmp/out_save.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Analysis Load (level 2)" $X265 --preset medium --analysis-load x265_analysis.dat --analysis-load-reuse-level 2 --bitrate 500 --input-res 416x240 --fps 30 --frames 60 -o /tmp/out_load.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Analysis Save (level 10)" $X265 --preset slow --analysis-save x265_analysis_10.dat --analysis-save-reuse-level 10 --bitrate 500 --input-res 416x240 --fps 30 --frames 60 -o /tmp/out_save10.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Analysis Load (level 10)" $X265 --preset slow --analysis-load x265_analysis_10.dat --analysis-load-reuse-level 10 --bitrate 500 --input-res 416x240 --fps 30 --frames 60 -o /tmp/out_load10.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Segment Encoding" $X265 --preset ultrafast --no-open-gop --chunk-start 10 --chunk-end 50 --crf 28 --input-res 416x240 --fps 30 --frames 60 -o /tmp/out_seg.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - rm -f /tmp/out_*.hevc x265_analysis*.dat
+          - echo ""
+          - echo "==================== ENCODING SUMMARY ===================="
+          - cat /tmp/summary.log 2>/dev/null || true
+          - echo "=========================================================="
+          - echo "=== Analysis/Segment Results FAIL=$FAIL ==="
+          - mkdir -p summaries && cp /tmp/summary.log summaries/analysis-save-load.log 2>/dev/null || true
+          - test $FAIL -eq 0
+        artifacts:
+          - summaries/*.log
+
+    - step: &test-bitstream-validation
+        name: "Test Bitstream Validation (decode output)"
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm libnuma-dev ffmpeg > /dev/null 2>&1
+          - mkdir -p build/8bit && cd build/8bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON
+          - make -j$(nproc)
+          - cd ../..
+          - mkdir -p testdata
+          - ffmpeg -y -f lavfi -i testsrc=duration=2:size=416x240:rate=30 -pix_fmt yuv420p testdata/test_420_416x240.yuv
+          - X265=build/8bit/x265
+          - FAIL=0
+          - |
+            echo "" > /tmp/summary.log
+            validate_encode() {
+              local label="$1"; shift
+              echo "=== $label ==="
+              local outfile="/tmp/validate_${RANDOM}.hevc"
+              $X265 "$@" -o "$outfile" testdata/test_420_416x240.yuv 2>&1 | tee /tmp/x265_last.log
+              local rc=${PIPESTATUS[0]}
+              local summary=$(grep "encoded" /tmp/x265_last.log | tail -1)
+              [ -n "$summary" ] && printf "  %-45s | %s\n" "$label" "$summary" >> /tmp/summary.log
+              if [ $rc -eq 0 ]; then
+                if ffprobe -v error -show_entries stream=codec_name "$outfile" 2>&1 | grep -q hevc; then
+                  echo "PASS: $label (encode + probe)"
+                  if ffmpeg -y -i "$outfile" -frames:v 5 -f rawvideo /dev/null 2>&1; then
+                    echo "PASS: $label (decode)"
+                  else
+                    echo "FAIL: $label (decode failed)"
+                    FAIL=$((FAIL + 1))
+                  fi
+                else
+                  echo "FAIL: $label (not valid HEVC)"
+                  FAIL=$((FAIL + 1))
+                fi
+              else
+                echo "FAIL: $label (encode failed)"
+                FAIL=$((FAIL + 1))
+              fi
+              rm -f "$outfile"
+            }
+          - validate_encode "CRF ultrafast" --preset ultrafast --crf 28 --input-res 416x240 --fps 30 --frames 30
+          - validate_encode "CRF medium" --preset medium --crf 22 --input-res 416x240 --fps 30 --frames 30
+          - validate_encode "CRF veryslow" --preset veryslow --crf 18 --input-res 416x240 --fps 30 --frames 30
+          - validate_encode "ABR + VBV" --preset medium --bitrate 500 --vbv-maxrate 500 --vbv-bufsize 500 -F4 --input-res 416x240 --fps 30 --frames 30
+          - validate_encode "Lossless" --preset ultrafast --lossless --input-res 416x240 --fps 30 --frames 30
+          - validate_encode "HRD compliant" --preset medium --bitrate 500 --vbv-maxrate 500 --vbv-bufsize 500 --hrd --aud --repeat-headers -F4 --input-res 416x240 --fps 30 --frames 30
+          - validate_encode "Closed GOP" --preset medium --no-open-gop --keyint 10 --crf 28 --input-res 416x240 --fps 30 --frames 30
+          - validate_encode "Zero-latency" --preset medium --tune zerolatency --crf 28 --input-res 416x240 --fps 30 --frames 30
+          - echo ""
+          - echo "==================== ENCODING SUMMARY ===================="
+          - cat /tmp/summary.log 2>/dev/null || true
+          - echo "=========================================================="
+          - echo "=== Bitstream Validation Results FAIL=$FAIL ==="
+          - mkdir -p summaries && cp /tmp/summary.log summaries/bitstream-validation.log 2>/dev/null || true
+          - test $FAIL -eq 0
+        artifacts:
+          - summaries/*.log
+
+    - step: &test-threading
+        name: "Test Threading & Parallelism"
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm libnuma-dev ffmpeg > /dev/null 2>&1
+          - mkdir -p build/8bit && cd build/8bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON
+          - make -j$(nproc)
+          - cd ../..
+          - mkdir -p testdata
+          - ffmpeg -y -f lavfi -i testsrc=duration=2:size=832x480:rate=30 -pix_fmt yuv420p testdata/test_420_832x480.yuv
+          - X265=build/8bit/x265
+          - FAIL=0
+          - |
+            run_x265() {
+              local label="$1"; shift
+              echo "=== $label ==="
+              "$@" 2>&1 | tee /tmp/x265_last.log
+              local rc=${PIPESTATUS[0]}
+              local summary=$(grep "encoded" /tmp/x265_last.log | tail -1)
+              [ -n "$summary" ] && printf "  %-45s | %s\n" "$label" "$summary" >> /tmp/summary.log
+              return $rc
+            }
+            echo "" > /tmp/summary.log
+          - run_x265 "WPP enabled" $X265 --preset medium --wpp --crf 28 --input-res 832x480 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "WPP disabled" $X265 --preset medium --no-wpp --crf 28 --input-res 832x480 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - |
+            for ft in 1 2 4; do
+              run_x265 "Frame threads $ft" $X265 --preset medium --frame-threads $ft --crf 28 --input-res 832x480 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+            done
+          - |
+            for ls in 0 2 4; do
+              run_x265 "Lookahead slices $ls" $X265 --preset medium --lookahead-slices $ls --crf 28 --input-res 832x480 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+            done
+          - run_x265 "Pools=none (single thread)" $X265 --preset ultrafast --pools none --crf 28 --input-res 832x480 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - rm -f /tmp/out.hevc
+          - echo ""
+          - echo "==================== ENCODING SUMMARY ===================="
+          - cat /tmp/summary.log 2>/dev/null || true
+          - echo "=========================================================="
+          - echo "=== Threading Results FAIL=$FAIL ==="
+          - mkdir -p summaries && cp /tmp/summary.log summaries/threading.log 2>/dev/null || true
+          - test $FAIL -eq 0
+        artifacts:
+          - summaries/*.log
+
+    - step: &test-quality-metrics
+        name: "Test Quality Metrics (SSIM/PSNR)"
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm libnuma-dev ffmpeg > /dev/null 2>&1
+          - mkdir -p build/8bit && cd build/8bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON
+          - make -j$(nproc)
+          - cd ../..
+          - mkdir -p testdata
+          - ffmpeg -y -f lavfi -i testsrc=duration=2:size=416x240:rate=30 -pix_fmt yuv420p testdata/test_420_416x240.yuv
+          - X265=build/8bit/x265
+          - FAIL=0
+          - |
+            run_x265() {
+              local label="$1"; shift
+              echo "=== $label ==="
+              "$@" 2>&1 | tee /tmp/x265_last.log
+              local rc=${PIPESTATUS[0]}
+              local summary=$(grep "encoded" /tmp/x265_last.log | tail -1)
+              [ -n "$summary" ] && printf "  %-45s | %s\n" "$label" "$summary" >> /tmp/summary.log
+              return $rc
+            }
+            echo "" > /tmp/summary.log
+          - run_x265 "SSIM Metric" $X265 --preset medium --ssim --crf 22 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - grep -qi "ssim" /tmp/x265_last.log || FAIL=$((FAIL + 1))
+          - run_x265 "PSNR Metric" $X265 --preset medium --psnr --crf 22 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - grep -qi "psnr" /tmp/x265_last.log || FAIL=$((FAIL + 1))
+          - run_x265 "SSIM + PSNR" $X265 --preset medium --ssim --psnr --crf 22 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - grep -qi "ssim" /tmp/x265_last.log || FAIL=$((FAIL + 1))
+          - grep -qi "psnr" /tmp/x265_last.log || FAIL=$((FAIL + 1))
+          - run_x265 "Hash (MD5)" $X265 --preset medium --hash 1 --crf 22 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Recon Output" $X265 --preset medium --crf 22 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc -r /tmp/recon.yuv testdata/test_420_416x240.yuv || FAIL=$((FAIL + 1))
+          - test -f /tmp/recon.yuv && echo "Recon file created OK" || FAIL=$((FAIL + 1))
+          - rm -f /tmp/out.hevc /tmp/recon.yuv
+          - echo ""
+          - echo "==================== ENCODING SUMMARY ===================="
+          - cat /tmp/summary.log 2>/dev/null || true
+          - echo "=========================================================="
+          - echo "=== Quality Metrics Results FAIL=$FAIL ==="
+          - mkdir -p summaries && cp /tmp/summary.log summaries/quality-metrics.log 2>/dev/null || true
+          - test $FAIL -eq 0
+        artifacts:
+          - summaries/*.log
+
+    - step: &test-realworld-video
+        name: "Test Real-World Video (Y4M + Artifacts)"
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm libnuma-dev ffmpeg wget > /dev/null 2>&1
+          - mkdir -p build/8bit && cd build/8bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON
+          - make -j$(nproc)
+          - cd ../..
+          - mkdir -p testdata artifacts
+          - echo "=== Downloading xiph.org test sequences ==="
+          - wget -q -O testdata/bus_cif.y4m https://media.xiph.org/video/derf/y4m/bus_cif.y4m
+          - wget -q -O testdata/akiyo_cif.y4m https://media.xiph.org/video/derf/y4m/akiyo_cif.y4m
+          - X265=build/8bit/x265
+          - FAIL=0
+          - |
+            run_x265() {
+              local label="$1"; shift
+              echo "=== $label ==="
+              "$@" 2>&1 | tee /tmp/x265_last.log
+              local rc=${PIPESTATUS[0]}
+              local summary=$(grep "encoded" /tmp/x265_last.log | tail -1)
+              [ -n "$summary" ] && printf "  %-45s | %s\n" "$label" "$summary" >> /tmp/summary.log
+              return $rc
+            }
+            echo "" > /tmp/summary.log
+          - run_x265 "bus ultrafast CRF 28" $X265 --preset ultrafast --crf 28 --ssim --psnr --frames 150 -o artifacts/bus_ultrafast_crf28.hevc testdata/bus_cif.y4m || FAIL=$((FAIL + 1))
+          - run_x265 "bus medium CRF 22" $X265 --preset medium --crf 22 --ssim --psnr --frames 150 -o artifacts/bus_medium_crf22.hevc testdata/bus_cif.y4m || FAIL=$((FAIL + 1))
+          - run_x265 "bus slow ABR 1000k" $X265 --preset slow --bitrate 1000 --vbv-maxrate 1500 --vbv-bufsize 2000 -F4 --ssim --psnr --frames 150 -o artifacts/bus_slow_abr1000k.hevc testdata/bus_cif.y4m || FAIL=$((FAIL + 1))
+          - run_x265 "bus veryslow tune grain" $X265 --preset veryslow --tune grain --crf 20 --ssim --psnr --frames 150 -o artifacts/bus_veryslow_grain.hevc testdata/bus_cif.y4m || FAIL=$((FAIL + 1))
+          - run_x265 "akiyo medium CRF 22" $X265 --preset medium --crf 22 --ssim --psnr --frames 300 -o artifacts/akiyo_medium_crf22.hevc testdata/akiyo_cif.y4m || FAIL=$((FAIL + 1))
+          - run_x265 "akiyo slow VBV 500k CBR" $X265 --preset slow --bitrate 500 --vbv-maxrate 500 --vbv-bufsize 500 --strict-cbr -F4 --ssim --psnr --frames 300 -o artifacts/akiyo_slow_vbv500k.hevc testdata/akiyo_cif.y4m || FAIL=$((FAIL + 1))
+          - run_x265 "akiyo veryslow CRF 18" $X265 --preset veryslow --crf 18 --ssim --psnr --frames 300 -o artifacts/akiyo_veryslow_crf18.hevc testdata/akiyo_cif.y4m || FAIL=$((FAIL + 1))
+          - run_x265 "akiyo 2-pass pass1" $X265 --preset medium --bitrate 400 --pass 1 -F4 --frames 300 -o /dev/null testdata/akiyo_cif.y4m || FAIL=$((FAIL + 1))
+          - run_x265 "akiyo 2-pass pass2" $X265 --preset medium --bitrate 400 --pass 2 -F4 --ssim --psnr --frames 300 -o artifacts/akiyo_medium_2pass_400k.hevc testdata/akiyo_cif.y4m || FAIL=$((FAIL + 1))
+          - |
+            echo "=== Validate all artifacts with ffprobe ==="
+            for f in artifacts/*.hevc; do
+              if ffprobe -v error -show_entries stream=codec_name "$f" 2>&1 | grep -q hevc; then
+                echo "PASS: $f is valid HEVC"
+              else
+                echo "FAIL: $f is NOT valid HEVC"
+                FAIL=$((FAIL + 1))
+              fi
+            done
+          - rm -f x265_2pass.log x265_2pass.log.cutree
+          - echo ""
+          - echo "==================== ENCODING SUMMARY ===================="
+          - cat /tmp/summary.log 2>/dev/null || true
+          - echo "=========================================================="
+          - echo "=== Real-World Video Results FAIL=$FAIL ==="
+          - mkdir -p summaries && cp /tmp/summary.log summaries/realworld-video.log 2>/dev/null || true
+          - test $FAIL -eq 0
+        artifacts:
+          - artifacts/*.hevc
+          - summaries/*.log
+
+    - step: &test-10bit-12bit-encoding
+        name: "Test 10-bit & 12-bit Encoding"
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm libnuma-dev ffmpeg > /dev/null 2>&1
+          - mkdir -p testdata
+          - ffmpeg -y -f lavfi -i testsrc=duration=2:size=832x480:rate=30 -pix_fmt yuv420p10le testdata/test_10bit_832x480.yuv
+          - ffmpeg -y -f lavfi -i testsrc=duration=2:size=416x240:rate=30 -pix_fmt yuv420p10le testdata/test_10bit_416x240.yuv
+          - ffmpeg -y -f lavfi -i testsrc=duration=2:size=416x240:rate=30 -pix_fmt yuv420p12le testdata/test_12bit_416x240.yuv
+          - FAIL=0
+          - |
+            run_x265() {
+              local label="$1"; shift
+              echo "=== $label ==="
+              "$@" 2>&1 | tee /tmp/x265_last.log
+              local rc=${PIPESTATUS[0]}
+              local summary=$(grep "encoded" /tmp/x265_last.log | tail -1)
+              [ -n "$summary" ] && printf "  %-45s | %s\n" "$label" "$summary" >> /tmp/summary.log
+              return $rc
+            }
+            echo "" > /tmp/summary.log
+          - echo "=== Building 10-bit CLI ==="
+          - mkdir -p build/10bit && cd build/10bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DHIGH_BIT_DEPTH=ON -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON
+          - make -j$(nproc)
+          - cd ../..
+          - X265_10=build/10bit/x265
+          - run_x265 "10-bit ultrafast CRF" $X265_10 --preset ultrafast --crf 28 --ssim --psnr --input-res 416x240 --fps 30 --input-depth 10 --frames 30 -o /tmp/out.hevc testdata/test_10bit_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "10-bit medium CRF" $X265_10 --preset medium --crf 22 --ssim --psnr --input-res 832x480 --fps 30 --input-depth 10 --frames 30 -o /tmp/out.hevc testdata/test_10bit_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "10-bit slow ABR + VBV" $X265_10 --preset slow --bitrate 1000 --vbv-maxrate 1000 --vbv-bufsize 1000 -F4 --ssim --psnr --input-res 832x480 --fps 30 --input-depth 10 --frames 30 -o /tmp/out.hevc testdata/test_10bit_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "10-bit veryslow CRF" $X265_10 --preset veryslow --crf 18 --ssim --psnr --input-res 416x240 --fps 30 --input-depth 10 --frames 30 -o /tmp/out.hevc testdata/test_10bit_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "10-bit lossless" $X265_10 --preset ultrafast --lossless --input-res 416x240 --fps 30 --input-depth 10 --frames 30 -o /tmp/out.hevc testdata/test_10bit_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "10-bit CQP" $X265_10 --preset medium --qp 28 --ssim --psnr --input-res 416x240 --fps 30 --input-depth 10 --frames 30 -o /tmp/out.hevc testdata/test_10bit_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "10-bit 2-pass pass1" $X265_10 --preset medium --bitrate 500 --pass 1 -F4 --input-res 416x240 --fps 30 --input-depth 10 --frames 30 -o /dev/null testdata/test_10bit_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "10-bit 2-pass pass2" $X265_10 --preset medium --bitrate 500 --pass 2 -F4 --ssim --psnr --input-res 416x240 --fps 30 --input-depth 10 --frames 30 -o /tmp/out.hevc testdata/test_10bit_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "10-bit tune grain" $X265_10 --preset medium --tune grain --crf 22 --ssim --psnr --input-res 416x240 --fps 30 --input-depth 10 --frames 30 -o /tmp/out.hevc testdata/test_10bit_416x240.yuv || FAIL=$((FAIL + 1))
+          - rm -f /tmp/out.hevc x265_2pass.log x265_2pass.log.cutree
+          - echo "=== Building 12-bit CLI ==="
+          - mkdir -p build/12bit && cd build/12bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DHIGH_BIT_DEPTH=ON -DMAIN12=ON -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON
+          - make -j$(nproc)
+          - cd ../..
+          - X265_12=build/12bit/x265
+          - run_x265 "12-bit ultrafast CRF" $X265_12 --preset ultrafast --crf 28 --ssim --psnr --input-res 416x240 --fps 30 --input-depth 12 --frames 30 -o /tmp/out.hevc testdata/test_12bit_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "12-bit medium CRF" $X265_12 --preset medium --crf 22 --ssim --psnr --input-res 416x240 --fps 30 --input-depth 12 --frames 30 -o /tmp/out.hevc testdata/test_12bit_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "12-bit slow CRF" $X265_12 --preset slow --crf 20 --ssim --psnr --input-res 416x240 --fps 30 --input-depth 12 --frames 30 -o /tmp/out.hevc testdata/test_12bit_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "12-bit lossless" $X265_12 --preset ultrafast --lossless --input-res 416x240 --fps 30 --input-depth 12 --frames 30 -o /tmp/out.hevc testdata/test_12bit_416x240.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "12-bit ABR + VBV" $X265_12 --preset medium --bitrate 500 --vbv-maxrate 500 --vbv-bufsize 500 -F4 --ssim --psnr --input-res 416x240 --fps 30 --input-depth 12 --frames 30 -o /tmp/out.hevc testdata/test_12bit_416x240.yuv || FAIL=$((FAIL + 1))
+          - rm -f /tmp/out.hevc
+          - echo ""
+          - echo "==================== ENCODING SUMMARY ===================="
+          - cat /tmp/summary.log 2>/dev/null || true
+          - echo "=========================================================="
+          - echo "=== 10-bit/12-bit Encoding Results FAIL=$FAIL ==="
+          - mkdir -p summaries && cp /tmp/summary.log summaries/10bit-12bit-encoding.log 2>/dev/null || true
+          - test $FAIL -eq 0
+        artifacts:
+          - summaries/*.log
+
+    - step: &test-mcstf-sbrc-interlace
+        name: "Test MCSTF, SBRC & Interlace"
+        script:
+          - export DEBIAN_FRONTEND=noninteractive
+          - apt-get update -qq
+          - apt-get install -y -qq build-essential cmake nasm libnuma-dev ffmpeg > /dev/null 2>&1
+          - mkdir -p build/8bit && cd build/8bit
+          - cmake ../../source -DCMAKE_BUILD_TYPE=Release -DENABLE_CLI=ON -DENABLE_ASSEMBLY=ON
+          - make -j$(nproc)
+          - cd ../..
+          - mkdir -p testdata
+          - ffmpeg -y -f lavfi -i testsrc=duration=3:size=832x480:rate=30 -pix_fmt yuv420p testdata/test_420_832x480.yuv
+          - ffmpeg -y -f lavfi -i testsrc=duration=3:size=1920x1080:rate=25 -pix_fmt yuv420p testdata/test_420_1080p.yuv
+          - X265=build/8bit/x265
+          - FAIL=0
+          - |
+            run_x265() {
+              local label="$1"; shift
+              echo "=== $label ==="
+              "$@" 2>&1 | tee /tmp/x265_last.log
+              local rc=${PIPESTATUS[0]}
+              local summary=$(grep "encoded" /tmp/x265_last.log | tail -1)
+              [ -n "$summary" ] && printf "  %-45s | %s\n" "$label" "$summary" >> /tmp/summary.log
+              return $rc
+            }
+            echo "" > /tmp/summary.log
+          - run_x265 "MCSTF slower" $X265 --preset slower --crf 24 --mcstf --bframes 5 --frame-threads 1 --no-cutree --input-res 832x480 --fps 30 --frames 60 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "MCSTF medium" $X265 --preset medium --crf 26 --mcstf --bframes 5 --frame-threads 1 --tskip-fast --constrained-intra --input-res 832x480 --fps 30 --frames 60 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "MCSTF slow" $X265 --preset slow --crf 24 --mcstf --bframes 5 --input-res 832x480 --fps 30 --frames 60 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "SBRC slow" $X265 --preset slow --crf 26 --sbrc --no-open-gop --keyint 60 --min-keyint 60 --vbv-bufsize 6000 --vbv-maxrate 5000 --temporal-layers 4 --b-adapt 0 --no-cutree --input-res 1920x1080 --fps 25 --frames 50 -o /tmp/out.hevc testdata/test_420_1080p.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "SBRC superfast" $X265 --preset superfast --crf 22 --sbrc --no-open-gop --vbv-maxrate 9000 --vbv-bufsize 7500 --keyint 100 --min-keyint 100 --input-res 1920x1080 --fps 25 --frames 50 -o /tmp/out.hevc testdata/test_420_1080p.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Interlace TFF" $X265 --preset faster --interlace tff --crf 28 --input-res 832x480 --fps 30 --frames 60 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Interlace BFF" $X265 --preset fast --interlace bff --crf 28 --input-res 832x480 --fps 30 --frames 60 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - run_x265 "Interlace BFF + weightb" $X265 --preset fast --interlace bff --weightb --crf 28 --input-res 832x480 --fps 30 --frames 60 -o /tmp/out.hevc testdata/test_420_832x480.yuv || FAIL=$((FAIL + 1))
+          - rm -f /tmp/out.hevc
+          - echo ""
+          - echo "==================== ENCODING SUMMARY ===================="
+          - cat /tmp/summary.log 2>/dev/null || true
+          - echo "=========================================================="
+          - echo "=== MCSTF/SBRC/Interlace Results FAIL=$FAIL ==="
+          - mkdir -p summaries && cp /tmp/summary.log summaries/mcstf-sbrc-interlace.log 2>/dev/null || true
+          - test $FAIL -eq 0
+        artifacts:
+          - summaries/*.log
+
+    - step: &summary-report
+        name: "Pipeline Summary Report"
+        script:
+          - echo ""
+          - echo "================================================================"
+          - echo "       x265 PIPELINE - COMBINED ENCODING SUMMARY REPORT"
+          - echo "================================================================"
+          - |
+            total_encodes=0
+            for f in summaries/*.log; do
+              [ -f "$f" ] || continue
+              step_name=$(basename "$f" .log)
+              count=$(grep -c "encoded" "$f" 2>/dev/null || echo 0)
+              total_encodes=$((total_encodes + count))
+              echo ""
+              echo "----------------------------------------------------------------"
+              printf " [%s] (%d encodes)\n" "$step_name" "$count"
+              echo "----------------------------------------------------------------"
+              echo "  TEST                                          | FRAMES  FPS       BITRATE     QP"
+              echo "  ----------------------------------------------|--------------------------------------"
+              while IFS= read -r line; do
+                if [ -n "$line" ]; then
+                  echo "$line"
+                fi
+              done < "$f"
+            done
+          - echo ""
+          - echo "================================================================"
+          - |
+            total_encodes=0
+            total_fps=0
+            fps_count=0
+            for f in summaries/*.log; do
+              [ -f "$f" ] || continue
+              while IFS= read -r line; do
+                fps=$(echo "$line" | grep -oP '\([\d.]+\s+fps\)' | grep -oP '[\d.]+' | head -1)
+                if [ -n "$fps" ]; then
+                  total_encodes=$((total_encodes + 1))
+                  total_fps=$(echo "$total_fps + $fps" | bc 2>/dev/null || echo "$total_fps")
+                  fps_count=$((fps_count + 1))
+                fi
+              done < "$f"
+            done
+            if [ $fps_count -gt 0 ]; then
+              avg_fps=$(echo "scale=2; $total_fps / $fps_count" | bc 2>/dev/null || echo "N/A")
+              echo " TOTALS: $total_encodes encodes across $(ls summaries/*.log 2>/dev/null | wc -l) test suites"
+              echo " AVERAGE FPS: $avg_fps (across all encodes)"
+            else
+              echo " No encoding summaries found."
+            fi
+          - echo "================================================================"
+
+pipelines:
+  default:
+    - parallel:
+        - step: *build-8bit
+        - step: *build-10bit
+        - step: *build-12bit
+    - step: *build-multilib
+    - parallel:
+        - step: *test-cli-presets
+        - step: *test-rate-control
+        - step: *test-encoding-features
+        - step: *test-analysis-save-load
+        - step: *test-bitstream-validation
+        - step: *test-threading
+        - step: *test-quality-metrics
+        - step: *test-realworld-video
+        - step: *test-10bit-12bit-encoding
+        - step: *test-mcstf-sbrc-interlace
+    - step: *summary-report
