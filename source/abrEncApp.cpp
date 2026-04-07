@@ -935,7 +935,6 @@ ret:
                     m_cliopt.seek + inFrameCount, stats.encodedPictureCount, profileName);
                 m_input[MAX_VIEWS]->stopReader();
             }
-            api->param_free(m_param);
 
             X265_FREE(errorBuf);
             X265_FREE(rpuPayload);
