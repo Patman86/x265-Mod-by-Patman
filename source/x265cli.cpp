@@ -627,7 +627,7 @@ namespace X265_NS {
 
     void CLIOptions::printStatus(uint32_t frameNum)
     {
-        setlocale(LC_NUMERIC, "en_US.utf8");
+        setlocale(LC_NUMERIC, "C");
         char buf[200];
         int64_t time = x265_mdate();
 
