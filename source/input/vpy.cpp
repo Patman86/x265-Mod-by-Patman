@@ -94,7 +94,7 @@ void VPYInput::parseVpyOptions(const char* _options)
     std::string optSeparator {";"};
     std::string valSeparator {"="};
     std::map<std::string, int> knownOptions
-	{
+    {
         {std::string {"library"},        1},
         {std::string {"output"},         2},
         {std::string {"requests"},       3},
