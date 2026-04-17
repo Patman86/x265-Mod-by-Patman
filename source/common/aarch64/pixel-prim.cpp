@@ -25,6 +25,12 @@ static inline void sumsubq_s16(int16x8_t *sum, int16x8_t *sub, const int16x8_t a
     *sub = vsubq_s16(a, b);
 }
 
+static inline void abssumsubq_s16(int16x8_t *sum, int16x8_t *sub, const int16x8_t a, const int16x8_t b)
+{
+    *sum = vabsq_s16(vaddq_s16(a, b));
+    *sub = vabdq_s16(a, b);
+}
+
 static inline void transpose_s16_s16x2(int16x8_t *t1, int16x8_t *t2,
                                        const int16x8_t s1, const int16x8_t s2)
 {
@@ -52,19 +58,11 @@ static inline void transpose_s16_s64x2(int16x8_t *t1, int16x8_t *t2,
     *t2 = vreinterpretq_s16_s64(vtrn2q_s64(tmp1, tmp2));
 }
 
-static inline uint16x8_t max_abs_s16(const int16x8_t a, const int16x8_t b)
-{
-    uint16x8_t abs0 = vreinterpretq_u16_s16(vabsq_s16(a));
-    uint16x8_t abs1 = vreinterpretq_u16_s16(vabsq_s16(b));
-
-    return vmaxq_u16(abs0, abs1);
-}
-
 #if X265_DEPTH == 12
-static inline void sumsubq_s32(int32x4_t *sum, int32x4_t *sub, const int32x4_t a, const int32x4_t b)
+static inline void abssumsubq_s32(int32x4_t *sum, int32x4_t *sub, const int32x4_t a, const int32x4_t b)
 {
-    *sum = vaddq_s32(a, b);
-    *sub = vsubq_s32(a, b);
+    *sum = vabsq_s32(vaddq_s32(a, b));
+    *sub = vabdq_s32(a, b);
 }
 
 static inline void sumsublq_s16(int32x4_t *sum_lo, int32x4_t *sum_hi,
@@ -85,15 +83,6 @@ static inline void transpose_inplace_s32_s64x2(int32x4_t *t1, int32x4_t *t2)
     *t1 = vreinterpretq_s32_s64(vtrn1q_s64(tmp1, tmp2));
     *t2 = vreinterpretq_s32_s64(vtrn2q_s64(tmp1, tmp2));
 }
-
-static inline uint32x4_t max_abs_s32(int32x4_t a, int32x4_t b)
-{
-    uint32x4_t abs0 = vreinterpretq_u32_s32(vabsq_s32(a));
-    uint32x4_t abs1 = vreinterpretq_u32_s32(vabsq_s32(b));
-
-    return vmaxq_u32(abs0, abs1);
-}
-
 #endif // X265_DEPTH == 12
 
 #if HIGH_BIT_DEPTH
@@ -202,6 +191,22 @@ static inline void hadamard_8_v(const int16x8_t in_coefs[8], int16x8_t out_coefs
     sumsubq_s16(&out_coefs[3], &out_coefs[7], temp[3], temp[7]);
 }
 
+// 4 way hadamard horizontal pass with absolute value.
+static inline void hadamard_abs_4_h(const int16x8_t in_coefs[4], int16x8_t out_coefs[4])
+{
+    int16x8_t s0, s1, d0, d1, t0, t1, t2, t3;
+
+    transpose_s16_s16x2(&t0, &t1, in_coefs[0], in_coefs[1]);
+    transpose_s16_s16x2(&t2, &t3, in_coefs[2], in_coefs[3]);
+
+    abssumsubq_s16(&s0, &d0, t0, t1);
+    abssumsubq_s16(&s1, &d1, t2, t3);
+
+    transpose_s16_s32x2(&out_coefs[0], &out_coefs[1], s0, s1);
+    transpose_s16_s32x2(&out_coefs[2], &out_coefs[3], d0, d1);
+}
+
+#if X265_DEPTH != 12
 // 4 way hadamard horizontal pass.
 static inline void hadamard_4_h(const int16x8_t in_coefs[4], int16x8_t out_coefs[4])
 {
@@ -217,7 +222,6 @@ static inline void hadamard_4_h(const int16x8_t in_coefs[4], int16x8_t out_coefs
     transpose_s16_s32x2(&out_coefs[2], &out_coefs[3], d0, d1);
 }
 
-#if X265_DEPTH != 12
 // 8 way hadamard horizontal pass.
 static inline void hadamard_8_h(int16x8_t coefs[8], uint16x8_t out[4])
 {
@@ -227,20 +231,20 @@ static inline void hadamard_8_h(int16x8_t coefs[8], uint16x8_t out[4])
     hadamard_4_h(coefs, temp);
     hadamard_4_h(coefs + 4, temp + 4);
 
-    sumsubq_s16(&s0, &d0, temp[0], temp[1]);
-    sumsubq_s16(&s1, &d1, temp[2], temp[3]);
-    sumsubq_s16(&s2, &d2, temp[4], temp[5]);
-    sumsubq_s16(&s3, &d3, temp[6], temp[7]);
+    abssumsubq_s16(&s0, &d0, temp[0], temp[1]);
+    abssumsubq_s16(&s1, &d1, temp[2], temp[3]);
+    abssumsubq_s16(&s2, &d2, temp[4], temp[5]);
+    abssumsubq_s16(&s3, &d3, temp[6], temp[7]);
 
     transpose_s16_s64x2(&temp[0], &temp[1], s0, s2);
     transpose_s16_s64x2(&temp[2], &temp[3], s1, s3);
     transpose_s16_s64x2(&temp[4], &temp[5], d0, d2);
     transpose_s16_s64x2(&temp[6], &temp[7], d1, d3);
 
-    out[0] = max_abs_s16(temp[0], temp[1]);
-    out[1] = max_abs_s16(temp[2], temp[3]);
-    out[2] = max_abs_s16(temp[4], temp[5]);
-    out[3] = max_abs_s16(temp[6], temp[7]);
+    out[0] = vmaxq_u16(vreinterpretq_u16_s16(temp[0]), vreinterpretq_u16_s16(temp[1]));
+    out[1] = vmaxq_u16(vreinterpretq_u16_s16(temp[2]), vreinterpretq_u16_s16(temp[3]));
+    out[2] = vmaxq_u16(vreinterpretq_u16_s16(temp[4]), vreinterpretq_u16_s16(temp[5]));
+    out[3] = vmaxq_u16(vreinterpretq_u16_s16(temp[6]), vreinterpretq_u16_s16(temp[7]));
 }
 
 #else // X265_DEPTH == 12
@@ -270,24 +274,24 @@ static inline void hadamard_8_h(int16x8_t coefs[8], uint32x4_t out[4])
     transpose_inplace_s32_s64x2(&a_hi[4], &a_hi[5]);
     transpose_inplace_s32_s64x2(&a_hi[6], &a_hi[7]);
 
-    sumsubq_s32(&b_lo[0], &b_lo[1], a_lo[0], a_lo[1]);
-    sumsubq_s32(&b_lo[2], &b_lo[3], a_lo[2], a_lo[3]);
-    sumsubq_s32(&b_lo[4], &b_lo[5], a_lo[4], a_lo[5]);
-    sumsubq_s32(&b_lo[6], &b_lo[7], a_lo[6], a_lo[7]);
+    abssumsubq_s32(&b_lo[0], &b_lo[1], a_lo[0], a_lo[1]);
+    abssumsubq_s32(&b_lo[2], &b_lo[3], a_lo[2], a_lo[3]);
+    abssumsubq_s32(&b_lo[4], &b_lo[5], a_lo[4], a_lo[5]);
+    abssumsubq_s32(&b_lo[6], &b_lo[7], a_lo[6], a_lo[7]);
 
-    sumsubq_s32(&b_hi[0], &b_hi[1], a_hi[0], a_hi[1]);
-    sumsubq_s32(&b_hi[2], &b_hi[3], a_hi[2], a_hi[3]);
-    sumsubq_s32(&b_hi[4], &b_hi[5], a_hi[4], a_hi[5]);
-    sumsubq_s32(&b_hi[6], &b_hi[7], a_hi[6], a_hi[7]);
+    abssumsubq_s32(&b_hi[0], &b_hi[1], a_hi[0], a_hi[1]);
+    abssumsubq_s32(&b_hi[2], &b_hi[3], a_hi[2], a_hi[3]);
+    abssumsubq_s32(&b_hi[4], &b_hi[5], a_hi[4], a_hi[5]);
+    abssumsubq_s32(&b_hi[6], &b_hi[7], a_hi[6], a_hi[7]);
 
-    uint32x4_t max0_lo = max_abs_s32(b_lo[0], b_hi[0]);
-    uint32x4_t max1_lo = max_abs_s32(b_lo[1], b_hi[1]);
-    uint32x4_t max2_lo = max_abs_s32(b_lo[2], b_hi[2]);
-    uint32x4_t max3_lo = max_abs_s32(b_lo[3], b_hi[3]);
-    uint32x4_t max0_hi = max_abs_s32(b_lo[4], b_hi[4]);
-    uint32x4_t max1_hi = max_abs_s32(b_lo[5], b_hi[5]);
-    uint32x4_t max2_hi = max_abs_s32(b_lo[6], b_hi[6]);
-    uint32x4_t max3_hi = max_abs_s32(b_lo[7], b_hi[7]);
+    uint32x4_t max0_lo = vmaxq_u32(vreinterpretq_u32_s32(b_lo[0]), vreinterpretq_u32_s32(b_hi[0]));
+    uint32x4_t max1_lo = vmaxq_u32(vreinterpretq_u32_s32(b_lo[1]), vreinterpretq_u32_s32(b_hi[1]));
+    uint32x4_t max2_lo = vmaxq_u32(vreinterpretq_u32_s32(b_lo[2]), vreinterpretq_u32_s32(b_hi[2]));
+    uint32x4_t max3_lo = vmaxq_u32(vreinterpretq_u32_s32(b_lo[3]), vreinterpretq_u32_s32(b_hi[3]));
+    uint32x4_t max0_hi = vmaxq_u32(vreinterpretq_u32_s32(b_lo[4]), vreinterpretq_u32_s32(b_hi[4]));
+    uint32x4_t max1_hi = vmaxq_u32(vreinterpretq_u32_s32(b_lo[5]), vreinterpretq_u32_s32(b_hi[5]));
+    uint32x4_t max2_hi = vmaxq_u32(vreinterpretq_u32_s32(b_lo[6]), vreinterpretq_u32_s32(b_hi[6]));
+    uint32x4_t max3_hi = vmaxq_u32(vreinterpretq_u32_s32(b_lo[7]), vreinterpretq_u32_s32(b_hi[7]));
 
     out[0] = vaddq_u32(max0_lo, max0_hi);
     out[1] = vaddq_u32(max1_lo, max1_hi);
@@ -306,25 +310,25 @@ static inline int hadamard_4x4(int16x8_t a0, int16x8_t a1)
     sumsubq_s16(&sum, &dif, t0, t1);
 
     transpose_s16_s16x2(&t0, &t1, sum, dif);
-    sumsubq_s16(&sum, &dif, t0, t1);
+    abssumsubq_s16(&sum, &dif, t0, t1);
 
     transpose_s16_s32x2(&t0, &t1, sum, dif);
 
-    uint16x8_t max = max_abs_s16(t0, t1);
+    uint16x8_t max = vmaxq_u16(vreinterpretq_u16_s16(t0), vreinterpretq_u16_s16(t1));
 
     return vaddlvq_u16(max);
 }
 
 // Calculate 2 4x4 hadamard transformation.
-static void hadamard_4x4_dual(int16x8_t diff[4], uint16x8_t *out)
+static inline void hadamard_4x4_dual(int16x8_t diff[4], uint16x8_t *out)
 {
     int16x8_t temp[4];
 
     hadamard_4_v(diff, temp);
-    hadamard_4_h(temp, diff);
+    hadamard_abs_4_h(temp, diff);
 
-    uint16x8_t sum0 = max_abs_s16(diff[0], diff[1]);
-    uint16x8_t sum1 = max_abs_s16(diff[2], diff[3]);
+    uint16x8_t sum0 = vmaxq_u16(vreinterpretq_u16_s16(diff[0]), vreinterpretq_u16_s16(diff[1]));
+    uint16x8_t sum1 = vmaxq_u16(vreinterpretq_u16_s16(diff[2]), vreinterpretq_u16_s16(diff[3]));
 
     *out = vaddq_u16(sum0, sum1);
 }
@@ -337,13 +341,13 @@ static inline void hadamard_4x4_quad(int16x8_t diff[8], uint16x8_t out[2])
     hadamard_4_v(diff, temp);
     hadamard_4_v(diff + 4, temp + 4);
 
-    hadamard_4_h(temp, diff);
-    hadamard_4_h(temp + 4, diff + 4);
+    hadamard_abs_4_h(temp, diff);
+    hadamard_abs_4_h(temp + 4, diff + 4);
 
-    uint16x8_t sum0 = max_abs_s16(diff[0], diff[1]);
-    uint16x8_t sum1 = max_abs_s16(diff[2], diff[3]);
-    uint16x8_t sum2 = max_abs_s16(diff[4], diff[5]);
-    uint16x8_t sum3 = max_abs_s16(diff[6], diff[7]);
+    uint16x8_t sum0 = vmaxq_u16(vreinterpretq_u16_s16(diff[0]), vreinterpretq_u16_s16(diff[1]));
+    uint16x8_t sum1 = vmaxq_u16(vreinterpretq_u16_s16(diff[2]), vreinterpretq_u16_s16(diff[3]));
+    uint16x8_t sum2 = vmaxq_u16(vreinterpretq_u16_s16(diff[4]), vreinterpretq_u16_s16(diff[5]));
+    uint16x8_t sum3 = vmaxq_u16(vreinterpretq_u16_s16(diff[6]), vreinterpretq_u16_s16(diff[7]));
 
     out[0] = vaddq_u16(sum0, sum1);
     out[1] = vaddq_u16(sum2, sum3);
@@ -1937,11 +1941,11 @@ static inline int calc_energy_4x4(const pixel *source, intptr_t sstride)
     sumsubq_s16(&s01_23, &d01_23, t0, t1);
 
     transpose_s16_s16x2(&t0, &t1, s01_23, d01_23);
-    sumsubq_s16(&s01_23, &d01_23, t0, t1);
+    abssumsubq_s16(&s01_23, &d01_23, t0, t1);
 
     transpose_s16_s32x2(&t0, &t1, s01_23, d01_23);
 
-    int sat = vaddvq_u16(max_abs_s16(t0, t1));
+    int sat = vaddvq_u16(vmaxq_u16(vreinterpretq_u16_s16(t0), vreinterpretq_u16_s16(t1)));
 
     return sat - sum;
 }
