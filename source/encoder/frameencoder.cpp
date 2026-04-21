@@ -1036,6 +1036,13 @@ void FrameEncoder::compressFrame(int layer)
                     }
                 }
 
+                if (m_top->m_threadedME && !slice->isIntra())
+                {
+                    ScopedLock lock(m_tmeDepLock);
+                    m_tmeDeps[i].external = true;
+                    m_top->m_threadedME->enqueueReadyRows(i, layer, this);
+                }
+
                 if (!i)
                     m_row0WaitTime[layer] = x265_mdate();
                 else if (i == m_numRows - 1)
@@ -1636,6 +1643,29 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
         const uint32_t cuAddr = lineStartCUAddr + col;
         CUData* ctu = curEncData.getPicCTU(cuAddr);
         const uint32_t bLastCuInSlice = (bLastRowInSlice & (col == numCols - 1)) ? 1 : 0;
+
+        /* Must wait for TME to finish before initCTU because both threads
+         * operate on the same CUData — the encoder's initCTU would corrupt
+         * data that deriveMVsForCTU is still reading. */
+        if (m_top->m_threadedME && slice->m_sliceType != I_SLICE)
+        {
+            int64_t waitStart = x265_mdate();
+            bool waited = false;
+
+            while (m_frame[layer]->m_ctuMEFlags[cuAddr].get() == 0)
+            {
+#ifdef DETAILED_CU_STATS
+                tld.analysis.m_stats[m_jpId].countTmeBlockedCTUs++;
+#endif
+                m_frame[layer]->m_ctuMEFlags[cuAddr].waitForChange(0);
+                waited = true;
+            }
+
+            int64_t waitEnd = x265_mdate();
+            if (waited)
+                ATOMIC_ADD(&m_totalThreadedMEWait[layer], waitEnd - waitStart);
+        }
+
         ctu->initCTU(*m_frame[layer], cuAddr, slice->m_sliceQp, bFirstRowInSlice, bLastRowInSlice, bLastCuInSlice);
 
         if (!layer && bIsVbv)
@@ -1692,26 +1722,6 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
         if (m_param->dynamicRd && (int32_t)(m_rce.qpaRc - m_rce.qpNoVbv) > 0)
             ctu->m_vbvAffected = true;
 
-        if (m_top->m_threadedME && slice->m_sliceType != I_SLICE)
-        {
-            int64_t waitStart = x265_mdate();
-            bool waited = false;
-
-            // Wait for threadedME to complete ME upto this CTU
-            while (m_frame[layer]->m_ctuMEFlags[cuAddr].get() == 0)
-            {
-#ifdef DETAILED_CU_STATS
-                tld.analysis.m_stats[m_jpId].countTmeBlockedCTUs++;
-#endif
-                m_frame[layer]->m_ctuMEFlags[cuAddr].waitForChange(0);
-                waited = true;
-            }
-
-            int64_t waitEnd = x265_mdate();
-            if (waited)
-                ATOMIC_ADD(&m_totalThreadedMEWait[layer], waitEnd - waitStart);
-        }
-            
         // Does all the CU analysis, returns best top level mode decision
         Mode& best = tld.analysis.compressCTU(*ctu, *m_frame[layer], m_cuGeoms[m_ctuGeomMap[cuAddr]], rowCoder);
 

@@ -348,6 +348,12 @@ void Search::puMotionEstimation(const Slice* slice, const CUGeom& cuGeom, CUData
                 PicYuv* recon = slice->m_mref[list][ref].reconPic;
                 int offset = recon->getLumaAddr(cu.m_cuAddr, pu.cuAbsPartIdx + pu.puAbsPartIdx) - recon->getLumaAddr(0);
 
+                if (m_param->searchMethod == X265_SEA)
+                {
+                    for (int planes = 0; planes < INTEGRAL_PLANE_NUM; planes++)
+                        m_me.integral[planes] = slice->m_refFrameList[list][ref]->m_encData->m_meIntegral[planes] + offset;
+                }
+
                 m_me.setSourcePU(fencPic->m_picOrg[0], fencPic->m_stride, offset, pu.width, pu.height, m_param->searchMethod, m_param->subpelRefine);
                 setSearchRange(cu, mvp, searchRange, mvmin, mvmax);
 

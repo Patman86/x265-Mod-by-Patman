@@ -1621,7 +1621,9 @@ void LookaheadTLD::calculateHistogram(
         for (uint32_t horizontalIdx = 0; horizontalIdx < inputWidth; horizontalIdx += dsFactor)
         {
             pixel val = inputSrc[horizontalIdx] >> shift;
+#if HIGH_BIT_DEPTH
             X265_CHECK(val < HISTOGRAM_NUMBER_OF_BINS, "Pixel value out of allocated histogram range. This will lead to memory corruption.\n");
+#endif
             ++(histogram[val]);
             *sum += val;
         }

@@ -3847,6 +3847,7 @@ void Encoder::configureZone(x265_param *p, x265_param *zone)
             p->rc.qp = zone->rc.qp;
             p->rc.aqMode = X265_AQ_NONE;
             p->rc.hevcAq = 0;
+            p->bAQMotion = 0;
         }
         if (p->rc.aqMode == 0 && p->rc.cuTree)
         {
@@ -4062,6 +4063,7 @@ void Encoder::configure(x265_param *p)
         p->rc.bitrate = 0;
         p->rc.cuTree = 0;
         p->rc.aqStrength = 0;
+        p->bAQMotion = 0;
     }
 
     if (p->rc.aqMode == 0 && p->rc.cuTree)

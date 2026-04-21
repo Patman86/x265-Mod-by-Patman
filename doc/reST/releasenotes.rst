@@ -2,6 +2,53 @@
 Release Notes
 *************
 
+Version 4.2
+===========
+
+Release date - 19th April, 2026.
+
+New feature
+-----------
+1. Threaded Motion Estimation (Experimental feature)-It uses a dedicated threadpool to precompute Motion Estimation in parallel.Improves encoding speed upto 1.5x for 1080p & lower resolution on multi core machines with low frequency setting. On high frequency systems or on machines with low number of cores, the overhead of additional Motion estimation work may outweigh parallelism
+
+Enhancements to existing features
+-------------
+
+1.Add new Levels 6.3 to 7.2 specified in ITU-T H.265 (V9) (09/2023) and above
+2.Improve Slices feature with check zeroMv
+3.Enable frame parallelism with MCSTF feature
+4.Updated support to signal AOM FGM params
+5.Improve quality with SBRC feature
+6.Updated DolbyVision P5 VUI defaults
+
+API changes
+-----------
+1. API Support to enable Threaded Motion Estimation(--threaded-me)
+
+Optimizations
+-------------
+1. RISC V optimizations including SAD, SATD, DCT, IDCT, block copy, pixel utilities, SAO, loopfilter, transpose kernels resulting in 2x encoding speed.
+2. ARM SIMD optimizations including the use of NEON and SVE instruction set extensions. The following algorithms now have optimized SIMD implementations: DST, IDCT, SSE, SSD ,intra_pred_planar, pelFilterLumaStrong, interpolation, planecopy, dequant_normal, blockcopy, pixel variance resulting in 8% faster encoding speed compared to v4.1
+
+Bug fixes
+---------
+1. Fix memory leaks (no command line option, SEI buffer, analysis save/load)
+2. Fix chroma qp offset for non yuv444 inputs
+3. Fix max supported input resolution
+4. Fix bugs with ARM SIMD optimizations
+5. Fix Alpha and Multiview feature flag support in x265_config
+6. Fix test harness issues, CMake errors
+7. Fix inconsistent output with aq-motion
+8. Fix crash with hist-scenecut on high bit-depth builds
+9. Fix lookahead concurrency bug
+10. Fix shared link issue (R_X86_64_PC32), yuv recon output issue, rd-refine and dynamic-refine issue, inputs for Windows named pipe,weighted prediction delta_chroma_offset, crf and vbv issue in abr-ladder, psnr and ssim reported with MCSTF feature, internally overflowed VBV variables
+
+Known issues
+------------
+1. Output mismatch between analysis save & load with cutree with reuse level < 10
+2. Inconsistent hash mismatch with abr-ladder feature
+3. Performance regression observed with threaded-me feature on high frequency systems and for higher resolutions (4k)
+
 Version 4.1
 ===========
 

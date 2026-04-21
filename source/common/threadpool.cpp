@@ -33,6 +33,15 @@
 #include <winnt.h>
 #endif
 
+#if defined(__APPLE__)
+#include <sys/sysctl.h>
+#elif !defined(_WIN32)
+#include <fstream>
+#include <string>
+#include <cstdio>
+#include <cstdlib>
+#endif
+
 #if X86_64
 
 #ifdef __GNUC__
@@ -351,7 +360,6 @@ static void distributeThreadsForTme(
         }
 
         // Apply calculated threadpool assignment
-        // TODO: Make sure this doesn't cause a problem later on
         memset(threadsPerPool, 0, sizeof(int) * (numNumaNodes + 2));
         memset(nodeMaskPerPool, 0, sizeof(uint64_t) * (numNumaNodes + 2));
 
@@ -905,16 +913,87 @@ int ThreadPool::configureTmeThreadCount(x265_param* param, int cpuCount)
         }
     }
 
+    bool isHighFreq = (getCPUFrequencyMHz() > 2000.0);
+
     if (selectedRule >= 0)
     {
         const TmeRuleConfig& cfg = s_tmeRuleConfig[selectedRule];
         param->tmeTaskBlockSize = cfg.widthBasedTaskBlockSize ? ((param->sourceWidth + 480 - 1) / 480) : cfg.taskBlockSize[resClass];
         param->tmeNumBufferRows = cfg.numBufferRows[resClass];
-        return (cpuCount * cfg.threadPercent[resClass]) / 100;
+        return (!isHighFreq) ? (cpuCount * cfg.threadPercent[resClass]) / 100 : cpuCount / 2;
     }
 
     static const int s_defaultThreadPercent[TME_RES_COUNT] = { 80, 80, 70 };
-    return (cpuCount * s_defaultThreadPercent[resClass]) / 100;
+    return (!isHighFreq) ? (cpuCount * s_defaultThreadPercent[resClass]) / 100 : cpuCount / 2;
+}
+
+double getCPUFrequencyMHz()
+{
+#if defined(_WIN32)
+    HKEY hKey;
+    DWORD mhz = 0;
+    DWORD size = sizeof(mhz);
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE,
+                      "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+                      0, KEY_READ, &hKey) == ERROR_SUCCESS)
+    {
+        RegQueryValueExA(hKey, "~MHz", NULL, NULL, (LPBYTE)&mhz, &size);
+        RegCloseKey(hKey);
+    }
+    return (double)mhz;
+
+#elif defined(__APPLE__)
+    uint64_t freq = 0;
+    size_t size = sizeof(freq);
+    if (sysctlbyname("hw.cpufrequency", &freq, &size, NULL, 0) == 0)
+        return (double)freq / 1.0e6;
+    return 0.0;
+
+#else  /* Linux */
+    /* scaling_cur_freq reflects the live frequency chosen by the governor
+     * and EPP hint. Iterate over all cpuN entries and return the highest observed value.
+     */
+    {
+        uint64_t maxKhz = 0;
+        char path[64];
+        for (int cpu = 0; ; ++cpu)
+        {
+            snprintf(path, sizeof(path),
+                     "/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq", cpu);
+            std::ifstream f(path);
+            if (!f.is_open())
+                break;
+            uint64_t khz = 0;
+            f >> khz;
+            if (khz > maxKhz)
+                maxKhz = khz;
+        }
+        if (maxKhz > 0)
+            return (double)maxKhz / 1000.0;
+    }
+    /* Fall back to /proc/cpuinfo — collect the max "cpu MHz" across all entries. */
+    {
+        std::ifstream f("/proc/cpuinfo");
+        std::string line;
+        double maxMhz = 0.0;
+        while (std::getline(f, line))
+        {
+            if (line.find("cpu MHz") != std::string::npos)
+            {
+                size_t colon = line.find(':');
+                if (colon != std::string::npos)
+                {
+                    double mhz = strtod(line.c_str() + colon + 1, NULL);
+                    if (mhz > maxMhz)
+                        maxMhz = mhz;
+                }
+            }
+        }
+        if (maxMhz > 0.0)
+            return maxMhz;
+    }
+    return 0.0;
+#endif
 }
 
 } // end namespace X265_NS

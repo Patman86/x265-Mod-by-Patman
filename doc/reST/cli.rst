@@ -408,15 +408,20 @@ Performance Options
 	can reduce compression efficiency. Recommended on many-core CPUs when
 	encode speed is prioritized over compression efficiency.
 
-	If VBV options are enabled, Threaded ME is automatically disabled and a 
-	warning is emitted.
+	This feature is automatically disabled in the following conditions:
 
-	This feature is implicitly disabled when no thread pool is present.
+	- When no thread pool is present.
+	- When the detected CPU core count is less than 32.
+	- If VBV options are enabled, due to incompatibility with re-encoding trigggers.
 
-	--threaded-me provides speedups on many-core CPUs, accompanied by a
-	compression efficiency loss.
-    
-	Default disabled.
+	Default disabled. **Experimental Feature**
+
+	.. note::
+		:option:`--threaded-me` currently provides encoding speedups only on
+		many-core machines running at low clock frequencies (at or below
+		approximately 1.5 GHz). On high-frequency systems or machines with
+		fewer cores, the overhead of the additional motion estimation work
+		may outweigh the parallelism gains.
 
 .. option:: --preset, -p <integer|string>
 

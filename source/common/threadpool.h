@@ -171,6 +171,20 @@ public:
     virtual void processTasks(int workerThreadId) = 0;
 };
 
+/**
+ * @brief Return the highest current CPU frequency in MHz across all cores, or 0.0 if unavailable.
+ *
+ * The value reflects the live frequency as reported by the cpufreq subsystem,
+ * which accounts for the active scaling governor and EPP hint.
+ *
+ * Platform support:
+ *   Linux   – iterates /sys/devices/system/cpu/cpuN/cpufreq/scaling_cur_freq (kHz)
+ *              for all cores and returns the maximum; falls back to /proc/cpuinfo
+ *   macOS   – sysctl hw.cpufrequency (Hz)
+ *   Windows – registry ~MHz under CentralProcessor\0
+ */
+double getCPUFrequencyMHz();
+
 } // end namespace X265_NS
 
 #endif // ifndef X265_THREADPOOL_H
