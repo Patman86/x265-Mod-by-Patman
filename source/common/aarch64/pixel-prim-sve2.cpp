@@ -160,6 +160,251 @@ static inline void hadamard_4x4_quad(int16x8_t diff[8], uint64x2_t *sum)
     *sum = x265_udotq_u16(*sum, sum1, vdupq_n_u16(1));
 }
 
+#if X265_DEPTH == 8
+static inline void hadamard_8x8(int16x8_t diff[8], uint64x2_t *sum)
+{
+    int16x8_t a[8], b[8];
+
+    a[0] = x265_caddq_s16<90>(diff[0], diff[0]);
+    a[1] = x265_caddq_s16<90>(diff[1], diff[1]);
+    a[2] = x265_caddq_s16<90>(diff[2], diff[2]);
+    a[3] = x265_caddq_s16<90>(diff[3], diff[3]);
+    a[4] = x265_caddq_s16<90>(diff[4], diff[4]);
+    a[5] = x265_caddq_s16<90>(diff[5], diff[5]);
+    a[6] = x265_caddq_s16<90>(diff[6], diff[6]);
+    a[7] = x265_caddq_s16<90>(diff[7], diff[7]);
+
+    const uint8x16_t idx = vld1q_u8(kHADPermuteTbl);
+    // Re-order input ready for CADD instruction.
+    b[0] = vqtbl1q_s16(a[0], idx);
+    b[1] = vqtbl1q_s16(a[1], idx);
+    b[2] = vqtbl1q_s16(a[2], idx);
+    b[3] = vqtbl1q_s16(a[3], idx);
+    b[4] = vqtbl1q_s16(a[4], idx);
+    b[5] = vqtbl1q_s16(a[5], idx);
+    b[6] = vqtbl1q_s16(a[6], idx);
+    b[7] = vqtbl1q_s16(a[7], idx);
+
+    a[0] = x265_caddq_s16<90>(b[0], b[0]);
+    a[1] = x265_caddq_s16<90>(b[1], b[1]);
+    a[2] = x265_caddq_s16<90>(b[2], b[2]);
+    a[3] = x265_caddq_s16<90>(b[3], b[3]);
+    a[4] = x265_caddq_s16<90>(b[4], b[4]);
+    a[5] = x265_caddq_s16<90>(b[5], b[5]);
+    a[6] = x265_caddq_s16<90>(b[6], b[6]);
+    a[7] = x265_caddq_s16<90>(b[7], b[7]);
+
+    // Re-order input ready for CADD instruction.
+    b[0] = vqtbl1q_s16(a[0], idx);
+    b[1] = vqtbl1q_s16(a[1], idx);
+    b[2] = vqtbl1q_s16(a[2], idx);
+    b[3] = vqtbl1q_s16(a[3], idx);
+    b[4] = vqtbl1q_s16(a[4], idx);
+    b[5] = vqtbl1q_s16(a[5], idx);
+    b[6] = vqtbl1q_s16(a[6], idx);
+    b[7] = vqtbl1q_s16(a[7], idx);
+
+    a[0] = x265_caddq_s16<90>(b[0], b[0]);
+    a[1] = x265_caddq_s16<90>(b[1], b[1]);
+    a[2] = x265_caddq_s16<90>(b[2], b[2]);
+    a[3] = x265_caddq_s16<90>(b[3], b[3]);
+    a[4] = x265_caddq_s16<90>(b[4], b[4]);
+    a[5] = x265_caddq_s16<90>(b[5], b[5]);
+    a[6] = x265_caddq_s16<90>(b[6], b[6]);
+    a[7] = x265_caddq_s16<90>(b[7], b[7]);
+
+    sumsubq_s16(&b[0], &b[1], a[0], a[1]);
+    sumsubq_s16(&b[2], &b[3], a[2], a[3]);
+    sumsubq_s16(&b[4], &b[5], a[4], a[5]);
+    sumsubq_s16(&b[6], &b[7], a[6], a[7]);
+
+    abssumsubq_s16(&a[0], &a[2], b[0], b[2]);
+    abssumsubq_s16(&a[1], &a[3], b[1], b[3]);
+    abssumsubq_s16(&a[4], &a[6], b[4], b[6]);
+    abssumsubq_s16(&a[5], &a[7], b[5], b[7]);
+
+    uint16x8_t max0 = vmaxq_u16(vreinterpretq_u16_s16(a[0]), vreinterpretq_u16_s16(a[4]));
+    uint16x8_t max1 = vmaxq_u16(vreinterpretq_u16_s16(a[1]), vreinterpretq_u16_s16(a[5]));
+    uint16x8_t max2 = vmaxq_u16(vreinterpretq_u16_s16(a[2]), vreinterpretq_u16_s16(a[6]));
+    uint16x8_t max3 = vmaxq_u16(vreinterpretq_u16_s16(a[3]), vreinterpretq_u16_s16(a[7]));
+
+    uint16x8_t sum0 = vaddq_u16(max0, max1);
+    uint16x8_t sum1 = vaddq_u16(max2, max3);
+
+    *sum = x265_udotq_u16(*sum, sum0, vdupq_n_u16(1));
+    *sum = x265_udotq_u16(*sum, sum1, vdupq_n_u16(1));
+}
+
+#elif X265_DEPTH == 10
+static inline void hadamard_8x8(int16x8_t diff[8], uint64x2_t *sum)
+{
+    int16x8_t a[8], b[8];
+
+    a[0] = x265_caddq_s16<90>(diff[0], diff[0]);
+    a[1] = x265_caddq_s16<90>(diff[1], diff[1]);
+    a[2] = x265_caddq_s16<90>(diff[2], diff[2]);
+    a[3] = x265_caddq_s16<90>(diff[3], diff[3]);
+    a[4] = x265_caddq_s16<90>(diff[4], diff[4]);
+    a[5] = x265_caddq_s16<90>(diff[5], diff[5]);
+    a[6] = x265_caddq_s16<90>(diff[6], diff[6]);
+    a[7] = x265_caddq_s16<90>(diff[7], diff[7]);
+
+    const uint8x16_t idx = vld1q_u8(kHADPermuteTbl);
+    // Re-order input ready for CADD instruction.
+    b[0] = vqtbl1q_s16(a[0], idx);
+    b[1] = vqtbl1q_s16(a[1], idx);
+    b[2] = vqtbl1q_s16(a[2], idx);
+    b[3] = vqtbl1q_s16(a[3], idx);
+    b[4] = vqtbl1q_s16(a[4], idx);
+    b[5] = vqtbl1q_s16(a[5], idx);
+    b[6] = vqtbl1q_s16(a[6], idx);
+    b[7] = vqtbl1q_s16(a[7], idx);
+
+    a[0] = x265_caddq_s16<90>(b[0], b[0]);
+    a[1] = x265_caddq_s16<90>(b[1], b[1]);
+    a[2] = x265_caddq_s16<90>(b[2], b[2]);
+    a[3] = x265_caddq_s16<90>(b[3], b[3]);
+    a[4] = x265_caddq_s16<90>(b[4], b[4]);
+    a[5] = x265_caddq_s16<90>(b[5], b[5]);
+    a[6] = x265_caddq_s16<90>(b[6], b[6]);
+    a[7] = x265_caddq_s16<90>(b[7], b[7]);
+
+    // Re-order input ready for CADD instruction.
+    b[0] = vqtbl1q_s16(a[0], idx);
+    b[1] = vqtbl1q_s16(a[1], idx);
+    b[2] = vqtbl1q_s16(a[2], idx);
+    b[3] = vqtbl1q_s16(a[3], idx);
+    b[4] = vqtbl1q_s16(a[4], idx);
+    b[5] = vqtbl1q_s16(a[5], idx);
+    b[6] = vqtbl1q_s16(a[6], idx);
+    b[7] = vqtbl1q_s16(a[7], idx);
+
+    a[0] = x265_caddq_s16<90>(b[0], b[0]);
+    a[1] = x265_caddq_s16<90>(b[1], b[1]);
+    a[2] = x265_caddq_s16<90>(b[2], b[2]);
+    a[3] = x265_caddq_s16<90>(b[3], b[3]);
+    a[4] = x265_caddq_s16<90>(b[4], b[4]);
+    a[5] = x265_caddq_s16<90>(b[5], b[5]);
+    a[6] = x265_caddq_s16<90>(b[6], b[6]);
+    a[7] = x265_caddq_s16<90>(b[7], b[7]);
+
+    sumsubq_s16(&b[0], &b[1], a[0], a[1]);
+    sumsubq_s16(&b[2], &b[3], a[2], a[3]);
+    sumsubq_s16(&b[4], &b[5], a[4], a[5]);
+    sumsubq_s16(&b[6], &b[7], a[6], a[7]);
+
+    abssumsubq_s16(&a[0], &a[2], b[0], b[2]);
+    abssumsubq_s16(&a[1], &a[3], b[1], b[3]);
+    abssumsubq_s16(&a[4], &a[6], b[4], b[6]);
+    abssumsubq_s16(&a[5], &a[7], b[5], b[7]);
+
+    uint16x8_t max0 = vmaxq_u16(vreinterpretq_u16_s16(a[0]), vreinterpretq_u16_s16(a[4]));
+    uint16x8_t max1 = vmaxq_u16(vreinterpretq_u16_s16(a[1]), vreinterpretq_u16_s16(a[5]));
+    uint16x8_t max2 = vmaxq_u16(vreinterpretq_u16_s16(a[2]), vreinterpretq_u16_s16(a[6]));
+    uint16x8_t max3 = vmaxq_u16(vreinterpretq_u16_s16(a[3]), vreinterpretq_u16_s16(a[7]));
+
+    *sum = x265_udotq_u16(*sum, max0, vdupq_n_u16(1));
+    *sum = x265_udotq_u16(*sum, max1, vdupq_n_u16(1));
+    *sum = x265_udotq_u16(*sum, max2, vdupq_n_u16(1));
+    *sum = x265_udotq_u16(*sum, max3, vdupq_n_u16(1));
+}
+
+#elif X265_DEPTH == 12
+static inline void hadamard_8x8(int16x8_t diff[8], uint64x2_t *sum)
+{
+    int16x8_t a[8], b[8];
+    int32x4_t c[16], d[16];
+
+    a[0] = x265_caddq_s16<90>(diff[0], diff[0]);
+    a[1] = x265_caddq_s16<90>(diff[1], diff[1]);
+    a[2] = x265_caddq_s16<90>(diff[2], diff[2]);
+    a[3] = x265_caddq_s16<90>(diff[3], diff[3]);
+    a[4] = x265_caddq_s16<90>(diff[4], diff[4]);
+    a[5] = x265_caddq_s16<90>(diff[5], diff[5]);
+    a[6] = x265_caddq_s16<90>(diff[6], diff[6]);
+    a[7] = x265_caddq_s16<90>(diff[7], diff[7]);
+
+    const uint8x16_t idx = vld1q_u8(kHADPermuteTbl);
+    // Re-order input ready for CADD instruction.
+    b[0] = vqtbl1q_s16(a[0], idx);
+    b[1] = vqtbl1q_s16(a[1], idx);
+    b[2] = vqtbl1q_s16(a[2], idx);
+    b[3] = vqtbl1q_s16(a[3], idx);
+    b[4] = vqtbl1q_s16(a[4], idx);
+    b[5] = vqtbl1q_s16(a[5], idx);
+    b[6] = vqtbl1q_s16(a[6], idx);
+    b[7] = vqtbl1q_s16(a[7], idx);
+
+    a[0] = x265_caddq_s16<90>(b[0], b[0]);
+    a[1] = x265_caddq_s16<90>(b[1], b[1]);
+    a[2] = x265_caddq_s16<90>(b[2], b[2]);
+    a[3] = x265_caddq_s16<90>(b[3], b[3]);
+    a[4] = x265_caddq_s16<90>(b[4], b[4]);
+    a[5] = x265_caddq_s16<90>(b[5], b[5]);
+    a[6] = x265_caddq_s16<90>(b[6], b[6]);
+    a[7] = x265_caddq_s16<90>(b[7], b[7]);
+
+    // Re-order input ready for CADD instruction.
+    b[0] = vqtbl1q_s16(a[0], idx);
+    b[1] = vqtbl1q_s16(a[1], idx);
+    b[2] = vqtbl1q_s16(a[2], idx);
+    b[3] = vqtbl1q_s16(a[3], idx);
+    b[4] = vqtbl1q_s16(a[4], idx);
+    b[5] = vqtbl1q_s16(a[5], idx);
+    b[6] = vqtbl1q_s16(a[6], idx);
+    b[7] = vqtbl1q_s16(a[7], idx);
+
+    a[0] = x265_caddq_s16<90>(b[0], b[0]);
+    a[1] = x265_caddq_s16<90>(b[1], b[1]);
+    a[2] = x265_caddq_s16<90>(b[2], b[2]);
+    a[3] = x265_caddq_s16<90>(b[3], b[3]);
+    a[4] = x265_caddq_s16<90>(b[4], b[4]);
+    a[5] = x265_caddq_s16<90>(b[5], b[5]);
+    a[6] = x265_caddq_s16<90>(b[6], b[6]);
+    a[7] = x265_caddq_s16<90>(b[7], b[7]);
+
+    sumsublq_s16(&c[0], &c[1], &c[2], &c[3], a[0], a[1]);
+    sumsublq_s16(&c[4], &c[5], &c[6], &c[7], a[2], a[3]);
+    sumsublq_s16(&c[8], &c[9], &c[10], &c[11], a[4], a[5]);
+    sumsublq_s16(&c[12], &c[13], &c[14], &c[15], a[6], a[7]);
+
+    abssumsubq_s32(&d[0], &d[4], c[0], c[4]);
+    abssumsubq_s32(&d[1], &d[5], c[1], c[5]);
+    abssumsubq_s32(&d[2], &d[6], c[2], c[6]);
+    abssumsubq_s32(&d[3], &d[7], c[3], c[7]);
+    abssumsubq_s32(&d[8], &d[12], c[8], c[12]);
+    abssumsubq_s32(&d[9], &d[13], c[9], c[13]);
+    abssumsubq_s32(&d[10], &d[14], c[10], c[14]);
+    abssumsubq_s32(&d[11], &d[15], c[11], c[15]);
+
+    uint32x4_t sum0 = vmaxq_u32(vreinterpretq_u32_s32(d[0]), vreinterpretq_u32_s32(d[8]));
+    uint32x4_t sum1 = vmaxq_u32(vreinterpretq_u32_s32(d[1]), vreinterpretq_u32_s32(d[9]));
+    uint32x4_t sum2 =
+        vmaxq_u32(vreinterpretq_u32_s32(d[2]), vreinterpretq_u32_s32(d[10]));
+    uint32x4_t sum3 =
+        vmaxq_u32(vreinterpretq_u32_s32(d[3]), vreinterpretq_u32_s32(d[11]));
+    uint32x4_t sum4 =
+        vmaxq_u32(vreinterpretq_u32_s32(d[4]), vreinterpretq_u32_s32(d[12]));
+    uint32x4_t sum5 =
+        vmaxq_u32(vreinterpretq_u32_s32(d[5]), vreinterpretq_u32_s32(d[13]));
+    uint32x4_t sum6 =
+        vmaxq_u32(vreinterpretq_u32_s32(d[6]), vreinterpretq_u32_s32(d[14]));
+    uint32x4_t sum7 =
+        vmaxq_u32(vreinterpretq_u32_s32(d[7]), vreinterpretq_u32_s32(d[15]));
+
+    uint32x4_t sum01 = vaddq_u32(sum0, sum1);
+    uint32x4_t sum23 = vaddq_u32(sum2, sum3);
+    uint32x4_t sum45 = vaddq_u32(sum4, sum5);
+    uint32x4_t sum67 = vaddq_u32(sum6, sum7);
+
+    uint32x4_t sum0123 = vaddq_u32(sum01, sum23);
+    uint32x4_t sum4567 = vaddq_u32(sum45, sum67);
+    *sum = vpadalq_u32(*sum, sum0123);
+    *sum = vpadalq_u32(*sum, sum4567);
+}
+
+#endif // X265_DEPTH == 8
+
 #if HIGH_BIT_DEPTH
 static inline void pixel_satd_4x4_sve2(const uint16_t *pix1, intptr_t stride_pix1,
                                        const uint16_t *pix2, intptr_t stride_pix2,
@@ -287,6 +532,81 @@ static inline void pixel_satd_16x16_sve2(const uint16_t *pix1, intptr_t stride_p
         pix1 += 4 * stride_pix1;
         pix2 += 4 * stride_pix2;
     }
+}
+
+static inline int pixel_sa8d_8x8_sve2(const uint16_t *pix1, intptr_t stride_pix1,
+                                      const uint16_t *pix2, intptr_t stride_pix2)
+{
+    int16x8_t diff[8];
+    uint64x2_t sum = vdupq_n_u64(0);
+
+    load_diff_u16x8x4_dual(pix1, stride_pix1, pix2, stride_pix2, diff);
+    hadamard_8x8(diff, &sum);
+
+    return (vaddvq_u64(sum) + 1) >> 1;
+}
+
+static inline int pixel_sa8d_16x16_sve2(const uint16_t *pix1, intptr_t stride_pix1,
+                                        const uint16_t *pix2, intptr_t stride_pix2)
+{
+    uint64x2_t sum = vdupq_n_u64(0);
+    int16x8_t diff[8];
+
+    load_diff_u16x8x8(pix1 + 0 * stride_pix1 + 0, stride_pix1, pix2 + 0 * stride_pix2 + 0,
+                      stride_pix2, diff);
+    hadamard_8x8(diff, &sum);
+
+    load_diff_u16x8x8(pix1 + 0 * stride_pix1 + 8, stride_pix1, pix2 + 0 * stride_pix2 + 8,
+                      stride_pix2, diff);
+    hadamard_8x8(diff, &sum);
+
+    load_diff_u16x8x8(pix1 + 8 * stride_pix1 + 0, stride_pix1, pix2 + 8 * stride_pix2 + 0,
+                      stride_pix2, diff);
+    hadamard_8x8(diff, &sum);
+
+    load_diff_u16x8x8(pix1 + 8 * stride_pix1 + 8, stride_pix1, pix2 + 8 * stride_pix2 + 8,
+                      stride_pix2, diff);
+    hadamard_8x8(diff, &sum);
+
+    return (vaddvq_u64(sum) + 1) >> 1;
+}
+
+static inline int pixel_sa8d_16x32_sve2(const uint16_t *pix1, intptr_t stride_pix1,
+                                        const uint16_t *pix2, intptr_t stride_pix2)
+{
+    uint64x2_t sum0 = vdupq_n_u64(0);
+    uint64x2_t sum1 = vdupq_n_u64(0);
+    int16x8_t diff[8];
+
+    load_diff_u16x8x8(pix1 + 0 * stride_pix1 + 0, stride_pix1, pix2 + 0 * stride_pix2 + 0,
+                      stride_pix2, diff);
+    hadamard_8x8(diff, &sum0);
+    load_diff_u16x8x8(pix1 + 8 * stride_pix1 + 0, stride_pix1, pix2 + 8 * stride_pix2 + 0,
+                      stride_pix2, diff);
+    hadamard_8x8(diff, &sum0);
+    load_diff_u16x8x8(pix1 + 0 * stride_pix1 + 8, stride_pix1, pix2 + 0 * stride_pix2 + 8,
+                      stride_pix2, diff);
+    hadamard_8x8(diff, &sum0);
+    load_diff_u16x8x8(pix1 + 8 * stride_pix1 + 8, stride_pix1, pix2 + 8 * stride_pix2 + 8,
+                      stride_pix2, diff);
+    hadamard_8x8(diff, &sum0);
+
+    load_diff_u16x8x8(pix1 + 16 * stride_pix1 + 0, stride_pix1,
+                      pix2 + 16 * stride_pix2 + 0, stride_pix2, diff);
+    hadamard_8x8(diff, &sum1);
+    load_diff_u16x8x8(pix1 + 24 * stride_pix1 + 0, stride_pix1,
+                      pix2 + 24 * stride_pix2 + 0, stride_pix2, diff);
+    hadamard_8x8(diff, &sum1);
+    load_diff_u16x8x8(pix1 + 16 * stride_pix1 + 8, stride_pix1,
+                      pix2 + 16 * stride_pix2 + 8, stride_pix2, diff);
+    hadamard_8x8(diff, &sum1);
+    load_diff_u16x8x8(pix1 + 24 * stride_pix1 + 8, stride_pix1,
+                      pix2 + 24 * stride_pix2 + 8, stride_pix2, diff);
+    hadamard_8x8(diff, &sum1);
+
+    uint64x2_t sum = vpaddq_u64(sum0, sum1);
+    uint64x2_t sa8d = vrshrq_n_u64(sum, 1);
+    return vaddvq_u64(sa8d);
 }
 
 #else
@@ -417,6 +737,81 @@ static inline void pixel_satd_16x16_sve2(const uint8_t *pix1, intptr_t stride_pi
     hadamard_4x4_quad(diff, sum);
 }
 
+static inline int pixel_sa8d_8x8_sve2(const uint8_t *pix1, intptr_t stride_pix1,
+                                      const uint8_t *pix2, intptr_t stride_pix2)
+{
+    int16x8_t diff[8];
+    uint64x2_t sum = vdupq_n_u64(0);
+
+    load_diff_u8x8x8(pix1, stride_pix1, pix2, stride_pix2, diff);
+    hadamard_8x8(diff, &sum);
+
+    return (vaddvq_u64(sum) + 1) >> 1;
+}
+
+static inline int pixel_sa8d_16x16_sve2(const uint8_t *pix1, intptr_t stride_pix1,
+                                        const uint8_t *pix2, intptr_t stride_pix2)
+{
+    uint64x2_t sum = vdupq_n_u64(0);
+    int16x8_t diff[8];
+
+    load_diff_u8x8x8(pix1 + 0 * stride_pix1 + 0, stride_pix1, pix2 + 0 * stride_pix2 + 0,
+                     stride_pix2, diff);
+    hadamard_8x8(diff, &sum);
+
+    load_diff_u8x8x8(pix1 + 0 * stride_pix1 + 8, stride_pix1, pix2 + 0 * stride_pix2 + 8,
+                     stride_pix2, diff);
+    hadamard_8x8(diff, &sum);
+
+    load_diff_u8x8x8(pix1 + 8 * stride_pix1 + 0, stride_pix1, pix2 + 8 * stride_pix2 + 0,
+                     stride_pix2, diff);
+    hadamard_8x8(diff, &sum);
+
+    load_diff_u8x8x8(pix1 + 8 * stride_pix1 + 8, stride_pix1, pix2 + 8 * stride_pix2 + 8,
+                     stride_pix2, diff);
+    hadamard_8x8(diff, &sum);
+
+    return (vaddvq_u64(sum) + 1) >> 1;
+}
+
+static inline int pixel_sa8d_16x32_sve2(const uint8_t *pix1, intptr_t stride_pix1,
+                                        const uint8_t *pix2, intptr_t stride_pix2)
+{
+    uint64x2_t sum0 = vdupq_n_u64(0);
+    uint64x2_t sum1 = vdupq_n_u64(0);
+    int16x8_t diff[8];
+
+    load_diff_u8x8x8(pix1 + 0 * stride_pix1 + 0, stride_pix1, pix2 + 0 * stride_pix2 + 0,
+                     stride_pix2, diff);
+    hadamard_8x8(diff, &sum0);
+    load_diff_u8x8x8(pix1 + 8 * stride_pix1 + 0, stride_pix1, pix2 + 8 * stride_pix2 + 0,
+                     stride_pix2, diff);
+    hadamard_8x8(diff, &sum0);
+    load_diff_u8x8x8(pix1 + 0 * stride_pix1 + 8, stride_pix1, pix2 + 0 * stride_pix2 + 8,
+                     stride_pix2, diff);
+    hadamard_8x8(diff, &sum0);
+    load_diff_u8x8x8(pix1 + 8 * stride_pix1 + 8, stride_pix1, pix2 + 8 * stride_pix2 + 8,
+                     stride_pix2, diff);
+    hadamard_8x8(diff, &sum0);
+
+    load_diff_u8x8x8(pix1 + 16 * stride_pix1 + 0, stride_pix1,
+                     pix2 + 16 * stride_pix2 + 0, stride_pix2, diff);
+    hadamard_8x8(diff, &sum1);
+    load_diff_u8x8x8(pix1 + 24 * stride_pix1 + 0, stride_pix1,
+                     pix2 + 24 * stride_pix2 + 0, stride_pix2, diff);
+    hadamard_8x8(diff, &sum1);
+    load_diff_u8x8x8(pix1 + 16 * stride_pix1 + 8, stride_pix1,
+                     pix2 + 16 * stride_pix2 + 8, stride_pix2, diff);
+    hadamard_8x8(diff, &sum1);
+    load_diff_u8x8x8(pix1 + 24 * stride_pix1 + 8, stride_pix1,
+                     pix2 + 24 * stride_pix2 + 8, stride_pix2, diff);
+    hadamard_8x8(diff, &sum1);
+
+    uint64x2_t sum = vpaddq_u64(sum0, sum1);
+    uint64x2_t sa8d = vrshrq_n_u64(sum, 1);
+    return vaddvq_u64(sa8d);
+}
+
 #endif
 
 namespace X265_NS
@@ -523,6 +918,57 @@ int satd8_sve2(const pixel *pix1, intptr_t stride_pix1, const pixel *pix2,
     return (int)vaddvq_u64(sum);
 }
 
+template<int w, int h>
+// Calculate sa8d in blocks of 8x8
+int sa8d8_sve2(const pixel *pix1, intptr_t i_pix1, const pixel *pix2, intptr_t i_pix2)
+{
+    int cost = 0;
+
+    for (int y = 0; y < h; y += 8)
+    {
+        for (int x = 0; x < w; x += 8)
+        {
+            cost += pixel_sa8d_8x8_sve2(pix1 + i_pix1 * y + x, i_pix1,
+                                        pix2 + i_pix2 * y + x, i_pix2);
+        }
+    }
+    return cost;
+}
+
+template<int w, int h>
+// Calculate sa8d in blocks of 16x16
+int sa8d16_sve2(const pixel *pix1, intptr_t i_pix1, const pixel *pix2, intptr_t i_pix2)
+{
+    int cost = 0;
+
+    for (int y = 0; y < h; y += 16)
+    {
+        for (int x = 0; x < w; x += 16)
+        {
+            cost += pixel_sa8d_16x16_sve2(pix1 + i_pix1 * y + x, i_pix1,
+                                          pix2 + i_pix2 * y + x, i_pix2);
+        }
+    }
+    return cost;
+}
+
+template<int w, int h>
+// Calculate sa8d in blocks of 16x32
+int sa8d16x32_sve2(const pixel *pix1, intptr_t i_pix1, const pixel *pix2, intptr_t i_pix2)
+{
+    int cost = 0;
+
+    for (int y = 0; y < h; y += 32)
+    {
+        for (int x = 0; x < w; x += 16)
+        {
+            cost += pixel_sa8d_16x32_sve2(pix1 + i_pix1 * y + x, i_pix1,
+                                          pix2 + i_pix2 * y + x, i_pix2);
+        }
+    }
+    return cost;
+}
+
 void setupPixelPrimitives_sve2(EncoderPrimitives &p)
 {
     p.pu[LUMA_4x4].satd = satd4_sve2<4, 4>;
@@ -552,6 +998,10 @@ void setupPixelPrimitives_sve2(EncoderPrimitives &p)
     p.pu[LUMA_64x64].satd = satd8_sve2<64, 64>;
 
     p.cu[BLOCK_4x4].sa8d = satd4_sve2<4, 4>;
+    p.cu[BLOCK_8x8].sa8d = sa8d8_sve2<8, 8>;
+    p.cu[BLOCK_16x16].sa8d = sa8d16_sve2<16, 16>;
+    p.cu[BLOCK_32x32].sa8d = sa8d16x32_sve2<32, 32>;
+    p.cu[BLOCK_64x64].sa8d = sa8d16x32_sve2<64, 64>;
 
     p.chroma[X265_CSP_I420].pu[CHROMA_420_2x2].satd = NULL;
     p.chroma[X265_CSP_I420].pu[CHROMA_420_2x4].satd = NULL;
@@ -579,6 +1029,12 @@ void setupPixelPrimitives_sve2(EncoderPrimitives &p)
     p.chroma[X265_CSP_I420].pu[CHROMA_420_32x24].satd = satd8_sve2<32, 24>;
     p.chroma[X265_CSP_I420].pu[CHROMA_420_32x32].satd = satd8_sve2<32, 32>;
 
+    p.chroma[X265_CSP_I420].cu[BLOCK_8x8].sa8d =
+        p.chroma[X265_CSP_I420].pu[CHROMA_420_4x4].satd;
+    p.chroma[X265_CSP_I420].cu[BLOCK_16x16].sa8d = sa8d8_sve2<8, 8>;
+    p.chroma[X265_CSP_I420].cu[BLOCK_32x32].sa8d = sa8d16_sve2<16, 16>;
+    p.chroma[X265_CSP_I420].cu[BLOCK_64x64].sa8d = sa8d16x32_sve2<32, 32>;
+
     p.chroma[X265_CSP_I422].pu[CHROMA_422_2x4].satd = NULL;
     p.chroma[X265_CSP_I422].pu[CHROMA_422_2x8].satd = NULL;
     p.chroma[X265_CSP_I422].pu[CHROMA_422_2x16].satd = NULL;
@@ -605,6 +1061,16 @@ void setupPixelPrimitives_sve2(EncoderPrimitives &p)
     p.chroma[X265_CSP_I422].pu[CHROMA_422_32x48].satd = satd8_sve2<32, 48>;
     p.chroma[X265_CSP_I422].pu[CHROMA_422_32x64].satd = satd8_sve2<32, 64>;
     p.chroma[X265_CSP_I422].pu[CHROMA_422_12x32].satd = satd4_sve2<12, 32>;
+
+    p.chroma[X265_CSP_I422].cu[BLOCK_8x8].sa8d =
+        p.chroma[X265_CSP_I422].pu[CHROMA_422_4x8].satd;
+    p.chroma[X265_CSP_I422].cu[BLOCK_16x16].sa8d = sa8d8_sve2<8, 16>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_32x32].sa8d = sa8d16x32_sve2<16, 32>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_64x64].sa8d = sa8d16x32_sve2<32, 64>;
+
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_8x16].sa8d = sa8d8_sve2<8, 16>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_16x32].sa8d = sa8d16x32_sve2<16, 32>;
+    p.chroma[X265_CSP_I422].cu[BLOCK_422_32x64].sa8d = sa8d16x32_sve2<32, 64>;
 }
 } // namespace X265_NS
 #endif // defined(HAVE_SVE2) && HAVE_SVE_BRIDGE
