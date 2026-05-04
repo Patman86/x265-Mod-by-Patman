@@ -853,15 +853,14 @@ void Entropy::codeVUI(const VUI& vui, int maxSubTLayers, bool bEmitVUITimingInfo
             WRITE_CODE(vui.timingInfo.numUnitsInTick, 32, "vui_num_units_in_tick");
             WRITE_CODE(vui.timingInfo.timeScale, 32, "vui_time_scale");
             WRITE_FLAG(0, "vui_poc_proportional_to_timing_flag");
-        }
-
-        if (!bEmitVUIHRDInfo)
-            WRITE_FLAG(0, "vui_hrd_parameters_present_flag");
-        else
-        {
-            WRITE_FLAG(vui.hrdParametersPresentFlag, "vui_hrd_parameters_present_flag");
-            if (vui.hrdParametersPresentFlag)
-                codeHrdParameters(vui.hrdParameters, maxSubTLayers);
+            if (!bEmitVUIHRDInfo)
+                WRITE_FLAG(0, "vui_hrd_parameters_present_flag");
+            else
+            {
+                WRITE_FLAG(vui.hrdParametersPresentFlag, "vui_hrd_parameters_present_flag");
+                if (vui.hrdParametersPresentFlag)
+                    codeHrdParameters(vui.hrdParameters, maxSubTLayers);
+            }
         }
     }
 
