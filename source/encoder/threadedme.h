@@ -40,7 +40,7 @@
 
 namespace X265_NS {
 
-extern int g_puStartIdx[128][8];
+extern int g_puStartIdx[2 * MAX_CU_SIZE + 1][NUM_PART_SIZES];
 
 class Encoder;
 class Analysis;

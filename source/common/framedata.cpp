@@ -90,6 +90,16 @@ void FrameData::reinit(const SPS& sps)
 {
     memset(m_cuStat, 0, sps.numCUsInFrame * sizeof(*m_cuStat));
     memset(m_rowStat, 0, sps.numCuInHeight * sizeof(*m_rowStat));
+    if (m_param->bThreadedME)
+    {
+        uint32_t totalPUs = sps.numCuInWidth * sps.numCuInHeight * MAX_NUM_PUS_PER_CTU;
+        memset(m_slice->m_ctuMV, 0, totalPUs * sizeof(*m_slice->m_ctuMV));
+        for (uint32_t i = 0; i < totalPUs; i++)
+        {
+            m_slice->m_ctuMV[i].ref[0] = REF_NOT_VALID;
+            m_slice->m_ctuMV[i].ref[1] = REF_NOT_VALID;
+        }
+    }
     if (m_param->bDynamicRefine)
     {
         memset(m_picCTU->m_collectCURd, 0, MAX_NUM_DYN_REFINE * sps.numCUsInFrame * sizeof(uint64_t));
