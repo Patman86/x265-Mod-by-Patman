@@ -1,4 +1,4 @@
-name: CI
+name: X265 CI
 
 run-name: ${{ github.event_name == 'schedule' && 'Scheduled Run' || github.event.pull_request.title || github.event.head_commit.message }}
 
