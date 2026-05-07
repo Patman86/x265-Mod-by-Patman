@@ -75,14 +75,6 @@ static inline void sumsublq_s16(int32x4_t *sum_lo, int32x4_t *sum_hi,
     *sub_hi = vsubl_s16(vget_high_s16(a), vget_high_s16(b));
 }
 
-static inline void transpose_inplace_s32_s64x2(int32x4_t *t1, int32x4_t *t2)
-{
-    int64x2_t tmp1 = vreinterpretq_s64_s32(*t1);
-    int64x2_t tmp2 = vreinterpretq_s64_s32(*t2);
-
-    *t1 = vreinterpretq_s32_s64(vtrn1q_s64(tmp1, tmp2));
-    *t2 = vreinterpretq_s32_s64(vtrn2q_s64(tmp1, tmp2));
-}
 #endif // X265_DEPTH == 12
 
 #if HIGH_BIT_DEPTH
@@ -250,29 +242,24 @@ static inline void hadamard_8_h(int16x8_t coefs[8], uint16x8_t out[4])
 #else // X265_DEPTH == 12
 static inline void hadamard_8_h(int16x8_t coefs[8], uint32x4_t out[4])
 {
-    int16x8_t a[8];
+    int16x8_t a[8], b[8];
 
     transpose_s16_s16x2(&a[0], &a[1], coefs[0], coefs[1]);
     transpose_s16_s16x2(&a[2], &a[3], coefs[2], coefs[3]);
     transpose_s16_s16x2(&a[4], &a[5], coefs[4], coefs[5]);
     transpose_s16_s16x2(&a[6], &a[7], coefs[6], coefs[7]);
 
+    transpose_s16_s32x2(&b[0], &b[1], a[0], a[2]);
+    transpose_s16_s32x2(&b[2], &b[3], a[1], a[3]);
+    transpose_s16_s32x2(&b[4], &b[5], a[4], a[6]);
+    transpose_s16_s32x2(&b[6], &b[7], a[5], a[7]);
+
     int32x4_t a_lo[8], a_hi[8], b_lo[8], b_hi[8];
 
-    sumsublq_s16(&a_lo[0], &a_hi[0], &a_lo[4], &a_hi[4], a[0], a[1]);
-    sumsublq_s16(&a_lo[1], &a_hi[1], &a_lo[5], &a_hi[5], a[2], a[3]);
-    sumsublq_s16(&a_lo[2], &a_hi[2], &a_lo[6], &a_hi[6], a[4], a[5]);
-    sumsublq_s16(&a_lo[3], &a_hi[3], &a_lo[7], &a_hi[7], a[6], a[7]);
-
-    transpose_inplace_s32_s64x2(&a_lo[0], &a_lo[1]);
-    transpose_inplace_s32_s64x2(&a_lo[2], &a_lo[3]);
-    transpose_inplace_s32_s64x2(&a_lo[4], &a_lo[5]);
-    transpose_inplace_s32_s64x2(&a_lo[6], &a_lo[7]);
-
-    transpose_inplace_s32_s64x2(&a_hi[0], &a_hi[1]);
-    transpose_inplace_s32_s64x2(&a_hi[2], &a_hi[3]);
-    transpose_inplace_s32_s64x2(&a_hi[4], &a_hi[5]);
-    transpose_inplace_s32_s64x2(&a_hi[6], &a_hi[7]);
+    sumsublq_s16(&a_lo[0], &a_hi[0], &a_lo[4], &a_hi[4], b[0], b[2]);
+    sumsublq_s16(&a_lo[1], &a_hi[1], &a_lo[5], &a_hi[5], b[1], b[3]);
+    sumsublq_s16(&a_lo[2], &a_hi[2], &a_lo[6], &a_hi[6], b[4], b[6]);
+    sumsublq_s16(&a_lo[3], &a_hi[3], &a_lo[7], &a_hi[7], b[5], b[7]);
 
     abssumsubq_s32(&b_lo[0], &b_lo[1], a_lo[0], a_lo[1]);
     abssumsubq_s32(&b_lo[2], &b_lo[3], a_lo[2], a_lo[3]);
