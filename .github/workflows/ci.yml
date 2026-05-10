@@ -566,6 +566,8 @@ jobs:
           run_x265 "444 Input"         $X265 --preset medium --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_444_416x240.yuv || FAIL=$((FAIL+1))
           rm -f /tmp/out.hevc
 
+          run_x265 "Segment Encoding"  $X265 --preset ultrafast --no-open-gop --chunk-start 10 --chunk-end 50 --crf 28 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL+1))
+
           # ── Quality Metrics ──
           run_x265 "SSIM Metric"   $X265 --preset medium --ssim        --crf 22 --input-res 416x240 --fps 30 --frames 30 -o /tmp/out.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL+1))
           grep -qi "ssim" /tmp/x265_last.log || { echo "FAIL: ssim not reported"; FAIL=$((FAIL+1)); }
@@ -631,7 +633,7 @@ jobs:
           retention-days: 3
 
   test-analysis-save-load:
-    name: "Test Analysis Save/Load & Segment Encoding"
+    name: "Test Analysis Save/Load"
     runs-on: ubuntu-22.04
     timeout-minutes: 20
     needs: build-8bit
@@ -673,13 +675,12 @@ jobs:
           run_x265 "Analysis Load (level 2)"  $X265 --preset medium --analysis-load x265_analysis.dat    --analysis-load-reuse-level 2  --bitrate 500 --input-res 416x240 --fps 30 --frames 60 -o /tmp/out_load.hevc  testdata/test_420_416x240.yuv || FAIL=$((FAIL+1))
           run_x265 "Analysis Save (level 10)" $X265 --preset slow   --analysis-save x265_analysis_10.dat --analysis-save-reuse-level 10 --bitrate 500 --input-res 416x240 --fps 30 --frames 60 -o /tmp/out_save10.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL+1))
           run_x265 "Analysis Load (level 10)" $X265 --preset slow   --analysis-load x265_analysis_10.dat --analysis-load-reuse-level 10 --bitrate 500 --input-res 416x240 --fps 30 --frames 60 -o /tmp/out_load10.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL+1))
-          run_x265 "Segment Encoding"         $X265 --preset ultrafast --no-open-gop --chunk-start 10 --chunk-end 50 --crf 28 --input-res 416x240 --fps 30 --frames 60 -o /tmp/out_seg.hevc testdata/test_420_416x240.yuv || FAIL=$((FAIL+1))
-          rm -f /tmp/out_*.hevc x265_analysis*.dat
+          rm -f /tmp/out_save.hevc /tmp/out_load.hevc /tmp/out_save10.hevc /tmp/out_load10.hevc x265_analysis*.dat
           echo ""
           echo "==================== ENCODING SUMMARY ===================="
           cat /tmp/summary.log 2>/dev/null || true
           echo "=========================================================="
-          echo "=== Analysis/Segment Results FAIL=$FAIL ==="
+          echo "=== Analysis Save/Load Results FAIL=$FAIL ==="
           mkdir -p summaries && cp /tmp/summary.log summaries/analysis-save-load.log 2>/dev/null || true
           test $FAIL -eq 0
 
@@ -687,7 +688,7 @@ jobs:
         if: always()
         run: |
           {
-            echo "## Analysis Save/Load & Segment Encoding"
+            echo "## Analysis Save/Load"
             echo ""
             echo "| Test | Frames | FPS | Bitrate (kb/s) | Avg QP |"
             echo "|------|-------:|----:|---------------:|-------:|"
@@ -1190,7 +1191,7 @@ jobs:
           SUITE_TITLES["cli-presets"]="CLI Presets & Tune Modes"
           SUITE_TITLES["rate-control"]="Rate Control Modes"
           SUITE_TITLES["encoding-features"]="Encoding Features (incl. Quality Metrics, MCSTF/SBRC/Interlace)"
-          SUITE_TITLES["analysis-save-load"]="Analysis Save/Load & Segment Encoding"
+          SUITE_TITLES["analysis-save-load"]="Analysis Save/Load"
           SUITE_TITLES["video-and-validation"]="Real-World Video & Bitstream Validation"
           SUITE_TITLES["threading"]="Threading & Parallelism"
           SUITE_TITLES["10bit-12bit-encoding"]="10-bit & 12-bit Encoding"
