@@ -38,17 +38,17 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Cache ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.ccache
           key: ccache-8bit-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-8bit-${{ runner.os }}-
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
           key: apt-build-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -79,7 +79,7 @@ jobs:
           ./test/TestBench
 
       - name: Upload CLI binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: x265-8bit
           path: build/8bit/x265
@@ -87,7 +87,7 @@ jobs:
 
       - name: Upload library artifacts
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: lib-8bit
           path: build/8bit/libx265.a
@@ -98,17 +98,17 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Cache ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.ccache
           key: ccache-10bit-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-10bit-${{ runner.os }}-
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
           key: apt-build-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -138,7 +138,7 @@ jobs:
           ./test/TestBench
 
       - name: Upload CLI binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: x265-10bit
           path: build/10bit/x265
@@ -149,17 +149,17 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Cache ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.ccache
           key: ccache-12bit-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-12bit-${{ runner.os }}-
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
           key: apt-build-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -190,7 +190,7 @@ jobs:
           ./test/TestBench
 
       - name: Upload CLI binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: x265-12bit
           path: build/12bit/x265
@@ -202,17 +202,17 @@ jobs:
     timeout-minutes: 45
     needs: [build-8bit, build-10bit, build-12bit]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Cache ccache
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.ccache
           key: ccache-multilib-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-multilib-${{ runner.os }}-
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
           key: apt-build-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -277,7 +277,7 @@ jobs:
 
       - name: Upload artifacts
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: x265-multilib
           path: |
@@ -299,13 +299,13 @@ jobs:
     needs: build-8bit
     steps:
       - name: Download 8-bit binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: x265-8bit
           path: dist
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
           key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -384,7 +384,7 @@ jobs:
 
       - name: Upload summaries
         if: always() && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: summaries-cli-presets
           path: summaries/*.log
@@ -397,13 +397,13 @@ jobs:
     needs: build-8bit
     steps:
       - name: Download 8-bit binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: x265-8bit
           path: dist
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
           key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -475,7 +475,7 @@ jobs:
 
       - name: Upload summaries
         if: always() && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: summaries-rate-control
           path: summaries/*.log
@@ -488,13 +488,13 @@ jobs:
     needs: build-8bit
     steps:
       - name: Download 8-bit binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: x265-8bit
           path: dist
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
           key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -624,7 +624,7 @@ jobs:
 
       - name: Upload summaries
         if: always() && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: summaries-encoding-features
           path: summaries/*.log
@@ -637,13 +637,13 @@ jobs:
     needs: build-8bit
     steps:
       - name: Download 8-bit binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: x265-8bit
           path: dist
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
           key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -709,7 +709,7 @@ jobs:
 
       - name: Upload summaries
         if: always() && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: summaries-analysis-save-load
           path: summaries/*.log
@@ -722,13 +722,13 @@ jobs:
     needs: build-8bit
     steps:
       - name: Download 8-bit binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: x265-8bit
           path: dist
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
           key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -739,7 +739,7 @@ jobs:
 
       - name: Cache xiph.org test videos
         id: cache-videos
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: testdata
           key: xiph-test-videos-v1
@@ -854,7 +854,7 @@ jobs:
 
       - name: Upload HEVC artifacts
         if: always() && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: hevc-realworld
           path: artifacts/*.hevc
@@ -862,7 +862,7 @@ jobs:
 
       - name: Upload summaries
         if: always() && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: summaries-video-and-validation
           path: summaries/*.log
@@ -876,13 +876,13 @@ jobs:
     needs: build-8bit
     steps:
       - name: Download 8-bit binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: x265-8bit
           path: dist
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
           key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -953,7 +953,7 @@ jobs:
 
       - name: Upload summaries
         if: always() && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: summaries-threading
           path: summaries/*.log
@@ -966,19 +966,19 @@ jobs:
     needs: [build-10bit, build-12bit]
     steps:
       - name: Download 10-bit binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: x265-10bit
           path: dist/10bit
 
       - name: Download 12-bit binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: x265-12bit
           path: dist/12bit
 
       - name: Cache apt packages
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
           key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
@@ -1059,7 +1059,7 @@ jobs:
 
       - name: Upload summaries
         if: always() && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: summaries-10bit-12bit-encoding
           path: summaries/*.log
@@ -1088,7 +1088,7 @@ jobs:
       - test-10bit-12bit-encoding
     steps:
       - name: Download all summaries
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: summaries-*
           merge-multiple: true
