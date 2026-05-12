@@ -1,10 +1,11 @@
 name: X265 CI
 
-run-name: ${{ github.event.pull_request.title || github.event.head_commit.message }}
+run-name: ${{ github.event.pull_request.title || github.event.head_commit.message || 'Manual run' }}
 
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 # Cancel superseded runs on PRs/branches; let all main branch runs complete
 concurrency:
