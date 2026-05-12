@@ -52,8 +52,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
-          key: apt-build-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: apt-build-${{ runner.os }}-
+          key: apt-build-${{ runner.os }}-v1
+          restore-keys: apt-build-${{ runner.os }}-v1
 
       - name: Install build dependencies
         run: |
@@ -116,8 +116,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
-          key: apt-build-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: apt-build-${{ runner.os }}-
+          key: apt-build-${{ runner.os }}-v1
+          restore-keys: apt-build-${{ runner.os }}-v1
 
       - name: Install build dependencies
         run: |
@@ -171,8 +171,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
-          key: apt-build-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: apt-build-${{ runner.os }}-
+          key: apt-build-${{ runner.os }}-v1
+          restore-keys: apt-build-${{ runner.os }}-v1
 
       - name: Install build dependencies
         run: |
@@ -228,8 +228,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
-          key: apt-build-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: apt-build-${{ runner.os }}-
+          key: apt-build-${{ runner.os }}-v1
+          restore-keys: apt-build-${{ runner.os }}-v1
 
       - name: Install build dependencies
         run: |
@@ -325,8 +325,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: apt-test-${{ runner.os }}-
+          key: apt-test-${{ runner.os }}-v1
+          restore-keys: apt-test-${{ runner.os }}-v1
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
@@ -427,8 +427,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: apt-test-${{ runner.os }}-
+          key: apt-test-${{ runner.os }}-v1
+          restore-keys: apt-test-${{ runner.os }}-v1
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
@@ -522,8 +522,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: apt-test-${{ runner.os }}-
+          key: apt-test-${{ runner.os }}-v1
+          restore-keys: apt-test-${{ runner.os }}-v1
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
@@ -675,8 +675,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: apt-test-${{ runner.os }}-
+          key: apt-test-${{ runner.os }}-v1
+          restore-keys: apt-test-${{ runner.os }}-v1
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
@@ -764,8 +764,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: apt-test-${{ runner.os }}-
+          key: apt-test-${{ runner.os }}-v1
+          restore-keys: apt-test-${{ runner.os }}-v1
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg wget
@@ -922,8 +922,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: apt-test-${{ runner.os }}-
+          key: apt-test-${{ runner.os }}-v1
+          restore-keys: apt-test-${{ runner.os }}-v1
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
@@ -1022,8 +1022,8 @@ jobs:
         uses: actions/cache@v5
         with:
           path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-${{ hashFiles('.github/workflows/ci.yml') }}
-          restore-keys: apt-test-${{ runner.os }}-
+          key: apt-test-${{ runner.os }}-v1
+          restore-keys: apt-test-${{ runner.os }}-v1
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
