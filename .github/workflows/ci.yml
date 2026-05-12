@@ -59,6 +59,10 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential cmake nasm ccache libnuma-dev
 
+      - name: Prepare apt cache
+        if: always()
+        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+
       - name: Build
         run: |
           export PATH="/usr/lib/ccache:$PATH"
@@ -119,6 +123,10 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential cmake nasm ccache libnuma-dev
 
+      - name: Prepare apt cache
+        if: always()
+        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+
       - name: Build
         run: |
           export PATH="/usr/lib/ccache:$PATH"
@@ -169,6 +177,10 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential cmake nasm ccache libnuma-dev
+
+      - name: Prepare apt cache
+        if: always()
+        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
 
       - name: Build
         run: |
@@ -222,6 +234,10 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq build-essential cmake nasm ccache libnuma-dev
+
+      - name: Prepare apt cache
+        if: always()
+        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
 
       - name: Build 12-bit component (no CLI/API export)
         run: |
@@ -313,6 +329,10 @@ jobs:
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
+
+      - name: Prepare apt cache
+        if: always()
+        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
 
       - name: Run tests
         run: |
@@ -412,6 +432,10 @@ jobs:
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
 
+      - name: Prepare apt cache
+        if: always()
+        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+
       - name: Run tests
         run: |
           chmod +x dist/x265
@@ -502,6 +526,10 @@ jobs:
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
+
+      - name: Prepare apt cache
+        if: always()
+        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
 
       - name: Run tests
         run: |
@@ -652,6 +680,10 @@ jobs:
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
 
+      - name: Prepare apt cache
+        if: always()
+        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+
       - name: Run tests
         run: |
           chmod +x dist/x265
@@ -736,6 +768,10 @@ jobs:
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg wget
+
+      - name: Prepare apt cache
+        if: always()
+        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
 
       - name: Cache xiph.org test videos
         id: cache-videos
@@ -891,6 +927,10 @@ jobs:
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
 
+      - name: Prepare apt cache
+        if: always()
+        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+
       - name: Run tests
         run: |
           chmod +x dist/x265
@@ -986,6 +1026,10 @@ jobs:
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
+
+      - name: Prepare apt cache
+        if: always()
+        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
 
       - name: Run tests
         run: |
