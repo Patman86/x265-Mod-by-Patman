@@ -48,6 +48,9 @@ jobs:
           key: ccache-8bit-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-8bit-${{ runner.os }}-
 
+      - name: Fix apt cache dir permissions
+        run: sudo chmod -R 777 /var/cache/apt/archives/
+
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
@@ -112,6 +115,9 @@ jobs:
           key: ccache-10bit-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-10bit-${{ runner.os }}-
 
+      - name: Fix apt cache dir permissions
+        run: sudo chmod -R 777 /var/cache/apt/archives/
+
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
@@ -166,6 +172,9 @@ jobs:
           path: ~/.ccache
           key: ccache-12bit-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-12bit-${{ runner.os }}-
+
+      - name: Fix apt cache dir permissions
+        run: sudo chmod -R 777 /var/cache/apt/archives/
 
       - name: Cache apt packages
         uses: actions/cache@v5
@@ -223,6 +232,9 @@ jobs:
           path: ~/.ccache
           key: ccache-multilib-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-multilib-${{ runner.os }}-
+
+      - name: Fix apt cache dir permissions
+        run: sudo chmod -R 777 /var/cache/apt/archives/
 
       - name: Cache apt packages
         uses: actions/cache@v5
@@ -320,6 +332,9 @@ jobs:
         with:
           name: x265-8bit
           path: dist
+
+      - name: Fix apt cache dir permissions
+        run: sudo chmod -R 777 /var/cache/apt/archives/
 
       - name: Cache apt packages
         uses: actions/cache@v5
@@ -423,6 +438,9 @@ jobs:
           name: x265-8bit
           path: dist
 
+      - name: Fix apt cache dir permissions
+        run: sudo chmod -R 777 /var/cache/apt/archives/
+
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
@@ -517,6 +535,9 @@ jobs:
         with:
           name: x265-8bit
           path: dist
+
+      - name: Fix apt cache dir permissions
+        run: sudo chmod -R 777 /var/cache/apt/archives/
 
       - name: Cache apt packages
         uses: actions/cache@v5
@@ -671,6 +692,9 @@ jobs:
           name: x265-8bit
           path: dist
 
+      - name: Fix apt cache dir permissions
+        run: sudo chmod -R 777 /var/cache/apt/archives/
+
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
@@ -759,6 +783,9 @@ jobs:
         with:
           name: x265-8bit
           path: dist
+
+      - name: Fix apt cache dir permissions
+        run: sudo chmod -R 777 /var/cache/apt/archives/
 
       - name: Cache apt packages
         uses: actions/cache@v5
@@ -918,6 +945,9 @@ jobs:
           name: x265-8bit
           path: dist
 
+      - name: Fix apt cache dir permissions
+        run: sudo chmod -R 777 /var/cache/apt/archives/
+
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
@@ -1017,6 +1047,9 @@ jobs:
         with:
           name: x265-12bit
           path: dist/12bit
+
+      - name: Fix apt cache dir permissions
+        run: sudo chmod -R 777 /var/cache/apt/archives/
 
       - name: Cache apt packages
         uses: actions/cache@v5
