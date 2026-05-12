@@ -48,15 +48,14 @@ jobs:
           key: ccache-8bit-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-8bit-${{ runner.os }}-
 
-      - name: Fix apt cache dir permissions
-        run: sudo chmod -R 777 /var/cache/apt/archives/
-
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
-          path: /var/cache/apt/archives
-          key: apt-build-${{ runner.os }}-v1
-          restore-keys: apt-build-${{ runner.os }}-v1
+          path: /home/runner/apt-archives
+          key: apt-build-${{ runner.os }}-v2
+          restore-keys: apt-build-${{ runner.os }}-v2
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
       - name: Install build dependencies
         run: |
@@ -65,7 +64,9 @@ jobs:
 
       - name: Prepare apt cache
         if: always()
-        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
 
       - name: Build
         run: |
@@ -115,15 +116,14 @@ jobs:
           key: ccache-10bit-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-10bit-${{ runner.os }}-
 
-      - name: Fix apt cache dir permissions
-        run: sudo chmod -R 777 /var/cache/apt/archives/
-
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
-          path: /var/cache/apt/archives
-          key: apt-build-${{ runner.os }}-v1
-          restore-keys: apt-build-${{ runner.os }}-v1
+          path: /home/runner/apt-archives
+          key: apt-build-${{ runner.os }}-v2
+          restore-keys: apt-build-${{ runner.os }}-v2
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
       - name: Install build dependencies
         run: |
@@ -132,7 +132,9 @@ jobs:
 
       - name: Prepare apt cache
         if: always()
-        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
 
       - name: Build
         run: |
@@ -173,15 +175,14 @@ jobs:
           key: ccache-12bit-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-12bit-${{ runner.os }}-
 
-      - name: Fix apt cache dir permissions
-        run: sudo chmod -R 777 /var/cache/apt/archives/
-
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
-          path: /var/cache/apt/archives
-          key: apt-build-${{ runner.os }}-v1
-          restore-keys: apt-build-${{ runner.os }}-v1
+          path: /home/runner/apt-archives
+          key: apt-build-${{ runner.os }}-v2
+          restore-keys: apt-build-${{ runner.os }}-v2
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
       - name: Install build dependencies
         run: |
@@ -190,7 +191,9 @@ jobs:
 
       - name: Prepare apt cache
         if: always()
-        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
 
       - name: Build
         run: |
@@ -233,15 +236,14 @@ jobs:
           key: ccache-multilib-${{ runner.os }}-${{ github.sha }}
           restore-keys: ccache-multilib-${{ runner.os }}-
 
-      - name: Fix apt cache dir permissions
-        run: sudo chmod -R 777 /var/cache/apt/archives/
-
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
-          path: /var/cache/apt/archives
-          key: apt-build-${{ runner.os }}-v1
-          restore-keys: apt-build-${{ runner.os }}-v1
+          path: /home/runner/apt-archives
+          key: apt-build-${{ runner.os }}-v2
+          restore-keys: apt-build-${{ runner.os }}-v2
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
       - name: Install build dependencies
         run: |
@@ -250,7 +252,9 @@ jobs:
 
       - name: Prepare apt cache
         if: always()
-        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
 
       - name: Build 12-bit component (no CLI/API export)
         run: |
@@ -333,22 +337,23 @@ jobs:
           name: x265-8bit
           path: dist
 
-      - name: Fix apt cache dir permissions
-        run: sudo chmod -R 777 /var/cache/apt/archives/
-
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
-          path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-v1
-          restore-keys: apt-test-${{ runner.os }}-v1
+          path: /home/runner/apt-archives
+          key: apt-test-${{ runner.os }}-v2
+          restore-keys: apt-test-${{ runner.os }}-v2
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
 
       - name: Prepare apt cache
         if: always()
-        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
 
       - name: Run tests
         run: |
@@ -438,22 +443,23 @@ jobs:
           name: x265-8bit
           path: dist
 
-      - name: Fix apt cache dir permissions
-        run: sudo chmod -R 777 /var/cache/apt/archives/
-
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
-          path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-v1
-          restore-keys: apt-test-${{ runner.os }}-v1
+          path: /home/runner/apt-archives
+          key: apt-test-${{ runner.os }}-v2
+          restore-keys: apt-test-${{ runner.os }}-v2
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
 
       - name: Prepare apt cache
         if: always()
-        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
 
       - name: Run tests
         run: |
@@ -536,22 +542,23 @@ jobs:
           name: x265-8bit
           path: dist
 
-      - name: Fix apt cache dir permissions
-        run: sudo chmod -R 777 /var/cache/apt/archives/
-
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
-          path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-v1
-          restore-keys: apt-test-${{ runner.os }}-v1
+          path: /home/runner/apt-archives
+          key: apt-test-${{ runner.os }}-v2
+          restore-keys: apt-test-${{ runner.os }}-v2
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
 
       - name: Prepare apt cache
         if: always()
-        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
 
       - name: Run tests
         run: |
@@ -692,22 +699,23 @@ jobs:
           name: x265-8bit
           path: dist
 
-      - name: Fix apt cache dir permissions
-        run: sudo chmod -R 777 /var/cache/apt/archives/
-
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
-          path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-v1
-          restore-keys: apt-test-${{ runner.os }}-v1
+          path: /home/runner/apt-archives
+          key: apt-test-${{ runner.os }}-v2
+          restore-keys: apt-test-${{ runner.os }}-v2
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
 
       - name: Prepare apt cache
         if: always()
-        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
 
       - name: Run tests
         run: |
@@ -784,22 +792,23 @@ jobs:
           name: x265-8bit
           path: dist
 
-      - name: Fix apt cache dir permissions
-        run: sudo chmod -R 777 /var/cache/apt/archives/
-
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
-          path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-v1
-          restore-keys: apt-test-${{ runner.os }}-v1
+          path: /home/runner/apt-archives
+          key: apt-test-${{ runner.os }}-v2
+          restore-keys: apt-test-${{ runner.os }}-v2
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg wget
 
       - name: Prepare apt cache
         if: always()
-        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
 
       - name: Cache xiph.org test videos
         id: cache-videos
@@ -945,22 +954,23 @@ jobs:
           name: x265-8bit
           path: dist
 
-      - name: Fix apt cache dir permissions
-        run: sudo chmod -R 777 /var/cache/apt/archives/
-
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
-          path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-v1
-          restore-keys: apt-test-${{ runner.os }}-v1
+          path: /home/runner/apt-archives
+          key: apt-test-${{ runner.os }}-v2
+          restore-keys: apt-test-${{ runner.os }}-v2
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
 
       - name: Prepare apt cache
         if: always()
-        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
 
       - name: Run tests
         run: |
@@ -1048,22 +1058,23 @@ jobs:
           name: x265-12bit
           path: dist/12bit
 
-      - name: Fix apt cache dir permissions
-        run: sudo chmod -R 777 /var/cache/apt/archives/
-
       - name: Cache apt packages
         uses: actions/cache@v5
         with:
-          path: /var/cache/apt/archives
-          key: apt-test-${{ runner.os }}-v1
-          restore-keys: apt-test-${{ runner.os }}-v1
+          path: /home/runner/apt-archives
+          key: apt-test-${{ runner.os }}-v2
+          restore-keys: apt-test-${{ runner.os }}-v2
+      - name: Pre-populate apt cache
+        run: sudo cp /home/runner/apt-archives/*.deb /var/cache/apt/archives/ 2>/dev/null || true
 
       - name: Install runtime dependencies
         run: sudo apt-get update -qq && sudo apt-get install -y -qq libnuma1 ffmpeg
 
       - name: Prepare apt cache
         if: always()
-        run: sudo rm -rf /var/cache/apt/archives/partial /var/cache/apt/archives/lock
+        run: |
+          mkdir -p /home/runner/apt-archives
+          cp -n /var/cache/apt/archives/*.deb /home/runner/apt-archives/ 2>/dev/null || true
 
       - name: Run tests
         run: |
