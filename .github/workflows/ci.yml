@@ -1,12 +1,10 @@
 name: X265 CI
 
-run-name: ${{ github.event_name == 'schedule' && 'Scheduled Run' || github.event.pull_request.title || github.event.head_commit.message }}
+run-name: ${{ github.event.pull_request.title || github.event.head_commit.message }}
 
 on:
   push:
   pull_request:
-  schedule:
-    - cron: '30 22 * * *'  # Daily at 4:00 AM IST (UTC+5:30)
 
 # Cancel superseded runs on PRs/branches; let all main branch runs complete
 concurrency:
