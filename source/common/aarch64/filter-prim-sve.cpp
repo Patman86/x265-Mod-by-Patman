@@ -459,7 +459,6 @@ void inline interp4_vss_sve(const int16_t *src, intptr_t srcStride, int16_t *dst
     {
         if (width == 12)
         {
-            const int n_store = 8;
             const int16_t *s = src;
             int16_t *d = dst;
 
@@ -474,8 +473,7 @@ void inline interp4_vss_sve(const int16_t *src, intptr_t srcStride, int16_t *dst
             {
                 int16x8_t res;
                 filter4_s16x8(ss, filter, offset, res);
-
-                store_s16xnxm<n_store, 4>(&res, d, dstStride);
+                vst1q_s16(d, res);
 
                 int16x8_t new_r = vld1q_s16(s);
                 insert_row_into_window_s16x8(ss, new_r, merge_block_tbl);
@@ -486,7 +484,7 @@ void inline interp4_vss_sve(const int16_t *src, intptr_t srcStride, int16_t *dst
 
             int16x8_t res;
             filter4_s16x8(ss, filter, offset, res);
-            store_s16xnxm<n_store, 4>(&res, d, dstStride);
+            vst1q_s16(d, res);
 
             src += 8;
             dst += 8;
@@ -711,7 +709,6 @@ void inline interp4_vpp_sve(const pixel *src, intptr_t srcStride, pixel *dst,
     {
         if (width == 12)
         {
-            const int n_store = 8;
             const uint16_t *s = src;
             uint16_t *d = dst;
 
@@ -724,10 +721,9 @@ void inline interp4_vpp_sve(const pixel *src, intptr_t srcStride, pixel *dst,
 
             for (int row = 0; row < height - 1; ++row)
             {
-                uint16x8_t res[4];
-                filter4_u16x8(ss, filter, offset, maxVal, res[0]);
-
-                store_u16xnxm<n_store, 4>(d, dstStride, res);
+                uint16x8_t res;
+                filter4_u16x8(ss, filter, offset, maxVal, res);
+                vst1q_u16(d, res);
 
                 uint16x8_t new_r = vld1q_u16(s);
                 insert_row_into_window_u16x8(ss, new_r, merge_block_tbl);
@@ -736,9 +732,9 @@ void inline interp4_vpp_sve(const pixel *src, intptr_t srcStride, pixel *dst,
                 d += dstStride;
             }
 
-            uint16x8_t res[4];
-            filter4_u16x8(ss, filter, offset, maxVal, res[0]);
-            store_u16xnxm<n_store, 4>(d, dstStride, res);
+            uint16x8_t res;
+            filter4_u16x8(ss, filter, offset, maxVal, res);
+            vst1q_u16(d, res);
 
             src += 8;
             dst += 8;
