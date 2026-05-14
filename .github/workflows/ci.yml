@@ -4,7 +4,8 @@ run-name: ${{ github.event.pull_request.title || github.event.head_commit.messag
 
 on:
   push:
-  pull_request:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 # Cancel superseded runs on PRs/branches; let all main branch runs complete
@@ -31,8 +32,355 @@ defaults:
 
 jobs:
   # ───────────────────────────────────────────────────────────────────────────
-  # Phase 1 – Builds (parallel)
+  # Phase 1 – Parallel (PR: Code Quality + Builds; Push: Builds only)
+  # Code Quality (PR only) runs cppcheck + clang-format diff check scoped
+  # to changed lines only. Builds produce CLI binaries and static libraries
+  # for 8-bit, 10-bit, 12-bit, and multi-lib configurations.
   # ───────────────────────────────────────────────────────────────────────────
+
+  code-quality:
+    name: "Code Quality"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    if: github.event_name == 'pull_request_target'
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y cppcheck clang-format
+
+      - name: Create clang-format config
+        run: |
+          printf '%s\n' \
+            'BasedOnStyle: LLVM' \
+            'IndentWidth: 4' \
+            'UseTab: Never' \
+            'ColumnLimit: 120' \
+            'BreakBeforeBraces: Allman' \
+            > .clang-format
+
+      - name: Find changed files
+        id: changed
+        run: |
+          ALL_FILES=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          if [ -z "$ALL_FILES" ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No files changed."
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changed files:"
+            echo "$ALL_FILES"
+          fi
+
+      - name: Run code quality checks
+        if: steps.changed.outputs.has_changes == 'true'
+        run: |
+          git diff origin/${{ github.base_ref }}...HEAD --unified=0 > /tmp/pr.patch
+          python3 << 'PYEOF'
+          import re, sys, subprocess, os, difflib, json
+          from collections import Counter
+          CPP_EXTENSIONS    = ('.c', '.cpp', '.h', '.hpp')
+          HEADER_EXTENSIONS = ('.h', '.hpp')
+          BINARY_EXTENSIONS = ('.yuv', '.hevc', '.h265', '.exe',
+                               '.a', '.so', '.dll', '.o', '.lib', '.bin',
+                               '.png', '.jpg', '.jpeg', '.gif')
+          def show_trail(s):
+              stripped = s.rstrip('\n')
+              visible  = stripped.rstrip()
+              trail    = stripped[len(visible):]
+              return visible + trail.replace(' ', '·').replace('\t', '→')
+          changed_lines = {}
+          current_file  = None
+          with open('/tmp/pr.patch') as f:
+              for line in f:
+                  m = re.match(r'\+\+\+ b/(.+)', line.rstrip())
+                  if m:
+                      current_file = m.group(1)
+                      changed_lines.setdefault(current_file, set())
+                      continue
+                  m = re.match(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@', line)
+                  if m and current_file:
+                      start = int(m.group(1))
+                      count = int(m.group(2)) if m.group(2) is not None else 1
+                      for i in range(start, start + max(count, 1)):
+                          changed_lines[current_file].add(i)
+          all_issues = []
+          files = [f for f in changed_lines.keys() if f.endswith(('.c', '.cpp', '.h', '.hpp'))]
+          if files:
+              result = subprocess.run(
+                  [
+                      'cppcheck',
+                      '--enable=warning,performance,portability,style',
+                      '--suppress=missingIncludeSystem',
+                      '--inline-suppr',
+                      '--template={file}:{line}:{column}: {severity}: {message} [{id}]',
+                      '--quiet',
+                  ] + files,
+                  capture_output=True, text=True
+              )
+              for line in result.stderr.splitlines():
+                  m = re.match(r'^(.+?):(\d+):\d+: (\w+): (.+)', line)
+                  if not m:
+                      continue
+                  issue_file = m.group(1).replace('\\', '/').lstrip('./')
+                  issue_line = int(m.group(2))
+                  severity   = m.group(3)
+                  message    = m.group(4)
+                  if severity == 'information':
+                      continue
+                  for changed_file, lines in changed_lines.items():
+                      if (issue_file == changed_file or
+                              issue_file.endswith('/' + changed_file) or
+                              changed_file.endswith('/' + issue_file)):
+                          if issue_line in lines:
+                              all_issues.append({
+                                  'file'   : changed_file,
+                                  'line'   : issue_line,
+                                  'type'   : severity,
+                                  'message': message
+                              })
+                          break
+          for changed_file, lines in changed_lines.items():
+              if changed_file.endswith(BINARY_EXTENSIONS):
+                  continue
+              try:
+                  original = open(changed_file, 'r', encoding='utf-8', newline='').readlines()
+              except (FileNotFoundError, UnicodeDecodeError):
+                  continue
+              if changed_file.endswith(CPP_EXTENSIONS):
+                  result = subprocess.run(
+                      ['clang-format', '--style=file', changed_file],
+                      capture_output=True, text=True
+                  )
+                  formatted = result.stdout.splitlines(keepends=True)
+                  matcher = difflib.SequenceMatcher(
+                      None, original, formatted, autojunk=False)
+                  for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+                      if tag == 'equal':
+                          continue
+                      for k in range(i2 - i1):
+                          orig_line = i1 + k + 1
+                          if orig_line not in lines:
+                              continue
+                          orig = original[i1 + k]
+                          if orig.endswith('\r\n'):
+                              all_issues.append({
+                                  'file'   : changed_file,
+                                  'line'   : orig_line,
+                                  'type'   : 'style',
+                                  'message': (
+                                      f"Windows CRLF line ending (\\r\\n)\n"
+                                      f"         got:      |{orig.rstrip()} ← ends with \\r\\n\n"
+                                      f"         expected: |{orig.rstrip()} ← should end with \\n only"
+                                  )
+                              })
+                              continue
+                          if orig.endswith('\n') and orig[:-1].rstrip() != orig[:-1]:
+                              all_issues.append({
+                                  'file'   : changed_file,
+                                  'line'   : orig_line,
+                                  'type'   : 'style',
+                                  'message': (
+                                      f"trailing whitespace\n"
+                                      f"         got:      |{show_trail(orig)}\n"
+                                      f"         expected: |{orig[:-1].rstrip()}"
+                                  )
+                              })
+                              continue
+                          if orig.startswith('\t'):
+                              n_tabs   = len(orig) - len(orig.lstrip('\t'))
+                              expected = '    ' * n_tabs + orig.lstrip('\t').rstrip()
+                              all_issues.append({
+                                  'file'   : changed_file,
+                                  'line'   : orig_line,
+                                  'type'   : 'style',
+                                  'message': (
+                                      f"tab used instead of spaces\n"
+                                      f"         got:      |{'→' * n_tabs}{orig.lstrip(chr(9)).rstrip()}\n"
+                                      f"         expected: |{expected}"
+                                  )
+                              })
+              else:
+                  for i, orig in enumerate(original):
+                      orig_line = i + 1
+                      if orig_line not in lines:
+                          continue
+                      if orig.endswith('\r\n'):
+                          all_issues.append({
+                              'file'   : changed_file,
+                              'line'   : orig_line,
+                              'type'   : 'style',
+                              'message': (
+                                  f"Windows CRLF line ending (\\r\\n)\n"
+                                  f"         got:      |{orig.rstrip()} ← ends with \\r\\n\n"
+                                  f"         expected: |{orig.rstrip()} ← should end with \\n only"
+                              )
+                          })
+                          continue
+                      if orig.endswith('\n') and orig[:-1].rstrip() != orig[:-1]:
+                          all_issues.append({
+                              'file'   : changed_file,
+                              'line'   : orig_line,
+                              'type'   : 'style',
+                              'message': (
+                                  f"trailing whitespace\n"
+                                  f"         got:      |{show_trail(orig)}\n"
+                                  f"         expected: |{orig[:-1].rstrip()}"
+                              )
+                          })
+                      if '\t' in orig:
+                          all_issues.append({
+                              'file'   : changed_file,
+                              'line'   : orig_line,
+                              'type'   : 'style',
+                              'message': (
+                                  f"tab character found\n"
+                                  f"         got:      |{orig.rstrip().replace(chr(9), '→')}\n"
+                                  f"         expected: |{orig.rstrip().replace(chr(9), '    ')}"
+                              )
+                          })
+              if original and not original[-1].endswith('\n'):
+                  last_line = len(original)
+                  if last_line in lines:
+                      all_issues.append({
+                          'file'   : changed_file,
+                          'line'   : last_line,
+                          'type'   : 'style',
+                          'message': (
+                              f"missing newline at end of file\n"
+                              f"         got:      |{original[-1].rstrip()} ⚠ no newline\n"
+                              f"         expected: |{original[-1].rstrip()}↵"
+                          )
+                      })
+                      
+          all_issues.sort(key=lambda x: (x['file'], x['line']))
+          summary_path = os.environ.get('GITHUB_STEP_SUMMARY', '/tmp/summary.md')
+          order = {'error': 0, 'warning': 1, 'style': 2}
+          if all_issues:
+              RED    = '\033[91m'
+              YELLOW = '\033[93m'
+              BLUE   = '\033[94m'
+              BOLD   = '\033[1m'
+              RESET  = '\033[0m'
+              def color(issue_type):
+                  if issue_type == 'error':     return RED
+                  elif issue_type == 'warning': return YELLOW
+                  else:                         return BLUE
+              print(f"\n{BOLD}========================================{RESET}")
+              print(f"{BOLD}         CODE QUALITY ISSUES{RESET}")
+              print(f"{BOLD}========================================{RESET}\n")
+              grouped = {}
+              for issue in all_issues:
+                  grouped.setdefault(issue['file'], []).append(issue)
+              for file, file_issues in grouped.items():
+                  file_issues = sorted(file_issues,
+                                       key=lambda x: (order.get(x['type'], 9), x['line']))
+                  print(f"{BOLD}  {file}{RESET}")
+                  print(f"  {'─' * 40}")
+                  for issue in file_issues:
+                      c = color(issue['type'])
+                      first_line, *rest = issue['message'].split('\n')
+                      print(f"  {c}[{issue['type'].upper():^7}]{RESET}  "
+                            f"Line {issue['line']:>4}  ->  {first_line}")
+                      for extra in rest:
+                          print(f"           {extra}")
+                  print()
+              counts = Counter(i['type'] for i in all_issues)
+              print(f"{BOLD}  {'─' * 40}{RESET}")
+              print(f"{BOLD}  SUMMARY{RESET}")
+              print(f"  {'─' * 40}")
+              print(f"  {RED}Errors   : {counts.get('error',   0):>3}{RESET}")
+              print(f"  {YELLOW}Warnings : {counts.get('warning', 0):>3}{RESET}")
+              print(f"  {BLUE}Style    : {counts.get('style',   0):>3}{RESET}")
+              print(f"  {'─' * 40}")
+              print(f"{BOLD}  Total    : {len(all_issues):>3} issue(s) found.{RESET}")
+              print(f"  Fix and push again.")
+              print(f"{BOLD}  {'─' * 40}{RESET}\n")
+              BADGE = {
+                  'error':   'display:inline-block;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:500;background:#ffd7d5;color:#a8200d;',
+                  'warning': 'display:inline-block;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:500;background:#fff3cd;color:#7d4e00;',
+                  'style':   'display:inline-block;border-radius:4px;padding:2px 8px;font-size:11px;font-weight:500;background:#ddf4ff;color:#0550ae;',
+              }
+              TH  = 'style="background:#f6f8fa;color:#57606a;font-weight:500;text-align:left;padding:8px 12px;border:1px solid #d0d7de;font-size:12px;"'
+              TD  = 'style="padding:7px 12px;border:1px solid #d0d7de;vertical-align:middle;font-size:13px;"'
+              CODE= 'style="background:#f6f8fa;border:1px solid #d0d7de;border-radius:4px;padding:1px 6px;font-size:11px;font-family:monospace;color:#1f2328;"'
+              with open(summary_path, 'w') as f:
+                  f.write('<h2>&#9888;&#65039; Code Quality Issues</h2>\n')
+                  for file, file_issues in grouped.items():
+                      file_issues = sorted(file_issues,
+                                           key=lambda x: (order.get(x['type'], 9), x['line']))
+                      f.write(f'<h3 style="font-size:13px;font-weight:600;color:#0550ae;font-family:monospace;margin:1.5rem 0 8px;">&#128196; {file}</h3>\n')
+                      f.write('<table style="border-collapse:collapse;width:100%;font-size:13px;table-layout:fixed;">\n')
+                      f.write(f'<tr>'
+                              f'<th {TH} width="55">Line</th>'
+                              f'<th {TH} width="80">Type</th>'
+                              f'<th {TH} width="300">Issue</th>'
+                              f'<th {TH}>Got</th>'
+                              f'<th {TH}>Expected</th>'
+                              f'</tr>\n')
+                      for issue in file_issues:
+                          parts    = issue['message'].split('\n')
+                          summary  = parts[0]
+                          got      = ''
+                          expected = ''
+                          for p in parts[1:]:
+                              if 'got:'      in p: got      = p.split('|', 1)[-1].strip()
+                              if 'expected:' in p: expected = p.split('|', 1)[-1].strip()
+                          t     = issue['type']
+                          badge = f'<span style="{BADGE[t]}">{t.upper()}</span>'
+                          if got and expected:
+                              f.write(
+                                  f'<tr>'
+                                  f'<td {TD}><b>{issue["line"]}</b></td>'
+                                  f'<td {TD}>{badge}</td>'
+                                  f'<td {TD}>{summary}</td>'
+                                  f'<td {TD}><code {CODE}>{got}</code></td>'
+                                  f'<td {TD}><code {CODE}>{expected}</code></td>'
+                                  f'</tr>\n'
+                              )
+                          else:
+                              f.write(
+                                  f'<tr>'
+                                  f'<td {TD}><b>{issue["line"]}</b></td>'
+                                  f'<td {TD}>{badge}</td>'
+                                  f'<td {TD}>{summary}</td>'
+                                  f'<td {TD}>&mdash;</td>'
+                                  f'<td {TD}>&mdash;</td>'
+                                  f'</tr>\n'
+                              )
+                      f.write('</table>\n')
+                  e     = counts.get('error',   0)
+                  w     = counts.get('warning', 0)
+                  s     = counts.get('style',   0)
+                  total = len(all_issues)
+                  f.write('<h2>&#128202; Summary</h2>\n')
+                  f.write('<table style="border-collapse:collapse;width:300px;font-size:13px;">\n')
+                  f.write(f'<tr><th {TH}>Type</th><th {TH}>Count</th></tr>\n')
+                  f.write(f'<tr><td {TD}><span style="{BADGE["error"]}">ERROR</span></td><td {TD}><b style="color:#a8200d;">{e}</b></td></tr>\n')
+                  f.write(f'<tr><td {TD}><span style="{BADGE["warning"]}">WARNING</span></td><td {TD}><b style="color:#7d4e00;">{w}</b></td></tr>\n')
+                  f.write(f'<tr><td {TD}><span style="{BADGE["style"]}">STYLE</span></td><td {TD}><b style="color:#0550ae;">{s}</b></td></tr>\n')
+                  f.write(f'<tr><td {TD}><b>Total</b></td><td {TD}><b>{total}</b></td></tr>\n')
+                  f.write('</table>\n')
+                  f.write('<p style="font-size:13px;color:#57606a;margin-top:12px;">Fix the issues above and push again.</p>\n')
+              sys.exit(1)
+          else:
+              print("\n[OK] No issues found on changed lines.\n")
+              with open(summary_path, 'w') as f:
+                  f.write('<h2>&#9989; Code Quality</h2>\n')
+                  f.write('<p style="background:#dafbe1;border:1px solid #aceebb;border-radius:8px;'
+                          'padding:16px 24px;display:inline-block;color:#116329;font-size:15px;">'
+                          '&#127881; No issues found on changed lines.</p>\n')
+          PYEOF
+
+      - name: No changes detected
+        if: steps.changed.outputs.has_changes == 'false'
+        run: echo "[INFO] No files changed. Quality checks not applicable."
 
   build-8bit:
     name: "Build 8-bit"
@@ -95,7 +443,7 @@ jobs:
           retention-days: 3
 
       - name: Upload library artifacts
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request_target'
         uses: actions/upload-artifact@v7
         with:
           name: lib-8bit
@@ -309,7 +657,7 @@ jobs:
           ./x265 --version
 
       - name: Upload artifacts
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request_target'
         uses: actions/upload-artifact@v7
         with:
           name: x265-multilib
@@ -320,9 +668,11 @@ jobs:
           retention-days: 3
 
   # ───────────────────────────────────────────────────────────────────────────
-  # Phase 2 – Tests (parallel; each depends only on the binary it needs)
-  # Each job writes a per-job Markdown table to GITHUB_STEP_SUMMARY so
-  # results are visible immediately on the individual job page.
+  # Phase 2 – Tests + Smoke Tests (parallel; each depends only on the binary it needs)
+  # Functional test jobs each write a per-job Markdown table to GITHUB_STEP_SUMMARY
+  # so results are visible immediately on the individual job page.
+  # Smoke tests (PR only) run Linux and Windows build matrix against a private
+  # test harness with golden output validation.
   # ───────────────────────────────────────────────────────────────────────────
 
   test-cli-presets:
@@ -424,7 +774,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload summaries
-        if: always() && github.event_name != 'pull_request'
+        if: always() && github.event_name != 'pull_request_target'
         uses: actions/upload-artifact@v7
         with:
           name: summaries-cli-presets
@@ -523,7 +873,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload summaries
-        if: always() && github.event_name != 'pull_request'
+        if: always() && github.event_name != 'pull_request_target'
         uses: actions/upload-artifact@v7
         with:
           name: summaries-rate-control
@@ -680,7 +1030,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload summaries
-        if: always() && github.event_name != 'pull_request'
+        if: always() && github.event_name != 'pull_request_target'
         uses: actions/upload-artifact@v7
         with:
           name: summaries-encoding-features
@@ -773,7 +1123,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload summaries
-        if: always() && github.event_name != 'pull_request'
+        if: always() && github.event_name != 'pull_request_target'
         uses: actions/upload-artifact@v7
         with:
           name: summaries-analysis-save-load
@@ -926,7 +1276,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload HEVC artifacts
-        if: always() && github.event_name != 'pull_request'
+        if: always() && github.event_name != 'pull_request_target'
         uses: actions/upload-artifact@v7
         with:
           name: hevc-realworld
@@ -934,7 +1284,7 @@ jobs:
           retention-days: 3
 
       - name: Upload summaries
-        if: always() && github.event_name != 'pull_request'
+        if: always() && github.event_name != 'pull_request_target'
         uses: actions/upload-artifact@v7
         with:
           name: summaries-video-and-validation
@@ -1033,7 +1383,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload summaries
-        if: always() && github.event_name != 'pull_request'
+        if: always() && github.event_name != 'pull_request_target'
         uses: actions/upload-artifact@v7
         with:
           name: summaries-threading
@@ -1147,25 +1497,354 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload summaries
-        if: always() && github.event_name != 'pull_request'
+        if: always() && github.event_name != 'pull_request_target'
         uses: actions/upload-artifact@v7
         with:
           name: summaries-10bit-12bit-encoding
           path: summaries/*.log
           retention-days: 3
 
+  smoke-linux:
+    name: "Smoke - Linux (${{ matrix.build }})"
+    runs-on: ubuntu-latest
+    needs: [code-quality]
+    if: github.event_name == 'pull_request_target'
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        build:
+          - gcc
+          - gcc_8bit_debug
+          - gcc-main10
+          - gcc_10bit_debug
+          - gccmain12
+          - gccmain12_debug
+          - gcc-multilib
+
+    env:
+      TEST_SEQ_DIR:     ${{ github.workspace }}/../test-sequences
+      SMOKE_DIR:        ${{ github.workspace }}/../x265_smoke
+      HARNESS_DIR:      ${{ github.workspace }}/../x265_smoke/test-harness-git
+      X265_DIR:         ${{ github.workspace }}/../x265_smoke/x265
+      GOLDEN_DIR:       ${{ github.workspace }}/../x265_smoke/golden_output
+      DECODER_PATH:     ${{ github.workspace }}/../test-sequences/TAppDecoder_gcc
+      TEMP_DIR:         ${{ github.workspace }}/../x265_smoke/test_output/temp
+      COREDUMP_DIR:     ${{ github.workspace }}/../x265_smoke/test_output/coredump
+      SMOKE_TESTS_FILE: ${{ github.workspace }}/../x265_smoke/smoke-tests.txt
+
+    steps:
+      - name: "Create directories"
+        run: |
+          mkdir -p "$TEST_SEQ_DIR" "$SMOKE_DIR" "$GOLDEN_DIR" "$TEMP_DIR" "$COREDUMP_DIR"
+          echo "[OK] All directories created"
+
+      - name: "Clone test-harness"
+        run: |
+          git clone ${{ secrets.HARNESS_REPO_URL }} "$HARNESS_DIR"
+          echo "[OK] test-harness cloned"
+
+      - name: "Clone x265"
+        run: |
+          git clone ${{ github.event.pull_request.base.repo.clone_url }} "$X265_DIR"
+          echo "[OK] x265 cloned"
+
+      - name: "Download and extract assets"
+        run: |
+          REPO="${{ secrets.ASSETS_ORG_AND_REPO }}"
+          TAG="v4.2"
+          TOKEN="${{ secrets.ASSETS_TOKEN }}"
+          download_asset() {
+            local filename=$1
+            local dest=$2
+            echo "=== Downloading $filename ==="
+            ASSET_ID=$(curl -fsSL \
+              -H "Authorization: token $TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/$REPO/releases/tags/$TAG" \
+              | python3 -c "import sys, json; data = json.load(sys.stdin); asset = next((a for a in data['assets'] if a['name'] == '$filename'), None); print(asset['id'] if asset else '')")
+            if [ -z "$ASSET_ID" ]; then
+              echo "Asset '$filename' not found in release $TAG"
+              exit 1
+            fi
+            curl -fsSL \
+              -H "Authorization: token $TOKEN" \
+              -H "Accept: application/octet-stream" \
+              "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID" \
+              | tar -xz -C "$dest"
+            echo "[OK] $filename extracted"
+          }
+          download_asset "videos.tar.gz"         "$TEST_SEQ_DIR"
+          download_asset "goldens-linux.tar.gz"  "$GOLDEN_DIR"
+          download_asset "decoders-linux.tar.gz" "$TEST_SEQ_DIR"
+          download_asset "conf.tar.gz"           "$SMOKE_DIR"
+          download_asset "smoke-tests.tar.gz"    "$SMOKE_DIR"
+          chmod +x "$DECODER_PATH"
+
+      - name: "Copy and configure conf.py into test-harness"
+        run: |
+          cp "$SMOKE_DIR/linux/conf.py" "$HARNESS_DIR/conf.py"
+          sed -i "s|my_machine_name.*=.*|my_machine_name      = 'github-runner'|"             "$HARNESS_DIR/conf.py"
+          sed -i "s|my_source.*=.*|my_source            = r'$X265_DIR/source/'|"              "$HARNESS_DIR/conf.py"
+          sed -i "s|my_sequences.*=.*|my_sequences         = r'$TEST_SEQ_DIR'|"               "$HARNESS_DIR/conf.py"
+          sed -i "s|my_goldens.*=.*|my_goldens           = r'$GOLDEN_DIR'|"                   "$HARNESS_DIR/conf.py"
+          sed -i "s|my_hm_decoder.*=.*|my_hm_decoder        = r'$DECODER_PATH'|"              "$HARNESS_DIR/conf.py"
+          sed -i "s|my_jm_decoder.*=.*|my_jm_decoder        = r'$DECODER_PATH'|"              "$HARNESS_DIR/conf.py"
+          sed -i "s|my_decoder.*=.*|my_decoder           = r'$DECODER_PATH'|"                 "$HARNESS_DIR/conf.py"
+          sed -i "s|my_alpha_decoder.*=.*|my_alpha_decoder     = r'$DECODER_PATH'|"           "$HARNESS_DIR/conf.py"
+          sed -i "s|my_scc_decoder.*=.*|my_scc_decoder       = r'$DECODER_PATH'|"             "$HARNESS_DIR/conf.py"
+          sed -i "s|my_multiview_decoder.*=.*|my_multiview_decoder = r'$DECODER_PATH'|"       "$HARNESS_DIR/conf.py"
+          sed -i "s|my_tempfolder.*=.*|my_tempfolder        = r'$TEMP_DIR/'|"                 "$HARNESS_DIR/conf.py"
+          sed -i "s|my_coredumppath.*=.*|my_coredumppath      = r'$COREDUMP_DIR/'|"           "$HARNESS_DIR/conf.py"
+          echo "[OK] conf.py paths updated"
+
+      - name: "Checkout PR branch in x265"
+        run: |
+          git -C "$X265_DIR" fetch \
+            ${{ github.event.pull_request.head.repo.clone_url }} \
+            ${{ github.event.pull_request.head.ref }}
+          git -C "$X265_DIR" checkout FETCH_HEAD
+          echo "[OK] x265 at PR commit: $(git -C $X265_DIR log --oneline -1)"
+
+      - name: "Install dependencies"
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y nasm
+          python3 -m pip install msal requests psutil --break-system-packages
+          echo "[OK] Dependencies installed"
+
+      - name: "Run smoke-test.py (${{ matrix.build }})"
+        run: |
+          cd "$HARNESS_DIR"
+          echo "=== Starting smoke test for build: ${{ matrix.build }} ==="
+          python3 smoke-test.py -b "${{ matrix.build }}" -t "$SMOKE_TESTS_FILE"
+          echo "[OK] Linux smoke test PASSED for ${{ matrix.build }}"
+      
+      - name: "Set log upload path"
+        if: always()
+        run: |
+          echo "UPLOAD_LOG_PATH=$(realpath "$HARNESS_DIR/x265")/log-*.txt" >> "$GITHUB_ENV"
+
+      - name: "Upload logs"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "linux-${{ matrix.build }}-pr${{ github.event.pull_request.number }}-run${{ github.run_id }}"
+          path: "${{ env.UPLOAD_LOG_PATH }}"
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: "Cleanup"
+        if: always()
+        run: |
+          rm -rf "$SMOKE_DIR" "$TEST_SEQ_DIR"
+          echo "[OK] Cleanup done"
+
+  smoke-windows:
+    name: "Smoke - Windows (${{ matrix.build }})"
+    runs-on: windows-latest
+    needs: [code-quality]
+    if: github.event_name == 'pull_request_target'
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      matrix:
+        build:
+          - vc17_64_8bpp
+          - vc17_64_8bpp_debug
+          - vc17_64_16bpp
+          - vc17_64_16bpp_debug
+          - vc17_64_main12
+          - vc17_64_main12_debug
+          - vc17_64_multilib
+
+    env:
+      TEST_SEQ_DIR:     ${{ github.workspace }}\..\test-sequences
+      SMOKE_DIR:        ${{ github.workspace }}\..\x265_smoke
+      HARNESS_DIR:      ${{ github.workspace }}\..\x265_smoke\test-harness-git
+      X265_DIR:         ${{ github.workspace }}\..\x265_smoke\x265
+      GOLDEN_DIR:       ${{ github.workspace }}\..\x265_smoke\golden_output
+      DECODER_PATH:     ${{ github.workspace }}\..\test-sequences\TAppDecoder.exe
+      TEMP_DIR:         ${{ github.workspace }}\..\x265_smoke\test_output\temp
+      COREDUMP_DIR:     ${{ github.workspace }}\..\x265_smoke\test_output\coredump
+      SMOKE_TESTS_FILE: ${{ github.workspace }}\..\x265_smoke\smoke-tests.txt
+
+    steps:
+      - name: "Create directories"
+        run: |
+          mkdir -p "$TEST_SEQ_DIR" "$SMOKE_DIR" "$GOLDEN_DIR" "$TEMP_DIR" "$COREDUMP_DIR"
+          echo "[OK] All directories created"
+
+      - name: "Clone test-harness"
+        run: |
+          git clone ${{ secrets.HARNESS_REPO_URL }} "$HARNESS_DIR"
+          echo "[OK] test-harness cloned"
+
+      - name: "Clone x265"
+        run: |
+          git clone ${{ github.event.pull_request.base.repo.clone_url }} "$X265_DIR"
+          echo "[OK] x265 cloned"
+
+      - name: "Download and extract assets"
+        run: |
+          REPO="${{ secrets.ASSETS_ORG_AND_REPO }}"
+          TAG="v4.2"
+          TOKEN="${{ secrets.ASSETS_TOKEN }}"
+          download_asset() {
+            local filename=$1
+            local dest=$2
+            dest=$(cygpath -u "$2")
+            echo "=== Downloading $filename ==="
+            ASSET_ID=$(curl -fsSL \
+              -H "Authorization: token $TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/$REPO/releases/tags/$TAG" \
+              | python3 -c "import sys, json; data = json.load(sys.stdin); asset = next((a for a in data['assets'] if a['name'] == '$filename'), None); print(asset['id'] if asset else '')")
+            if [ -z "$ASSET_ID" ]; then
+              echo "Asset '$filename' not found in release $TAG"
+              exit 1
+            fi
+            curl -fsSL \
+              -H "Authorization: token $TOKEN" \
+              -H "Accept: application/octet-stream" \
+              "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID" \
+              | tar -xz -C "$dest"
+            echo "[OK] $filename extracted"
+          }
+          download_asset "videos.tar.gz"           "$TEST_SEQ_DIR"
+          download_asset "goldens-windows.tar.gz"  "$GOLDEN_DIR"
+          download_asset "decoders-windows.tar.gz" "$TEST_SEQ_DIR"
+          download_asset "conf.tar.gz"             "$SMOKE_DIR"
+          download_asset "smoke-tests.tar.gz"      "$SMOKE_DIR"
+
+      - name: "Find vcvarsall.bat"
+        run: |
+          VCVARS=$(find "C:/Program Files/Microsoft Visual Studio" \
+            -name "vcvarsall.bat" 2>/dev/null | head -1)
+          VCVARS_WIN=$(cygpath -m "$VCVARS")
+          echo "Found vcvarsall at: $VCVARS_WIN"
+          echo "VCVARSALL_PATH=$VCVARS_WIN" >> "$GITHUB_ENV"
+
+      - name: "Copy and configure conf.py into test-harness"
+        run: |
+          cp "$SMOKE_DIR/windows/conf.py" "$HARNESS_DIR/conf.py"
+          WIN_X265_DIR=$(cygpath -m "$X265_DIR")
+          WIN_TEST_SEQ_DIR=$(cygpath -m "$TEST_SEQ_DIR")
+          WIN_GOLDEN_DIR=$(cygpath -m "$GOLDEN_DIR")
+          WIN_DECODER_PATH=$(cygpath -m "$DECODER_PATH")
+          WIN_TEMP_DIR=$(cygpath -m "$TEMP_DIR")
+          WIN_COREDUMP_DIR=$(cygpath -m "$COREDUMP_DIR")
+          sed -i "s|my_machine_name.*=.*|my_machine_name      = 'github-runner'|" "$HARNESS_DIR/conf.py"
+          python3 - << 'EOF'
+          import re, os
+          conf   = os.environ['HARNESS_DIR'].replace('\\', '/') + '/conf.py'
+          vcvars = os.environ['VCVARSALL_PATH']
+          with open(conf, 'r', encoding='utf-8') as f:
+              content = f.read()
+          content = re.sub(
+              r'^(?!#)\s*my_vcvarsall\s*=.*$',
+              f"my_vcvarsall         = r'{vcvars}'",
+              content, flags=re.MULTILINE
+          )
+          with open(conf, 'w', encoding='utf-8') as f:
+              f.write(content)
+          print('[OK] vcvarsall path set to:', vcvars)
+          EOF
+          sed -i "s|my_source.*=.*|my_source            = r'${WIN_X265_DIR}/source/'|"        "$HARNESS_DIR/conf.py"
+          sed -i "s|my_sequences.*=.*|my_sequences         = r'${WIN_TEST_SEQ_DIR}'|"         "$HARNESS_DIR/conf.py"
+          sed -i "s|my_goldens.*=.*|my_goldens           = r'${WIN_GOLDEN_DIR}'|"             "$HARNESS_DIR/conf.py"
+          sed -i "s|my_hm_decoder.*=.*|my_hm_decoder        = r'${WIN_DECODER_PATH}'|"       "$HARNESS_DIR/conf.py"
+          sed -i "s|my_jm_decoder.*=.*|my_jm_decoder        = r'${WIN_DECODER_PATH}'|"       "$HARNESS_DIR/conf.py"
+          sed -i "s|my_decoder.*=.*|my_decoder           = r'${WIN_DECODER_PATH}'|"           "$HARNESS_DIR/conf.py"
+          sed -i "s|my_alpha_decoder.*=.*|my_alpha_decoder     = r'${WIN_DECODER_PATH}'|"     "$HARNESS_DIR/conf.py"
+          sed -i "s|my_scc_decoder.*=.*|my_scc_decoder       = r'${WIN_DECODER_PATH}'|"       "$HARNESS_DIR/conf.py"
+          sed -i "s|my_multiview_decoder.*=.*|my_multiview_decoder = r'${WIN_DECODER_PATH}'|" "$HARNESS_DIR/conf.py"
+          sed -i "s|my_tempfolder.*=.*|my_tempfolder        = r'${WIN_TEMP_DIR}/'|"           "$HARNESS_DIR/conf.py"
+          sed -i "s|my_coredumppath.*=.*|my_coredumppath      = r'${WIN_COREDUMP_DIR}/'|"     "$HARNESS_DIR/conf.py"
+          echo "[OK] conf.py paths updated"
+
+      - name: "Patch utils.py vcpath and msbuild"
+        run: |
+          python3 - << 'EOF'
+          import os
+          utils      = os.environ['HARNESS_DIR'].replace('\\', '/') + '/utils.py'
+          vcvars_dir = os.path.dirname(os.environ['VCVARSALL_PATH'])
+          vs_root    = vcvars_dir.replace('/', '\\').split('VC\\Auxiliary\\Build')[0]
+          msbuild    = vs_root + r'MSBuild\Current\Bin\amd64\MSBuild.exe'
+          with open(utils, 'r', encoding='utf-8') as f:
+              content = f.read()
+          content = content.replace(
+              r"vcpath = r'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build'",
+              f"vcpath = r'{vcvars_dir}'"
+          )
+          content = content.replace(
+              r"r'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\amd64\MSBuild.exe'",
+              f"r'{msbuild}'"
+          )
+          with open(utils, 'w', encoding='utf-8') as f:
+              f.write(content)
+          print('[OK] utils.py patched vcpath to:', vcvars_dir)
+          print('[OK] utils.py patched msbuild to:', msbuild)
+          EOF
+
+      - name: "Checkout PR branch in x265"
+        run: |
+          git -C "$X265_DIR" fetch \
+            ${{ github.event.pull_request.head.repo.clone_url }} \
+            ${{ github.event.pull_request.head.ref }}
+          git -C "$X265_DIR" checkout FETCH_HEAD
+          echo "[OK] x265 at PR commit: $(git -C $X265_DIR log --oneline -1)"
+
+      - name: "Install dependencies"
+        run: |
+          python3 -m pip install msal requests psutil setuptools
+          echo "[OK] Dependencies installed"
+
+      - name: "Run smoke-test.py (${{ matrix.build }})"
+        run: |
+          cd "$HARNESS_DIR"
+          echo "=== Starting smoke test for build: ${{ matrix.build }} ==="
+          WIN_SMOKE_TESTS_FILE=$(cygpath -m "$SMOKE_TESTS_FILE")
+          python3 smoke-test.py -b "${{ matrix.build }}" -t "$WIN_SMOKE_TESTS_FILE"
+          echo "[OK] Windows smoke test PASSED for ${{ matrix.build }}"
+      
+      - name: "Set log upload path"
+        if: always()
+        run: |
+          echo "UPLOAD_LOG_PATH=$(realpath "$HARNESS_DIR/x265")/log-*.txt" >> "$GITHUB_ENV"
+
+      - name: "Upload logs"
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: "windows-${{ matrix.build }}-pr${{ github.event.pull_request.number }}-run${{ github.run_id }}"
+          path: "${{ env.UPLOAD_LOG_PATH }}"
+          if-no-files-found: warn
+          retention-days: 3
+
+      - name: "Cleanup"
+        if: always()
+        run: |
+          rm -rf "$SMOKE_DIR" "$TEST_SEQ_DIR"
+          echo "[OK] Cleanup done"
+
   # ───────────────────────────────────────────────────────────────────────────
-  # Phase 3 – Summary report
-  # Writes a comprehensive Markdown performance report to GITHUB_STEP_SUMMARY
-  # so it appears on the Actions run overview page with full metrics tables,
-  # aggregate statistics, and fastest/slowest encode rankings.
+  # Phase 3 – Summary report + Final PR gate (parallel)
+  # Runs after all test jobs complete:
+  # - On push/non-PR events: summary report aggregates all test logs into a
+  #   GITHUB_STEP_SUMMARY performance report with FPS rankings and per-suite tables.
+  # - On pull_request_target: final PR gate aggregates results from all jobs
+  #   and reports overall PR validation status.
   # ───────────────────────────────────────────────────────────────────────────
 
   summary-report:
     name: "Pipeline Summary Report"
     runs-on: ubuntu-22.04
     timeout-minutes: 5
-    if: always()
+    if: always() && github.event_name != 'pull_request_target'
     needs:
       - build-multilib
       - test-cli-presets
@@ -1305,3 +1984,69 @@ jobs:
           echo "  FASTEST: $best_fps_label @ ${best_fps} fps"
           echo "  SLOWEST: $worst_fps_label @ ${worst_fps} fps"
           echo "================================================================"
+
+  final-status:
+    name: "Ready to Merge?"
+    runs-on: ubuntu-latest
+    needs:
+      - code-quality
+      - smoke-linux
+      - smoke-windows
+      - build-8bit
+      - build-10bit
+      - build-12bit
+      - build-multilib
+      - test-cli-presets
+      - test-rate-control
+      - test-encoding-features
+      - test-analysis-save-load
+      - test-video-and-validation
+      - test-threading
+      - test-10bit-12bit-encoding
+    if: always() && (github.event_name == 'pull_request_target')
+
+    steps:
+      - name: Evaluate and report
+        run: |
+          echo "================================================"
+          echo "  x265 PR #${{ github.event.pull_request.number }} - Validation Report"
+          echo "  Author : ${{ github.event.pull_request.user.login }}"
+          echo "  Branch : ${{ github.event.pull_request.head.ref }}"
+          echo "  Commit : ${{ github.sha }}"
+          echo "================================================"
+          echo "  Code Quality  : ${{ needs.code-quality.result }}"
+          echo "  Smoke Linux   : ${{ needs.smoke-linux.result }}"
+          echo "  Smoke Windows : ${{ needs.smoke-windows.result }}"
+          echo "  Build 8-bit   : ${{ needs.build-8bit.result }}"
+          echo "  Build 10-bit  : ${{ needs.build-10bit.result }}"
+          echo "  Build 12-bit  : ${{ needs.build-12bit.result }}"
+          echo "  Build Multilib: ${{ needs.build-multilib.result }}"
+          echo "  Test Presets  : ${{ needs.test-cli-presets.result }}"
+          echo "  Test Rate Ctrl: ${{ needs.test-rate-control.result }}"
+          echo "  Test Enc Feat : ${{ needs.test-encoding-features.result }}"
+          echo "  Test Analysis : ${{ needs.test-analysis-save-load.result }}"
+          echo "  Test Video    : ${{ needs.test-video-and-validation.result }}"
+          echo "  Test Threading: ${{ needs.test-threading.result }}"
+          echo "  Test 10/12bit : ${{ needs.test-10bit-12bit-encoding.result }}"
+          echo "================================================"
+          ALL_PASS=true
+          [[ "${{ needs.code-quality.result }}"            != "success" ]] && ALL_PASS=false && echo "   -> Code quality gate failed"
+          [[ "${{ needs.smoke-linux.result }}"             != "success" ]] && ALL_PASS=false && echo "   -> Linux smoke test failed - check uploaded log artifacts"
+          [[ "${{ needs.smoke-windows.result }}"           != "success" ]] && ALL_PASS=false && echo "   -> Windows smoke test failed - check uploaded log artifacts"
+          [[ "${{ needs.build-8bit.result }}"   != "success" ]] && ALL_PASS=false && echo "   -> 8-bit build failed"
+          [[ "${{ needs.build-10bit.result }}"  != "success" ]] && ALL_PASS=false && echo "   -> 10-bit build failed"
+          [[ "${{ needs.build-12bit.result }}"  != "success" ]] && ALL_PASS=false && echo "   -> 12-bit build failed"
+          [[ "${{ needs.build-multilib.result }}"          != "success" ]] && ALL_PASS=false && echo "   -> Multilib build failed"
+          [[ "${{ needs.test-cli-presets.result }}"        != "success" ]] && ALL_PASS=false && echo "   -> CLI presets test failed"
+          [[ "${{ needs.test-rate-control.result }}"       != "success" ]] && ALL_PASS=false && echo "   -> Rate control test failed"
+          [[ "${{ needs.test-encoding-features.result }}"  != "success" ]] && ALL_PASS=false && echo "   -> Encoding features test failed"
+          [[ "${{ needs.test-analysis-save-load.result }}" != "success" ]] && ALL_PASS=false && echo "   -> Analysis save/load test failed"
+          [[ "${{ needs.test-video-and-validation.result }}" != "success" ]] && ALL_PASS=false && echo "   -> Video & validation test failed"
+          [[ "${{ needs.test-threading.result }}"          != "success" ]] && ALL_PASS=false && echo "   -> Threading test failed"
+          [[ "${{ needs.test-10bit-12bit-encoding.result }}" != "success" ]] && ALL_PASS=false && echo "   -> 10/12-bit encoding test failed"
+          if $ALL_PASS; then
+            echo "[OK] ALL CHECKS PASSED - READY TO MERGE"
+          else
+            echo "[FAIL] ONE OR MORE CHECKS FAILED - DO NOT MERGE"
+            exit 1
+          fi
