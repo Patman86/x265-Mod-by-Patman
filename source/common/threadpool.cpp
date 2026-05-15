@@ -42,7 +42,7 @@
 #include <cstdlib>
 #endif
 
-#if X86_64
+#if X86_64 || X265_ARCH_ARM64
 
 #ifdef __GNUC__
 

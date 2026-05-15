@@ -87,6 +87,7 @@ elseif(ARMMATCH GREATER "-1")
 elseif(ARM64MATCH GREATER "-1")
     message(STATUS "Detected ARM64 target processor")
     set(ARM64 1)
+    add_definitions(-DX265_ARCH_ARM64=1)
 
     option(AARCH64_WARNINGS_AS_ERRORS "Build with -Werror for AArch64 Intrinsics files" OFF)
 
@@ -316,7 +317,6 @@ if(GCC)
     endif()
     if(ARM64)
         set(CPU_HAS_NEON 1)
-        add_definitions(-DX265_ARCH_ARM64=1)
 
         if (AARCH64_RUNTIME_CPU_DETECT)
             add_definitions(-DAARCH64_RUNTIME_CPU_DETECT=1)
