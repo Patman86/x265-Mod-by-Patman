@@ -248,6 +248,7 @@ void Search::puMotionEstimation(const Slice* slice, const CUGeom& cuGeom, CUData
 
     int row = cu.m_cuAddr / m_slice->m_sps->numCuInWidth;
     int col = cu.m_cuAddr % m_slice->m_sps->numCuInWidth;
+    int slotIdx = row * m_slice->m_sps->numCuInWidth + col;
 
     int numMvc = 0;
     for (int puIdx = 0; puIdx < numPart; puIdx++)
@@ -255,7 +256,6 @@ void Search::puMotionEstimation(const Slice* slice, const CUGeom& cuGeom, CUData
         PredictionUnit pu(cu, cuGeom, puIdx);
 
         int pos = finalIdx + puIdx * puOffset;
-        int slotIdx = (col % m_slice->m_sps->numCuInWidth) * m_slice->m_sps->numCuInHeight + row;
 
         InterNeighbourMV neighbours[6];
         if(!isMVP)
@@ -2638,7 +2638,7 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
                 {
                     int row = cu.m_cuAddr / m_slice->m_sps->numCuInWidth;
                     int col = cu.m_cuAddr % m_slice->m_sps->numCuInWidth;
-                    int slotIdx = (col % m_slice->m_sps->numCuInWidth) * m_slice->m_sps->numCuInHeight + row;
+                    int slotIdx = row * m_slice->m_sps->numCuInWidth + col;
 
                     threadedMEData = slice->m_ctuMV[slotIdx * MAX_NUM_PUS_PER_CTU + index];
 
