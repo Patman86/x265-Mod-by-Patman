@@ -371,6 +371,8 @@ static void distributeThreadsForTme(
         }
     }
     else
+#else
+    (void) bNumaSupport;
 #endif
     {
         memset(threadsPerPool, 0, sizeof(int) * (numNumaNodes + 2));
