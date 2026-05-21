@@ -1609,7 +1609,7 @@ jobs:
       - name: "Install dependencies"
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y nasm
+          sudo apt-get install -y nasm libnuma-dev
           python3 -m pip install msal requests psutil --break-system-packages
           echo "[OK] Dependencies installed"
 
@@ -1633,12 +1633,6 @@ jobs:
           path: "${{ env.UPLOAD_LOG_PATH }}"
           if-no-files-found: warn
           retention-days: 3
-
-      - name: "Cleanup"
-        if: always()
-        run: |
-          rm -rf "$SMOKE_DIR" "$TEST_SEQ_DIR"
-          echo "[OK] Cleanup done"
 
   smoke-windows:
     name: "Smoke - Windows (${{ matrix.build }})"
@@ -1824,12 +1818,6 @@ jobs:
           path: "${{ env.UPLOAD_LOG_PATH }}"
           if-no-files-found: warn
           retention-days: 3
-
-      - name: "Cleanup"
-        if: always()
-        run: |
-          rm -rf "$SMOKE_DIR" "$TEST_SEQ_DIR"
-          echo "[OK] Cleanup done"
 
   # ───────────────────────────────────────────────────────────────────────────
   # Phase 3 – Summary report + Final PR gate (parallel)
