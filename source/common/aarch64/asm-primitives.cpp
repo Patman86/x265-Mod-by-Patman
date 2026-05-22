@@ -730,6 +730,7 @@ void setupIntrinsicPrimitives(EncoderPrimitives &p, int cpuMask)
 #if defined(HAVE_SVE2) && HAVE_SVE_BRIDGE
     if (cpuMask & X265_CPU_SVE2)
     {
+        setupPixelPrimitives_sve2(p);
         setupSaoPrimitives_sve2(p);
     }
 #endif
