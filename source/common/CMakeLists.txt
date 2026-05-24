@@ -108,7 +108,7 @@ if(ENABLE_ASSEMBLY AND (ARM64 OR CROSS_COMPILE_ARM64))
     set(C_SRCS_NEON_DOTPROD filter-neon-dotprod.cpp pixel-prim-neon-dotprod.cpp)
     set(C_SRCS_NEON_I8MM filter-neon-i8mm.cpp)
     set(C_SRCS_SVE sao-prim-sve.cpp dct-prim-sve.cpp filter-prim-sve.h filter-prim-sve.cpp pixel-prim-sve.cpp)
-    set(C_SRCS_SVE2 sao-prim-sve2.cpp)
+    set(C_SRCS_SVE2 sao-prim-sve2.cpp pixel-prim-sve2.cpp)
     enable_language(ASM)
 
     # Add Arm assembly files here.

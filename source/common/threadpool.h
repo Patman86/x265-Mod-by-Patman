@@ -34,7 +34,7 @@ class ThreadPool;
 class WorkerThread;
 class BondedTaskGroup;
 
-#if X86_64
+#if X86_64 || X265_ARCH_ARM64
 typedef uint64_t sleepbitmap_t;
 #else
 typedef uint32_t sleepbitmap_t;

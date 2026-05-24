@@ -248,6 +248,7 @@ void Search::puMotionEstimation(const Slice* slice, const CUGeom& cuGeom, CUData
 
     int row = cu.m_cuAddr / m_slice->m_sps->numCuInWidth;
     int col = cu.m_cuAddr % m_slice->m_sps->numCuInWidth;
+    int slotIdx = row * m_slice->m_sps->numCuInWidth + col;
 
     int numMvc = 0;
     for (int puIdx = 0; puIdx < numPart; puIdx++)
@@ -255,7 +256,6 @@ void Search::puMotionEstimation(const Slice* slice, const CUGeom& cuGeom, CUData
         PredictionUnit pu(cu, cuGeom, puIdx);
 
         int pos = finalIdx + puIdx * puOffset;
-        int slotIdx = (col % m_slice->m_sps->numCuInWidth) * m_slice->m_sps->numCuInHeight + row;
 
         InterNeighbourMV neighbours[6];
         if(!isMVP)
@@ -276,6 +276,10 @@ void Search::puMotionEstimation(const Slice* slice, const CUGeom& cuGeom, CUData
                 MV zeroMV[2] = {0,0};
                 const MV* amvp = zeroMV;
                 int mvpIdx = 0;
+
+                PicYuv* recon = slice->m_mref[list][ref].reconPic;
+                int offset = recon->getLumaAddr(cu.m_cuAddr, pu.cuAbsPartIdx + pu.puAbsPartIdx) - recon->getLumaAddr(0);
+                m_me.setSourcePU(fencPic->m_picOrg[0], fencPic->m_stride, offset, pu.width, pu.height, m_param->searchMethod, m_param->subpelRefine);
 
                 bool bLowresMVP = false;
                 if (!isMVP)
@@ -345,16 +349,12 @@ void Search::puMotionEstimation(const Slice* slice, const CUGeom& cuGeom, CUData
                     }
                 }
 
-                PicYuv* recon = slice->m_mref[list][ref].reconPic;
-                int offset = recon->getLumaAddr(cu.m_cuAddr, pu.cuAbsPartIdx + pu.puAbsPartIdx) - recon->getLumaAddr(0);
-
                 if (m_param->searchMethod == X265_SEA)
                 {
                     for (int planes = 0; planes < INTEGRAL_PLANE_NUM; planes++)
                         m_me.integral[planes] = slice->m_refFrameList[list][ref]->m_encData->m_meIntegral[planes] + offset;
                 }
 
-                m_me.setSourcePU(fencPic->m_picOrg[0], fencPic->m_stride, offset, pu.width, pu.height, m_param->searchMethod, m_param->subpelRefine);
                 setSearchRange(cu, mvp, searchRange, mvmin, mvmax);
 
                 if (isMVP)
@@ -2600,8 +2600,59 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
 
         getBlkBits((PartSize)cu.m_partSize[0], slice->isInterP(), puIdx, lastMode, m_listSelBits);
         bool bDoUnidir = true;
+        bool useThreadedME = false;
+        bool threadedBidir = false;
+        bool threadedUniL0 = false;
+        bool threadedUniL1 = false;
+        MEData threadedMEData;
 
         cu.getNeighbourMV(puIdx, pu.puAbsPartIdx, interMode.interNeighbours);
+        if (m_param->bThreadedME)
+        {
+            int cuSize = 1 << cu.m_log2CUSize[0];
+            int lookupWidth = pu.width;
+            int lookupHeight = pu.height;
+            bool isAmp = cu.m_partSize[0] >= SIZE_2NxnU;
+
+            if (isAmp)
+            {
+                if (cu.m_partSize[0] == SIZE_2NxnU || cu.m_partSize[0] == SIZE_2NxnD)
+                    lookupHeight = puIdx ? (pu.width - pu.height) : pu.height;
+                else
+                    lookupWidth = puIdx ? (pu.height - pu.width) : pu.width;
+            }
+
+            if (lookupWidth + lookupHeight <= 2 * MAX_CU_SIZE)
+            {
+                int startIdx = g_puStartIdx[lookupWidth + lookupHeight][static_cast<int>(cu.m_partSize[0])];
+                int alignWidth = isAmp ? cuSize : pu.width;
+                int alignHeight = isAmp ? cuSize : pu.height;
+                int numPUX = m_param->maxCUSize / alignWidth;
+                int numPUY = m_param->maxCUSize / alignHeight;
+                int puOffset = isAmp ? (puIdx * numPUX * numPUY) : (cu.m_partSize[0] == SIZE_2NxN ? (puIdx * numPUX) : puIdx);
+                int relX = (cu.m_cuPelX / alignWidth) % numPUX;
+                int relY = (cu.m_cuPelY / alignHeight) % numPUY;
+                int index = startIdx + (relY * numPUX + relX) + puOffset;
+
+                if (index >= 0 && index < MAX_NUM_PUS_PER_CTU)
+                {
+                    int row = cu.m_cuAddr / m_slice->m_sps->numCuInWidth;
+                    int col = cu.m_cuAddr % m_slice->m_sps->numCuInWidth;
+                    int slotIdx = row * m_slice->m_sps->numCuInWidth + col;
+
+                    threadedMEData = slice->m_ctuMV[slotIdx * MAX_NUM_PUS_PER_CTU + index];
+
+                    bool validL0 = threadedMEData.ref[0] >= 0 && threadedMEData.ref[0] < numRefIdx[0];
+                    bool validL1 = numPredDir > 1 && threadedMEData.ref[1] >= 0 && threadedMEData.ref[1] < numRefIdx[1];
+
+                    threadedBidir = validL0 && validL1;
+                    threadedUniL0 = validL0 && threadedMEData.ref[1] == REF_NOT_VALID;
+                    threadedUniL1 = validL1 && threadedMEData.ref[0] == REF_NOT_VALID;
+                    useThreadedME = threadedBidir || threadedUniL0 || threadedUniL1;
+                }
+            }
+        }
+
         /* Uni-directional prediction */
         if ((m_param->analysisLoadReuseLevel > 1 && m_param->analysisLoadReuseLevel != 10)
             || (m_param->analysisMultiPassRefine && m_param->rc.bStatRead) || (m_param->bAnalysisType == AVC_INFO) || (useAsMVP))
@@ -2773,7 +2824,7 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
             /* if no peer threads were bonded, fall back to doing unidirectional
              * searches ourselves without overhead of singleMotionEstimation() */
         }
-        if (bDoUnidir && !m_param->bThreadedME)
+        if (bDoUnidir && (!m_param->bThreadedME || !useThreadedME))
         {
             interMode.bestME[puIdx][0].ref = interMode.bestME[puIdx][1].ref = -1;
             uint32_t refMask = refMasks[puIdx] ? refMasks[puIdx] : (uint32_t)-1;
@@ -2885,7 +2936,7 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
 
         if (slice->isInterB() && !cu.isBipredRestriction() &&  /* biprediction is possible for this PU */
             cu.m_partSize[pu.puAbsPartIdx] != SIZE_2Nx2N &&    /* 2Nx2N biprediction is handled elsewhere */
-            bestME[0].cost != MAX_UINT && bestME[1].cost != MAX_UINT && !m_param->bThreadedME)
+            bestME[0].cost != MAX_UINT && bestME[1].cost != MAX_UINT && (!m_param->bThreadedME || !useThreadedME))
         {
             bidir[0] = bestME[0];
             bidir[1] = bestME[1];
@@ -2991,65 +3042,28 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
         bool uniL0 = false;
         bool uniL1 = false;
 
-        if (m_param->bThreadedME)
+        if (useThreadedME)
         {
-            int cuSize = 1 << cu.m_log2CUSize[0];
+            bestME[0].ref = threadedMEData.ref[0];
+            bestME[1].ref = threadedMEData.ref[1];
 
-            int lookupWidth = pu.width;
-            int lookupHeight = pu.height;
+            isBidir = threadedBidir;
+            uniL0 = threadedUniL0;
+            uniL1 = threadedUniL1;
 
-            bool isAmp = cu.m_partSize[0] >= SIZE_2NxnU;
-
-            if (isAmp)
-            {
-                if (cu.m_partSize[0] == SIZE_2NxnU || cu.m_partSize[0] == SIZE_2NxnD)
-                    lookupHeight = (puIdx) ? (pu.width - pu.height) : pu.height;
-                else
-                    lookupWidth = (puIdx) ? (pu.height - pu.width) : pu.width;
-            }
-
-            int startIdx = g_puStartIdx[lookupWidth + lookupHeight][static_cast<int>(cu.m_partSize[0])];
-
-            int alignWidth = isAmp ? cuSize : pu.width;
-            int alignHeight = isAmp ? cuSize : pu.height;
-
-            int numPUX = m_param->maxCUSize / alignWidth;
-            int numPUY = m_param->maxCUSize / alignHeight;
-
-            int puOffset = isAmp ? (puIdx * numPUX * numPUY) : (cu.m_partSize[0] == SIZE_2NxN ? (puIdx * numPUX) : puIdx);
- 
-            int relX = (cu.m_cuPelX / alignWidth) % numPUX;
-            int relY = (cu.m_cuPelY / alignHeight) % numPUY;
-
-            int index = startIdx + (relY * numPUX + relX) + puOffset;
-
-            int row = cu.m_cuAddr / m_slice->m_sps->numCuInWidth;
-            int col = cu.m_cuAddr % m_slice->m_sps->numCuInWidth;
-
-            int slotIdx = (col % m_slice->m_sps->numCuInWidth) * m_slice->m_sps->numCuInHeight + row;
-
-            MEData meData = slice->m_ctuMV[slotIdx * MAX_NUM_PUS_PER_CTU + index];
-
-            bestME[0].ref = meData.ref[0];
-            bestME[1].ref = meData.ref[1];
-
-            isBidir = (bestME[0].ref >= 0 && bestME[1].ref >= 0);
-            uniL0 = (bestME[0].ref >= 0 && bestME[1].ref == REF_NOT_VALID);
-            uniL1 = (bestME[1].ref >= 0 && bestME[0].ref == REF_NOT_VALID);
-
-            if(isBidir)
+            if (isBidir)
             {
                 cu.getPMV(interMode.interNeighbours, 0, bestME[0].ref, interMode.amvpCand[0][bestME[0].ref], mvc);
                 cu.getPMV(interMode.interNeighbours, 1, bestME[1].ref, interMode.amvpCand[1][bestME[1].ref], mvc);
 
-                bidir[0].mv = meData.mv[0];
-                bidir[1].mv = meData.mv[1];
+                bidir[0].mv = threadedMEData.mv[0];
+                bidir[1].mv = threadedMEData.mv[1];
                 bidir[0].mvp = interMode.amvpCand[0][bestME[0].ref][0];
                 bidir[1].mvp = interMode.amvpCand[1][bestME[1].ref][0];
-                bidir[0].mvCost = meData.mvCost[0];
-                bidir[1].mvCost = meData.mvCost[1];
-                bidirCost = meData.cost;
-                bidirBits = meData.bits;
+                bidir[0].mvCost = threadedMEData.mvCost[0];
+                bidir[1].mvCost = threadedMEData.mvCost[1];
+                bidirCost = threadedMEData.cost;
+                bidirBits = threadedMEData.bits;
 
                 bestCost = bidirCost;
             }
@@ -3057,11 +3071,11 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
             {
                 cu.getPMV(interMode.interNeighbours, 0, bestME[0].ref, interMode.amvpCand[0][bestME[0].ref], mvc);
 
-                bestME[0].mv = meData.mv[0];
+                bestME[0].mv = threadedMEData.mv[0];
                 bestME[0].mvp = interMode.amvpCand[0][bestME[0].ref][0];
-                bestME[0].mvCost = meData.mvCost[0];
-                bestME[0].cost = meData.cost;
-                bestME[0].bits = meData.bits;
+                bestME[0].mvCost = threadedMEData.mvCost[0];
+                bestME[0].cost = threadedMEData.cost;
+                bestME[0].bits = threadedMEData.bits;
 
                 bestCost = bestME[0].cost;
             }
@@ -3069,16 +3083,14 @@ void Search::predInterSearch(Mode& interMode, const CUGeom& cuGeom, bool bChroma
             {
                 cu.getPMV(interMode.interNeighbours, 1, bestME[1].ref, interMode.amvpCand[1][bestME[1].ref], mvc);
 
-                bestME[1].mv = meData.mv[1];
+                bestME[1].mv = threadedMEData.mv[1];
                 bestME[1].mvp = interMode.amvpCand[1][bestME[1].ref][0];
-                bestME[1].mvCost = meData.mvCost[1];
-                bestME[1].cost = meData.cost;
-                bestME[1].bits = meData.bits;
+                bestME[1].mvCost = threadedMEData.mvCost[1];
+                bestME[1].cost = threadedMEData.cost;
+                bestME[1].bits = threadedMEData.bits;
 
                 bestCost = bestME[1].cost;
             }
-            else
-                x265_log(NULL, X265_LOG_ERROR, "Invalid ME mode");
 
             if (mrgCost < bestCost)
                 isMerge = true;

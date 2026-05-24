@@ -642,6 +642,7 @@ int MotionEstimate::diamondSearch(ReferencePlanes* ref, const MV& mvmin, const M
 
     for (int16_t dist = 1; dist <= 4; dist <<= 1)
     {
+        const MV bmv0 = bmv;
         const int32_t top = omv.y - dist;
         const int32_t bottom = omv.y + dist;
         const int32_t left = omv.x - dist;
@@ -697,10 +698,15 @@ int MotionEstimate::diamondSearch(ReferencePlanes* ref, const MV& mvmin, const M
                 COST_MV(omv.x, bottom);
             }
         }
+
+        if (bmv == bmv0)
+            break;
     }
 
+    omv = bmv;
     for (int16_t dist = 8; dist <= 64; dist += 8)
     {
+        const MV bmv0 = bmv;
         const int32_t top = omv.y - dist;
         const int32_t bottom = omv.y + dist;
         const int32_t left = omv.x - dist;
@@ -772,6 +778,10 @@ int MotionEstimate::diamondSearch(ReferencePlanes* ref, const MV& mvmin, const M
                 }
             }
         }
+
+        if (bmv == bmv0)
+            break;
+        omv = bmv;
     }
     outMV = bmv;
     return bcost;
@@ -995,7 +1005,11 @@ int MotionEstimate::motionEstimate(ReferencePlanes *ref,
 
     pmv = pmv.roundToFPel();
     MV omv = bmv;  // current search origin or starting point
-
+    if (bcost == 0)
+    {
+        outQMv = bmv.toQPel();
+        return mvcost(bmv << 2); // return just the MV cost (no residual)
+    }
     int search = ref->isHMELowres ? (hme ? searchMethodL0 : searchMethodL1) : searchMethod;
     switch (search)
     {

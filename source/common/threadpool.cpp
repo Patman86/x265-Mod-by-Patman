@@ -42,7 +42,7 @@
 #include <cstdlib>
 #endif
 
-#if X86_64
+#if X86_64 || X265_ARCH_ARM64
 
 #ifdef __GNUC__
 
@@ -371,6 +371,8 @@ static void distributeThreadsForTme(
         }
     }
     else
+#else
+    (void) bNumaSupport;
 #endif
     {
         memset(threadsPerPool, 0, sizeof(int) * (numNumaNodes + 2));
@@ -605,7 +607,10 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
             }
             else if (i == 0)
                 numThreads -= p->lookaheadThreads;
-            
+
+            if (!p->bThreadedME)
+                X265_CHECK(numThreads <= MAX_POOL_THREADS, "a single thread pool cannot have more than MAX_POOL_THREADS threads\n");
+
             if (!pools[i].create(numThreads, maxProviders, nodeMaskPerPool[node]))
             {
                 delete[] pools;
@@ -639,8 +644,6 @@ ThreadPool::ThreadPool()
 
 bool ThreadPool::create(int numThreads, int maxProviders, uint64_t nodeMask)
 {
-    X265_CHECK(numThreads <= MAX_POOL_THREADS, "a single thread pool cannot have more than MAX_POOL_THREADS threads\n");
-
 #if defined(_WIN32_WINNT) && _WIN32_WINNT >= _WIN32_WINNT_WIN7 
     memset(&m_groupAffinity, 0, sizeof(GROUP_AFFINITY));
     for (int i = 0; i < getNumaNodeCount(); i++)
