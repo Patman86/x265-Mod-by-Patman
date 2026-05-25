@@ -4255,10 +4255,16 @@ void Encoder::configure(x265_param *p)
         p->limitReferences = 0;
     }
 
-    if ((m_param->bEnableTemporalFilter) && (p->bframes < 5)){
+    if ((p->bEnableTemporalFilter) && (p->bFrameAdaptive == 0)) {
+        x265_log(p, X265_LOG_WARNING, "MCSTF is unsupported when b-adapt = 0. Disabling MCSTF.\n");
+        p->bEnableTemporalFilter = 0;
+    }
+
+    if ((p->bEnableTemporalFilter) && (p->bframes < 5)){
         x265_log(p, X265_LOG_WARNING, "Setting the number of B-frames to 5, as MCSTF filter is enabled.\n");
         p->bframes = 5;
     }
+
     if ((p->bEnableTemporalSubLayers > 2) && !p->bframes)
     {
         x265_log(p, X265_LOG_WARNING, "B frames not enabled, temporal sublayer disabled\n");
