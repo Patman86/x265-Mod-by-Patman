@@ -31,6 +31,9 @@
 #include "cpu.h"
 #include "common.h"
 
+#if HAVE_GETAUXVAL || HAVE_ELF_AUX_INFO
+#include <sys/auxv.h>
+#endif
 #if MACOS || SYS_FREEBSD
 #include <sys/types.h>
 #include <sys/sysctl.h>
@@ -41,7 +44,7 @@
 #include <machine/cpu.h>
 #endif
 
-#if X265_ARCH_ARM && !defined(HAVE_NEON)
+#if X265_ARCH_ARM && !defined(HAVE_NEON) && !(HAVE_GETAUXVAL || HAVE_ELF_AUX_INFO)
 #include <signal.h>
 #include <setjmp.h>
 static sigjmp_buf jmpbuf;
@@ -136,6 +139,20 @@ const cpu_name_t cpu_names[] =
 #endif // if X265_ARCH_X86
     { "", 0 },
 };
+
+unsigned long x265_getauxval(unsigned long type)
+{
+#if HAVE_GETAUXVAL
+    return getauxval(type);
+#elif HAVE_ELF_AUX_INFO
+    unsigned long aux = 0;
+    elf_aux_info(type, &aux, sizeof(aux));
+    return aux;
+#else
+    (void)type;
+    return 0;
+#endif
+}
 
 #if X265_ARCH_X86
 
@@ -357,6 +374,8 @@ void PFX(cpu_neon_test)(void);
 int PFX(cpu_fast_neon_mrc_test)(void);
 }
 
+#define X265_ARM_HWCAP_NEON (1U << 12)
+
 uint32_t cpu_detect(bool benableavx512)
 {
     int flags = 0;
@@ -364,6 +383,11 @@ uint32_t cpu_detect(bool benableavx512)
 #if HAVE_ARMV6 && ENABLE_ASSEMBLY
     flags |= X265_CPU_ARMV6;
 
+#if HAVE_GETAUXVAL || HAVE_ELF_AUX_INFO
+    unsigned long hwcap = x265_getauxval(AT_HWCAP);
+
+    if (hwcap & X265_ARM_HWCAP_NEON) flags |= X265_CPU_NEON;
+#else
     // don't do this hack if compiled with -mfpu=neon
 #if !HAVE_NEON
     static void (* oldsig)(int);
@@ -381,6 +405,7 @@ uint32_t cpu_detect(bool benableavx512)
 #endif // if !HAVE_NEON
 
     flags |= X265_CPU_NEON;
+#endif
 
     // fast neon -> arm (Cortex-A9) detection relies on user access to the
     // cycle counter; this assumes ARMv7 performance counters.

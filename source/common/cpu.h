@@ -48,6 +48,8 @@ extern "C" void PFX(safe_intel_cpu_indicator_init)(void);
 #define x265_emms() PFX(cpu_emms)()
 #endif
 
+unsigned long x265_getauxval(unsigned long);
+
 namespace X265_NS {
 uint32_t cpu_detect(bool);
 bool detect512();
