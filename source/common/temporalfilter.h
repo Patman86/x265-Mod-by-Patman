@@ -85,7 +85,7 @@ namespace X265_NS {
             me.init(X265_CSP_I400);
             me.setQP(X265_LOOKAHEAD_QP);
             predPUYuv.create(FENC_STRIDE, X265_CSP_I400);
-            m_useSADinME = 1;
+            m_useSADinME = 0;
             m_motionVectorFactor = 16;
         }
 

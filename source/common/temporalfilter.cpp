@@ -511,15 +511,7 @@ void TemporalFilter::bilateralFilter(Frame* frame,
         applyMotion(m_mcstfRefList[i].mvs, m_mcstfRefList[i].mvsStride, m_mcstfRefList[i].picBuffer, ref->compensatedPic);
     }
 
-    int refStrengthRow = 2;
-    if (numRefs == m_range * 2)
-    {
-        refStrengthRow = 0;
-    }
-    else if (numRefs == m_range)
-    {
-        refStrengthRow = 1;
-    }
+    int refStrengthRow = 0;
 
     const double lumaSigmaSq = (m_QP - m_sigmaZeroPoint) * (m_QP - m_sigmaZeroPoint) * m_sigmaMultiplier;
     const double chromaSigmaSq = 30 * 30;
@@ -578,34 +570,38 @@ void TemporalFilter::bilateralFilter(Frame* frame,
                             correctedPicsStride = refPicInfo->compensatedPic->m_stride;
                         else
                             correctedPicsStride = refPicInfo->compensatedPic->m_strideC;
-
-                        const intptr_t pelOffset = y * correctedPicsStride + x;
-                        primitives.pu[1].copy_pp(m_metld->me.fencPUYuv.m_buf[0], FENC_STRIDE, refPicInfo->compensatedPic->m_picOrg[c] + pelOffset, correctedPicsStride);
-
+                        const pixel *refPel = refPicInfo->compensatedPic->m_picOrg[c] +y * correctedPicsStride + x;
+                        
                         double variance = 0, diffsum = 0;
-                        for (int y1 = 0; y1 < blkSize - 1; y1++)
+                        for (int y1 = 0; y1 < blkSize; y1++)
                         {
-                            for (int x1 = 0; x1 < blkSize - 1; x1++)
+                            for (int x1 = 0; x1 < blkSize; x1++)
                             {
-                                int pix = *(srcPel + x1);
-                                int pixR = *(srcPel + x1 + 1);
-                                int pixD = *(srcPel + x1 + srcStride);
-
-                                int ref = *(m_metld->me.fencPUYuv.m_buf[0] + ((y1)*FENC_STRIDE + x1));
-                                int refR = *(m_metld->me.fencPUYuv.m_buf[0] + ((y1)*FENC_STRIDE + x1 + 1));
-                                int refD = *(m_metld->me.fencPUYuv.m_buf[0] + ((y1 + 1) * FENC_STRIDE + x1));
-
+                                int pix  = *(srcPel + srcStride * y1 + x1);
+                                int ref  = *(refPel + correctedPicsStride * y1 + x1);
                                 int diff = pix - ref;
-                                int diffR = pixR - refR;
-                                int diffD = pixD - refD;
 
                                 variance += diff * diff;
-                                diffsum += (diffR - diff) * (diffR - diff);
-                                diffsum += (diffD - diff) * (diffD - diff);
+
+                                if (x1 != blkSize - 1)
+                                {
+                                    int pixR  = *(srcPel + srcStride * y1 + x1 + 1);
+                                    int refR  = *(refPel + correctedPicsStride * y1 + x1 + 1);
+                                    int diffR = pixR - refR;
+                                    diffsum += (diffR - diff) * (diffR - diff);
+                                }
+                                if (y1 != blkSize - 1)
+                                {
+                                    int pixD  = *(srcPel + srcStride * y1 + x1 + srcStride);
+                                    int refD  = *(refPel + correctedPicsStride * y1 + x1 + correctedPicsStride);
+                                    int diffD = pixD - refD;
+                                    diffsum += (diffD - diff) * (diffD - diff);
+                                }
                             }
                         }
-
-                        refPicInfo->noise[(y / blkSize) * refPicInfo->mvsStride + (x / blkSize)] = (int)round((300 * variance + 50) / (10 * diffsum + 50));
+                        const int cntV = blkSize * blkSize;
+                        const int cntD = 2 * cntV - blkSize - blkSize;
+                        refPicInfo->noise[(y / blkSize) * refPicInfo->mvsStride + (x / blkSize)] = (int)round((15.0 * cntD / cntV * variance + 5.0) / (diffsum + 5.0));
                     }
                 }
 

@@ -1881,25 +1881,9 @@ bool Lookahead::generatemcstf(Frame * frameEnc, PicList refPic, int poclast)
                 for (int j = 0; j < (2 * frameEnc->m_mcstf->m_range); j++)
                 {
                     if (iterPOC < 0)
-                         continue;
+                        continue;
                     if (iterPOC >= poclast)
-                         {
-
-                    TemporalFilter * mcstf = frameEnc->m_mcstf;
-                    while (mcstf->m_numRef)
-                    {
-                        memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs0, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
-                        memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs1, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
-                        memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs2, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 16) * (mcstf->m_sourceHeight / 16)));
-                        memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].mvs, 0, sizeof(MV) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
-                        memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].noise, 0, sizeof(int) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
-                        memset(frameEnc->m_mcstfRefList[mcstf->m_numRef].error, 0, sizeof(int) * ((mcstf->m_sourceWidth / 4) * (mcstf->m_sourceHeight / 4)));
-
-                        mcstf->m_numRef--;
-                    }
-
-                    break;
-                    }
+                        break;
                     Frame * iterFrame = refPic.getPOCMCSTF(iterPOC);
                     if (iterFrame->m_poc == iterPOC)
                     {
