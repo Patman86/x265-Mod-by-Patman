@@ -30,6 +30,7 @@
 #include "piclist.h"
 #include "yuv.h"
 #include "motion.h"
+#include "threadpool.h"
 
 const int s_interpolationFilter[16][8] =
 {
@@ -188,12 +189,88 @@ namespace X265_NS {
 
         int createRefPicInfo(TemporalFilterRefPicInfo* refFrame, x265_param* param);
 
-        void bilateralFilter(Frame* frame, TemporalFilterRefPicInfo* mctfRefList, double overallStrength);
+        void bilateralFilter(Frame*                    frame,
+                            TemporalFilterRefPicInfo* mctfRefList,
+                            double                    overallStrength,
+                            ThreadPool*               pool);
+
+        void bilateralFilter_core(Frame*                    frame,
+                                TemporalFilterRefPicInfo* mctfRefList,
+                                int                       numRef,
+                                int                       blockRow,
+                                int                       blockSize,
+                                double                    overallStrength);
 
         void destroyRefPicInfo(TemporalFilterRefPicInfo* curFrame);
 
-        void applyMotion(MV *mvs, uint32_t mvsStride, PicYuv *input, PicYuv *output);
+        void applyMotion(MV *mvs, uint32_t mvsStride, PicYuv *input, PicYuv *output, const int blockRow = 0, const int rowSize = 0);
 
+    };
+
+    class BilateralFilterGroup : public BondedTaskGroup
+    {
+    public:
+        TemporalFilter& m_filter;
+        ThreadPool*     m_pool;
+
+        struct FilterJob
+        {
+            Frame*                    frame;
+            TemporalFilterRefPicInfo* mctfRefList;
+            int                       numRef;
+            int                       blockRow;
+            int                       rowSize;
+            double                    overallStrength;
+        };
+
+        static const int MAX_FILTER_JOBS = 512;
+        FilterJob m_jobs[MAX_FILTER_JOBS];
+        int       m_jobTotal;
+        int       m_jobAcquired;
+        Lock      m_lock;
+
+        BilateralFilterGroup(TemporalFilter& f, ThreadPool* pool)
+            : m_filter(f), m_pool(pool), m_jobTotal(0), m_jobAcquired(0) {}
+
+        void add(Frame* frame, TemporalFilterRefPicInfo* mctfRefList,
+                int numRef, int blockRow, int rowSize, double strength)
+        {
+            X265_CHECK(m_jobTotal < MAX_FILTER_JOBS,
+                    "BilateralFilterGroup overflow\n");
+            FilterJob& j    = m_jobs[m_jobTotal++];
+            j.frame         = frame;
+            j.mctfRefList   = mctfRefList;
+            j.numRef        = numRef;
+            j.blockRow      = blockRow;
+            j.rowSize       = rowSize;
+            j.overallStrength = strength;
+        }
+
+        void finishBatch()
+        {
+            if (m_pool)
+                tryBondPeers(*m_pool, m_jobTotal);
+            processTasks(-1);
+            waitForExit();
+            m_jobTotal = m_jobAcquired = 0;
+        }
+
+        void processTasks(int /*workerThreadID*/) override
+        {
+            m_lock.acquire();
+            while (m_jobAcquired < m_jobTotal)
+            {
+                const int i = m_jobAcquired++;
+                m_lock.release();
+
+                const FilterJob& j = m_jobs[i];
+                m_filter.bilateralFilter_core(j.frame, j.mctfRefList, j.numRef,
+                                            j.blockRow, j.rowSize,
+                                            j.overallStrength);
+                m_lock.acquire();
+            }
+            m_lock.release();
+        }
     };
 }
 #endif
