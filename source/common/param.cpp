@@ -1500,6 +1500,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("film-grain") p->filmGrain = (char* )value;
         OPT("aom-film-grain") p->aomFilmGrain = (char*)value;
         OPT("mcstf") p->bEnableTemporalFilter = atobool(value);
+        OPT("mcstf-ref-range") p->mcstfFrameRange = atoi(value);
         OPT("sbrc") p->bEnableSBRC = atobool(value);
 #if ENABLE_ALPHA
         OPT("alpha")
@@ -2229,7 +2230,10 @@ void x265_print_params(x265_param* param)
     TOOLOPT(param->toneMapFile != NULL, "dhdr10-info");
 #endif
     if(param->bEnableTemporalFilter)
+    {
         TOOLOPT(param->bEnableTemporalFilter, "mcstf");
+        TOOLVAL(param->mcstfFrameRange, "mcstf-ref-range=%d");
+    }
     x265_log(param, X265_LOG_INFO, "tools:%s\n", buf);
     fflush(stderr);
 }
@@ -2493,6 +2497,8 @@ char *x265_param2string(x265_param* p, int padx, int pady)
     if (p->aomFilmGrain)
         s += snprintf(s, bufSize - (s - buf), " aom-film-grain=%s", p->aomFilmGrain);
     BOOL(p->bEnableTemporalFilter, "mcstf");
+    if (p->bEnableTemporalFilter)
+        s += snprintf(s, bufSize - (s - buf), " mcstf-ref-range=%d", p->mcstfFrameRange);
 #if ENABLE_ALPHA
     BOOL(p->bEnableAlpha, "alpha");
 #endif
