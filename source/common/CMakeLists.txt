@@ -39,6 +39,7 @@ if(ENABLE_ASSEMBLY AND X86)
             # x64 implies SSE4, so only add /arch:SSE2 if building for Win32
             set_source_files_properties(${SSE3} ${SSSE3} ${SSE41} PROPERTIES COMPILE_FLAGS "${WARNDISABLE} /arch:SSE2")
         endif()
+        set_source_files_properties(x86/temporalfilter_simd.cpp PROPERTIES COMPILE_FLAGS "${WARNDISABLE} /arch:AVX2")
     endif()
     if(GCC)
         if(CLANG)
@@ -56,7 +57,7 @@ if(ENABLE_ASSEMBLY AND X86)
     endif()
     set(VEC_PRIMITIVES vec/vec-primitives.cpp ${PRIMITIVES})
     source_group(Intrinsics FILES ${VEC_PRIMITIVES})
-    set(C_SRCS asm-primitives.cpp pixel.h mc.h ipfilter8.h blockcopy8.h dct8.h loopfilter.h seaintegral.h)
+    set(C_SRCS asm-primitives.cpp pixel.h mc.h ipfilter8.h blockcopy8.h dct8.h loopfilter.h seaintegral.h temporalfilter_simd.cpp)
     set(A_SRCS pixel-a.asm const-a.asm cpu-a.asm ssd-a.asm mc-a.asm
                mc-a2.asm pixel-util8.asm blockcopy8.asm
                pixeladd8.asm dct8.asm seaintegral.asm)

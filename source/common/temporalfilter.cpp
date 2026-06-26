@@ -31,6 +31,76 @@
 
 using namespace X265_NS;
 
+namespace X265_NS {
+
+    /* MCSTF scalar fallbacks - used when the runtime CPU lacks the required ISA.*/
+
+    static int motionErrorLumaFrac_c(
+        const pixel* origOrigin, intptr_t origStride,
+        const pixel* buffOrigin, intptr_t buffStride,
+        int x, int y, int dx, int dy,
+        int bs, int besterror, int bitDepth, int errorMode)
+    {
+        const int* xFilter = s_interpolationFilter[dx & 0xF];
+        const int* yFilter = s_interpolationFilter[dy & 0xF];
+        int tempArray[64 + 8][64];
+        int error = 0;
+
+        for (int y1 = 1; y1 < bs + 7; y1++)
+        {
+            const int yOffset = y + y1 + (dy >> 4) - 3;
+            const pixel* sourceRow = buffOrigin + yOffset * buffStride;
+            for (int x1 = 0; x1 < bs; x1++)
+            {
+                int iBase = x + x1 + (dx >> 4) - 3;
+                const pixel* rowStart = sourceRow + iBase;
+                int iSum = 0;
+                iSum += xFilter[1] * rowStart[1];
+                iSum += xFilter[2] * rowStart[2];
+                iSum += xFilter[3] * rowStart[3];
+                iSum += xFilter[4] * rowStart[4];
+                iSum += xFilter[5] * rowStart[5];
+                iSum += xFilter[6] * rowStart[6];
+                tempArray[y1][x1] = iSum;
+            }
+        }
+
+        const int maxSampleValue = (1 << bitDepth) - 1;
+        for (int y1 = 0; y1 < bs; y1++)
+        {
+            const pixel* origRow = origOrigin + (y + y1) * origStride;
+            for (int x1 = 0; x1 < bs; x1++)
+            {
+                int iSum = 0;
+                iSum += yFilter[1] * tempArray[y1 + 1][x1];
+                iSum += yFilter[2] * tempArray[y1 + 2][x1];
+                iSum += yFilter[3] * tempArray[y1 + 3][x1];
+                iSum += yFilter[4] * tempArray[y1 + 4][x1];
+                iSum += yFilter[5] * tempArray[y1 + 5][x1];
+                iSum += yFilter[6] * tempArray[y1 + 6][x1];
+                iSum = (iSum + (1 << 11)) >> 12;
+                iSum = iSum < 0 ? 0 : (iSum > maxSampleValue ? maxSampleValue : iSum);
+
+                int diff = iSum - origRow[x + x1];
+                if (errorMode == 0)
+                    error += abs(diff);
+                else
+                    error += diff * diff;
+            }
+            if (error > besterror)
+                return error;
+        }
+        return error;
+    }
+    /* Global MCSTF primitives table */
+    MCSTFPrimitives mcstfPrim;
+
+    void setupMCTFPrimitives_scalar(MCSTFPrimitives& p)
+    {
+        p.motionErrorLumaFrac = motionErrorLumaFrac_c;
+    }
+}/* namespace X265_NS */
+
 void OrigPicBuffer::addPicture(Frame* inFrame)
 {
     m_mcstfPicList.pushFrontMCSTF(*inFrame);
@@ -244,56 +314,10 @@ int MotionEstimatorTLD::motionErrorLumaSAD(MotionEstimatorTLD& m_metld,
     }
     else
     {
-        const int *xFilter = s_interpolationFilter[dx & 0xF];
-        const int *yFilter = s_interpolationFilter[dy & 0xF];
-        int tempArray[64 + 8][64];
-
-        int iSum, iBase;
-        for (int y1 = 1; y1 < bs + 7; y1++)
-        {
-            const int yOffset = y + y1 + (dy >> 4) - 3;
-            const pixel *sourceRow = buffOrigin + (yOffset)*buffStride + 0;
-            for (int x1 = 0; x1 < bs; x1++)
-            {
-                iSum = 0;
-                iBase = x + x1 + (dx >> 4) - 3;
-                const pixel *rowStart = sourceRow + iBase;
-
-                iSum += xFilter[1] * rowStart[1];
-                iSum += xFilter[2] * rowStart[2];
-                iSum += xFilter[3] * rowStart[3];
-                iSum += xFilter[4] * rowStart[4];
-                iSum += xFilter[5] * rowStart[5];
-                iSum += xFilter[6] * rowStart[6];
-
-                tempArray[y1][x1] = iSum;
-            }
-        }
-
-        const pixel maxSampleValue = (1 << m_bitDepth) - 1;
-        for (int y1 = 0; y1 < bs; y1++)
-        {
-            const pixel *origRow = origOrigin + (y + y1)*origStride + 0;
-            for (int x1 = 0; x1 < bs; x1++)
-            {
-                iSum = 0;
-                iSum += yFilter[1] * tempArray[y1 + 1][x1];
-                iSum += yFilter[2] * tempArray[y1 + 2][x1];
-                iSum += yFilter[3] * tempArray[y1 + 3][x1];
-                iSum += yFilter[4] * tempArray[y1 + 4][x1];
-                iSum += yFilter[5] * tempArray[y1 + 5][x1];
-                iSum += yFilter[6] * tempArray[y1 + 6][x1];
-
-                iSum = (iSum + (1 << 11)) >> 12;
-                iSum = iSum < 0 ? 0 : (iSum > maxSampleValue ? maxSampleValue : iSum);
-
-                error += abs(iSum - origRow[x + x1]);
-            }
-            if (error > besterror)
-            {
-                return error;
-            }
-        }
+        error = mcstfPrim.motionErrorLumaFrac(
+            origOrigin, origStride, buffOrigin, buffStride,
+            x, y, dx, dy, bs, besterror, m_bitDepth, 0 /*SAD*/);
+        if (error > besterror) return error;
     }
     return error;
 }
@@ -350,56 +374,10 @@ int MotionEstimatorTLD::motionErrorLumaSSD(MotionEstimatorTLD& m_metld,
     }
     else
     {
-        const int *xFilter = s_interpolationFilter[dx & 0xF];
-        const int *yFilter = s_interpolationFilter[dy & 0xF];
-        int tempArray[64 + 8][64];
-
-        int iSum, iBase;
-        for (int y1 = 1; y1 < bs + 7; y1++)
-        {
-            const int yOffset = y + y1 + (dy >> 4) - 3;
-            const pixel *sourceRow = buffOrigin + (yOffset)*buffStride + 0;
-            for (int x1 = 0; x1 < bs; x1++)
-            {
-                iSum = 0;
-                iBase = x + x1 + (dx >> 4) - 3;
-                const pixel *rowStart = sourceRow + iBase;
-
-                iSum += xFilter[1] * rowStart[1];
-                iSum += xFilter[2] * rowStart[2];
-                iSum += xFilter[3] * rowStart[3];
-                iSum += xFilter[4] * rowStart[4];
-                iSum += xFilter[5] * rowStart[5];
-                iSum += xFilter[6] * rowStart[6];
-
-                tempArray[y1][x1] = iSum;
-            }
-        }
-
-        const pixel maxSampleValue = (1 << m_bitDepth) - 1;
-        for (int y1 = 0; y1 < bs; y1++)
-        {
-            const pixel *origRow = origOrigin + (y + y1)*origStride + 0;
-            for (int x1 = 0; x1 < bs; x1++)
-            {
-                iSum = 0;
-                iSum += yFilter[1] * tempArray[y1 + 1][x1];
-                iSum += yFilter[2] * tempArray[y1 + 2][x1];
-                iSum += yFilter[3] * tempArray[y1 + 3][x1];
-                iSum += yFilter[4] * tempArray[y1 + 4][x1];
-                iSum += yFilter[5] * tempArray[y1 + 5][x1];
-                iSum += yFilter[6] * tempArray[y1 + 6][x1];
-
-                iSum = (iSum + (1 << 11)) >> 12;
-                iSum = iSum < 0 ? 0 : (iSum > maxSampleValue ? maxSampleValue : iSum);
-
-                error += (iSum - origRow[x + x1]) * (iSum - origRow[x + x1]);
-            }
-            if (error > besterror)
-            {
-                return error;
-            }
-        }
+        error = mcstfPrim.motionErrorLumaFrac(
+            origOrigin, origStride, buffOrigin, buffStride,
+            x, y, dx, dy, bs, besterror, m_bitDepth, 1 /*SAD*/);
+        if (error > besterror) return error;
     }
     return error;
 }

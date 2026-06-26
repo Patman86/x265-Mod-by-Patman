@@ -23,6 +23,7 @@
 
 #include "common.h"
 #include "primitives.h"
+#include "temporalfilter.h"
 
 namespace X265_NS {
 // x265 private namespace
@@ -252,6 +253,12 @@ void x265_setup_primitives(x265_param *param)
     if (!primitives.pu[0].sad)
     {
         setupCPrimitives(primitives);
+
+        /* MCTF primitives: scalar defaults, then x86 SIMD overrides on capable CPUs */
+        setupMCTFPrimitives_scalar(mcstfPrim);
+#if ENABLE_ASSEMBLY && X265_ARCH_X86
+        setupMCTFPrimitives_x86(mcstfPrim, param->cpuid);
+#endif
 
         /* We do not want the encoder to use the un-optimized intra all-angles
          * C references. It is better to call the individual angle functions
