@@ -1817,19 +1817,6 @@ void Lookahead::compCostBref(Lowres **frames, int start, int end, int num)
     }
 }
 
-void CostEstimateGroup::estimatelowresmotion(MotionEstimatorTLD& m_metld, Frame* curframe, int refId)
-{
-    m_metld.m_bitDepth = curframe->m_param->internalBitDepth;
-    TemporalFilterRefPicInfo* ref = &curframe->m_mcstfRefList[refId];
-
-    m_metld.motionEstimationLuma(m_metld, ref->mvs0, ref->mvsStride0, curframe->m_lowres.lowerResPlane[0], (int)(curframe->m_lowres.lumaStride / 2), (curframe->m_lowres.lines / 2), (curframe->m_lowres.width / 2), ref->lowerRes, 16, curframe->m_param->searchRangeForLayer2);
-    m_metld.motionEstimationLuma(m_metld, ref->mvs1, ref->mvsStride1, curframe->m_lowres.lowresPlane[0], (int)(curframe->m_lowres.lumaStride), (curframe->m_lowres.lines), (curframe->m_lowres.width), ref->lowres, 16, curframe->m_param->searchRangeForLayer1, ref->mvs0, ref->mvsStride0, 2);
-    m_metld.motionEstimationLuma(m_metld, ref->mvs2, ref->mvsStride2, curframe->m_fencPic->m_picOrg[0], (int)curframe->m_fencPic->m_stride, curframe->m_fencPic->m_picHeight, curframe->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, curframe->m_param->searchRangeForLayer0, ref->mvs1, ref->mvsStride1, 2);
-    m_metld.motionEstimationLumaDoubleRes(m_metld, ref->mvs, ref->mvsStride, curframe->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error);
-
-    curframe->m_lowres.lowresMcstfMvs[0][refId][0].x = 1;
-}
-
 inline int enqueueRefFrame(Frame* iterFrame, Frame* curFrame, bool isPreFiltered, int16_t i)
 {
     TemporalFilterRefPicInfo * temp = &curFrame->m_mcstfRefList[curFrame->m_mcstf->m_numRef];
@@ -2163,10 +2150,8 @@ void Lookahead::slicetypeDecide()
 
     if (m_bBatchMotionSearch && m_param->bEnableTemporalFilter)
     {
-        /* pre-calculate all motion searches, using many worker threads */
-        CostEstimateGroup estGroup(*this, frames);
-        Frame* frameEnc = m_inputQueue.first();
         m_inputLock.acquire();
+        Frame* frameEnc = m_inputQueue.first();
         for (int b = 0; b < m_inputQueue.size(); b++)
         {
             if (m_param->bEnableTemporalFilter && isFilterThisframe(frameEnc->m_mcstf->m_sliceTypeConfig, frameEnc->m_lowres.sliceType))
@@ -2177,16 +2162,28 @@ void Lookahead::slicetypeDecide()
                     fflush(stderr);
                 }
 
-                for (int j = 1; j <= frameEnc->m_mcstf->m_numRef; j++)
+                const int rowMELevels      = 4;
+                const int rowSize          = 16;
+                const int origHeight       = frameEnc->m_fencPic->m_picHeight;
+                const int levelHeight[4]   = {origHeight / 4, origHeight / 2, origHeight, origHeight};
+                for(int i = 0; i < rowMELevels; i++)
                 {
-                    TemporalFilterRefPicInfo* ref = &frameEnc->m_mcstfRefList[j - 1];
-                    int i = ref->poc;
+                    const int numBlockRows = (levelHeight[i] + rowSize - 1) / rowSize;
+                    CostEstimateGroup estGroup(*this, frames);
 
-                    /* Skip search if already done */
-                    if (frames[b + 1]->lowresMcstfMvs[0][j - 1][0].x != 0x7FFF)
-                        continue;
+                    for (int j = 1; j <= frameEnc->m_mcstf->m_numRef; j++)
+                    {
+                        TemporalFilterRefPicInfo* ref = &frameEnc->m_mcstfRefList[j - 1];
+                        int refpoc = ref->poc;
 
-                    estGroup.add(j - 1, i, frameEnc->m_poc);
+                        /* Skip search if already done */
+                        if (frameEnc->m_lowres.lowresMcstfMvs[0][j - 1][0].x != 0x7FFF)
+                            continue;
+
+                        for (int row = 0; row < numBlockRows; row++)
+                                estGroup.add_row(j - 1, refpoc, frameEnc->m_poc, row, i, frameEnc);
+                    }
+                    estGroup.finishBatch();
                 }
             }
             frameEnc = frameEnc->m_next;
@@ -2195,7 +2192,6 @@ void Lookahead::slicetypeDecide()
 
         /* auto-disable after the first batch if pool is small */
         m_bBatchMotionSearch &= m_pool->m_numWorkers >= 4;
-        estGroup.finishBatch();
     }
 
     if (m_param->bEnableTemporalSubLayers > 2)
@@ -4053,9 +4049,30 @@ void CostEstimateGroup::add(int p0, int p1, int b)
     m_batchMode = true;
 
     Estimate& e = m_estimates[m_jobTotal++];
-    e.p0 = p0;
-    e.p1 = p1;
-    e.b = b;
+    e.p0       = p0;
+    e.p1       = p1;
+    e.b        = b;
+    e.blockRow = -1;
+    e.MElevel  = -1;
+    e.frame    = NULL;
+
+    if (m_jobTotal == MAX_BATCH_SIZE)
+        finishBatch();
+}
+
+void CostEstimateGroup::add_row(int refIdx, int poc, int curPoc, int blockRow, int level, Frame* frame)
+{
+    X265_CHECK(m_batchMode || !m_jobTotal,
+               "single CostEstimateGroup instance cannot mix batch modes\n");
+    m_batchMode = true;
+
+    Estimate& e  = m_estimates[m_jobTotal++];
+    e.p0         = refIdx;
+    e.p1         = poc;
+    e.b          = curPoc;
+    e.blockRow   = blockRow;
+    e.MElevel    = level;
+    e.frame      = frame;
 
     if (m_jobTotal == MAX_BATCH_SIZE)
         finishBatch();
@@ -4091,12 +4108,24 @@ void CostEstimateGroup::processTasks(int workerThreadID)
             ProfileScopeEvent(estCostSingle);
 
             Estimate& e = m_estimates[i];
-            m_lookahead.m_inputLock.acquire();
-            Frame* curFrame = m_lookahead.m_inputQueue.getPOC(e.b);
-            m_lookahead.m_inputLock.release();
+            Frame* curFrame = e.frame;
             if (m_lookahead.m_param->bEnableTemporalFilter && curFrame && (curFrame->m_lowres.sliceType == X265_TYPE_IDR || curFrame->m_lowres.sliceType == X265_TYPE_I || curFrame->m_lowres.sliceType == X265_TYPE_P))
             {
-                estimatelowresmotion(m_metld, curFrame, e.p0);
+                m_metld.m_bitDepth = curFrame->m_param->internalBitDepth;
+                TemporalFilterRefPicInfo* ref = &curFrame->m_mcstfRefList[e.p0];
+
+                if (e.MElevel == 0)
+                    m_metld.motionEstimationLuma(m_metld, ref->mvs0, ref->mvsStride0, curFrame->m_lowres.lowerResPlane[0], (int)(curFrame->m_lowres.lumaStride / 2), (curFrame->m_lowres.lines / 2), (curFrame->m_lowres.width / 2), ref->lowerRes, 16, curFrame->m_param->searchRangeForLayer2, e.blockRow, 16);
+                else if (e.MElevel == 1)
+                    m_metld.motionEstimationLuma(m_metld, ref->mvs1, ref->mvsStride1, curFrame->m_lowres.lowresPlane[0], (int)(curFrame->m_lowres.lumaStride), (curFrame->m_lowres.lines), (curFrame->m_lowres.width), ref->lowres, 16, curFrame->m_param->searchRangeForLayer1, e.blockRow, 16, ref->mvs0, ref->mvsStride0, 2);
+                else if (e.MElevel == 2)
+                    m_metld.motionEstimationLuma(m_metld, ref->mvs2, ref->mvsStride2, curFrame->m_fencPic->m_picOrg[0], (int)curFrame->m_fencPic->m_stride, curFrame->m_fencPic->m_picHeight, curFrame->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, curFrame->m_param->searchRangeForLayer0, e.blockRow, 16, ref->mvs1, ref->mvsStride1, 2);
+                else if (e.MElevel == 3)
+                {
+                    m_metld.motionEstimationLumaDoubleRes(m_metld, ref->mvs, ref->mvsStride, curFrame->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error, e.blockRow, 16);
+                    if (e.blockRow == (int)(curFrame->m_fencPic->m_picHeight - 15)/16 - 1)
+                        curFrame->m_lowres.lowresMcstfMvs[0][e.p0][0].x = 1;
+                }
             }
             else
                 estimateFrameCost(tld, e.p0, e.p1, e.b, false);

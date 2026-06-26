@@ -97,11 +97,11 @@ namespace X265_NS {
 
         void init(const x265_param* param);
 
-        void motionEstimationLuma(MotionEstimatorTLD& m_tld, MV* mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, pixel* buf, int bs, int sRange,
+        void motionEstimationLuma(MotionEstimatorTLD& m_tld, MV* mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, pixel* buf, int bs, int sRange, int row, int rowSize,
             MV* previous = 0, uint32_t prevmvStride = 0, int factor = 1);
 
         void motionEstimationLumaDoubleRes(MotionEstimatorTLD& m_tld, MV* mvs, uint32_t mvStride, PicYuv* orig, PicYuv* buffer, int blockSize,
-            MV* previous, uint32_t prevMvStride, int factor, int* minError);
+            MV* previous, uint32_t prevMvStride, int factor, int* minError, int row, int rowSize);
 
         int motionErrorLumaSSD(MotionEstimatorTLD& m_tld, pixel* src,
             int stride,

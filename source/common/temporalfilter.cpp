@@ -702,7 +702,7 @@ void TemporalFilter::bilateralFilter(Frame* curFrame, TemporalFilterRefPicInfo* 
 }
 
 void MotionEstimatorTLD::motionEstimationLuma(MotionEstimatorTLD& m_metld, MV *mvs, uint32_t mvStride, pixel* src,int stride, int height, int width, pixel* buf, int blockSize,
-    int sRange, MV* previous, uint32_t prevMvStride, int factor)
+                                              int sRange, int row, int rowSize, MV* previous, uint32_t prevMvStride, int factor)
 {
 
     int range = sRange;
@@ -712,10 +712,15 @@ void MotionEstimatorTLD::motionEstimationLuma(MotionEstimatorTLD& m_metld, MV *m
 
     const int origWidth = width;
     const int origHeight = height;
+    int rowStart = row * rowSize;
 
+    if (rowStart > height)
+        return;
+
+    int rowEnd = (!rowSize) ? height : X265_MIN(rowStart + rowSize, height);  
     int error;
 
-    for (int blockY = 0; blockY + blockSize <= origHeight; blockY += stepSize)
+    for (int blockY = rowStart; blockY + blockSize <= rowEnd; blockY += stepSize)
     {
         for (int blockX = 0; blockX + blockSize <= origWidth; blockX += stepSize)
         {
@@ -790,22 +795,7 @@ void MotionEstimatorTLD::motionEstimationLuma(MotionEstimatorTLD& m_metld, MV *m
                 }
             }
 
-            if (blockY > 0)
-            {
-                int idx = ((blockY - stepSize) / stepSize) * mvStride + (blockX / stepSize);
-                MV aboveMV = mvs[idx];
-
-                if (m_useSADinME)
-                    error = motionErrorLumaSAD(m_metld, src, stride, buf, blockX, blockY, aboveMV.x, aboveMV.y, blockSize, leastError);
-                else
-                    error = motionErrorLumaSSD(m_metld, src, stride, buf, blockX, blockY, aboveMV.x, aboveMV.y, blockSize, leastError);
-
-                if (error < leastError)
-                {
-                    best.set(aboveMV.x, aboveMV.y);
-                    leastError = error;
-                }
-            }
+            /* Removed above block's Motion estimation dependency as the atomicity cost outweighs quality benefit */
 
             if (blockX > 0)
             {
@@ -856,7 +846,7 @@ void MotionEstimatorTLD::motionEstimationLuma(MotionEstimatorTLD& m_metld, MV *m
 
 
 void MotionEstimatorTLD::motionEstimationLumaDoubleRes(MotionEstimatorTLD& m_metld, MV *mvs, uint32_t mvStride, PicYuv *orig, PicYuv *buffer, int blockSize,
-    MV *previous, uint32_t prevMvStride, int factor, int* minError)
+                                                       MV *previous, uint32_t prevMvStride, int factor, int* minError, int row, int rowSize)
 {
 
     int range = 0;
@@ -864,12 +854,18 @@ void MotionEstimatorTLD::motionEstimationLumaDoubleRes(MotionEstimatorTLD& m_met
 
     const int stepSize = blockSize;
 
-    const int origWidth = orig->m_picWidth;
+    const int origWidth  = orig->m_picWidth;
     const int origHeight = orig->m_picHeight;
+    int rowStart         = row * rowSize;
+
+    if (row * rowSize > origHeight)
+        return;   // row beyond frame edge — nothing to do
+
+    int rowEnd = (!rowSize) ? origHeight : X265_MIN(rowStart + rowSize, origHeight);
 
     int error;
 
-    for (int blockY = 0; blockY + blockSize <= origHeight; blockY += stepSize)
+    for (int blockY = rowStart; blockY + blockSize <= rowEnd; blockY += stepSize)
     {
         for (int blockX = 0; blockX + blockSize <= origWidth; blockX += stepSize)
         {
@@ -964,8 +960,8 @@ void MotionEstimatorTLD::motionEstimationLumaDoubleRes(MotionEstimatorTLD& m_met
                 }
             }
 
-
-            if (blockY > 0)
+            /* Using Above block's Motion vector only when above block is available within the same thread */
+            if (blockY != rowStart)
             {
                 int idx = ((blockY - stepSize) / stepSize) * mvStride + (blockX / stepSize);
                 MV aboveMV = mvs[idx];
