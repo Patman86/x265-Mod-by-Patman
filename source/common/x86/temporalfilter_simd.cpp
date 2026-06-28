@@ -467,6 +467,84 @@ namespace X265_NS {
         }
     }
 
+    MCSTF_TARGET_AVX2
+        static void lumaBlockAvgVariance_AVX2(const pixel* origin, intptr_t stride, int blockX,int blockY,int blockSize,double* avgOut, double* varianceOut)
+    {
+        const pixel* base = origin + blockY * stride + blockX;
+
+        __m256i sumAcc = _mm256_setzero_si256();
+
+        for (int y1 = 0; y1 < blockSize; y1++)
+        {
+            const pixel* row = base + y1 * stride;
+
+            for (int x1 = 0; x1 < blockSize; x1 += 8)
+            {
+#if X265_DEPTH > 8
+                __m256i px = _mm256_cvtepu16_epi32(
+                    _mm_loadu_si128((const __m128i*)(row + x1)));
+#else
+                __m256i px = _mm256_cvtepu8_epi32(
+                    _mm_loadl_epi64((const __m128i*)(row + x1)));
+#endif
+                sumAcc = _mm256_add_epi32(sumAcc, px);
+            }
+        }
+
+        __m128i lo128 = _mm256_castsi256_si128(sumAcc);
+        __m128i hi128 = _mm256_extracti128_si256(sumAcc, 1);
+        __m128i sum128 = _mm_add_epi32(lo128, hi128);
+        __m128i s64lo = _mm_cvtepi32_epi64(sum128);
+        __m128i s64hi = _mm_cvtepi32_epi64(_mm_srli_si128(sum128, 8));
+        __m128i s64 = _mm_add_epi64(s64lo, s64hi);
+        int64_t sum_s[2];
+        _mm_storeu_si128((__m128i*)sum_s, s64);
+        int64_t totalSum = sum_s[0] + sum_s[1];
+
+        const int    N = blockSize * blockSize;
+        const double avg = (double)totalSum / N;
+        *avgOut = avg;
+
+        const __m256d vavg = _mm256_set1_pd(avg);
+        __m256d varAcc = _mm256_setzero_pd();
+
+        for (int y1 = 0; y1 < blockSize; y1++)
+        {
+            const pixel* row = base + y1 * stride;
+
+            for (int x1 = 0; x1 < blockSize; x1 += 8)
+            {
+#if X265_DEPTH > 8
+                __m128i px8 = _mm_loadu_si128((const __m128i*)(row + x1));
+                /* Widen uint16 → int32, then split into two groups of 4 */
+                __m256i px32 = _mm256_cvtepu16_epi32(px8);
+                __m128i lo4 = _mm256_castsi256_si128(px32);
+                __m128i hi4 = _mm256_extracti128_si256(px32, 1);
+#else
+                __m128i px8 = _mm_loadl_epi64((const __m128i*)(row + x1));
+                __m256i px32 = _mm256_cvtepu8_epi32(px8);
+                __m128i lo4 = _mm256_castsi256_si128(px32);
+                __m128i hi4 = _mm256_extracti128_si256(px32, 1);
+#endif
+                __m256d dlo = _mm256_cvtepi32_pd(lo4);
+                __m256d dhi = _mm256_cvtepi32_pd(hi4);
+
+                __m256d dlo_d = _mm256_sub_pd(dlo, vavg);
+                __m256d dhi_d = _mm256_sub_pd(dhi, vavg);
+
+                varAcc = _mm256_add_pd(varAcc, _mm256_mul_pd(dlo_d, dlo_d));
+                varAcc = _mm256_add_pd(varAcc, _mm256_mul_pd(dhi_d, dhi_d));
+            }
+        }
+
+        __m128d vlo2 = _mm256_castpd256_pd128(varAcc);
+        __m128d vhi2 = _mm256_extractf128_pd(varAcc, 1);
+        __m128d vsum = _mm_add_pd(vlo2, vhi2);
+        double varLanes[2];
+        _mm_storeu_pd(varLanes, vsum);
+        *varianceOut = varLanes[0] + varLanes[1];
+    }
+
     /* Dispatch - overrides scalar defaults with SIMD variants at runtime */
     void setupMCTFPrimitives_x86(MCSTFPrimitives & p, int cpuMask)
     {
@@ -474,6 +552,7 @@ namespace X265_NS {
         {
             p.motionErrorLumaFrac = motionErrorLumaFrac_AVX2;
             p.applyMotion = applyMotion_AVX2;
+            p.lumaBlockAvgVariance = lumaBlockAvgVariance_AVX2;
         }
     }
 } /* namespace X265_NS */

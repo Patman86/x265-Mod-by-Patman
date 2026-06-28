@@ -1005,27 +1005,10 @@ void MotionEstimatorTLD::motionEstimationLumaDoubleRes(MotionEstimatorTLD& m_met
                 }
             }
 
-            // calculate average
-            double avg = 0.0;
-            for (int x1 = 0; x1 < blockSize; x1++)
-            {
-                for (int y1 = 0; y1 < blockSize; y1++)
-                {
-                    avg = avg + *(orig->m_picOrg[0] + (blockX + x1 + orig->m_stride * (blockY + y1)));
-                }
-            }
-            avg = avg / (blockSize * blockSize);
-
-            // calculate variance
-            double variance = 0;
-            for (int x1 = 0; x1 < blockSize; x1++)
-            {
-                for (int y1 = 0; y1 < blockSize; y1++)
-                {
-                    int pix = *(orig->m_picOrg[0] + (blockX + x1 + orig->m_stride * (blockY + y1)));
-                    variance = variance + (pix - avg) * (pix - avg);
-                }
-            }
+            double avg, variance;
+            mcstfPrim.lumaBlockAvgVariance(
+                orig->m_picOrg[0], orig->m_stride,
+                blockX, blockY, blockSize, &avg, &variance);
 
             leastError = (int)(20 * ((leastError + 5.0) / (variance + 5.0)) + (leastError / (blockSize * blockSize)) / 50);
 

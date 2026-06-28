@@ -81,6 +81,9 @@ namespace X265_NS {
             uint32_t mvsStride, const MV* mvs,
             int csx, int csy,
             int blockRow, int rowSize, int vShift);
+        void (*lumaBlockAvgVariance)(const pixel* origin, intptr_t stride,
+            int blockX, int blockY, int blockSize,
+            double* avgOut, double* varianceOut);
     };
 
     extern MCSTFPrimitives mcstfPrim;
