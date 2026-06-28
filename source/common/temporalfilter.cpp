@@ -92,12 +92,102 @@ namespace X265_NS {
         }
         return error;
     }
+    static void applyMotion_c(
+        const pixel* pSrcImage, int srcStride,
+        pixel* pDstImage, int dstStride,
+        int width, int height,
+        int blockSizeX, int blockSizeY,
+        uint32_t mvsStride, const MV* mvs,
+        int csx, int csy,
+        int blockRow, int rowSize, int vShift)
+    {
+        static const int numFilterTaps = 7;
+        static const int centreTapOffset = 3;
+        const int maxValue = (1 << X265_DEPTH) - 1;
+
+        const int blkRowStart = (blockRow * rowSize) >> vShift;
+        const int blkRowEnd = X265_MIN((blockRow * rowSize + rowSize) >> vShift, height);
+        const int rowStart = (!rowSize) ? 0 : blkRowStart;
+        const int rowEnd = (!rowSize) ? height : blkRowEnd;
+        int       blockNumY = (!rowSize) ? 0 : blkRowStart / blockSizeY;
+
+        for (int y = rowStart;
+            y + blockSizeY <= rowEnd;
+            y += blockSizeY, blockNumY++)
+        {
+            for (int x = 0, blockNumX = 0;
+                x + blockSizeX <= width;
+                x += blockSizeX, blockNumX++)
+            {
+                const int mvIdx = blockNumY * (int)mvsStride + blockNumX;
+                const MV& mv = mvs[mvIdx];
+
+                const int dx = mv.x >> csx;
+                const int dy = mv.y >> csy;
+                const int xInt = mv.x >> (4 + csx);
+                const int yInt = mv.y >> (4 + csy);
+
+                const int* xFilter = s_interpolationFilter[dx & 0xf];
+                const int* yFilter = s_interpolationFilter[dy & 0xf];
+
+                int tempArray[8 + numFilterTaps][8];
+
+                for (int by = 1; by < blockSizeY + numFilterTaps; by++)
+                {
+                    const int yOffset = y + by + yInt - centreTapOffset;
+                    const pixel* sourceRow = pSrcImage + yOffset * srcStride;
+
+                    for (int bx = 0; bx < blockSizeX; bx++)
+                    {
+                        int iBase = x + bx + xInt - centreTapOffset;
+                        const pixel* rowStart = sourceRow + iBase;
+
+                        int iSum = 0;
+                        iSum += xFilter[1] * rowStart[1];
+                        iSum += xFilter[2] * rowStart[2];
+                        iSum += xFilter[3] * rowStart[3];
+                        iSum += xFilter[4] * rowStart[4];
+                        iSum += xFilter[5] * rowStart[5];
+                        iSum += xFilter[6] * rowStart[6];
+
+                        tempArray[by][bx] = iSum;
+                    }
+                }
+
+                pixel* pDstRow = pDstImage + y * dstStride;
+
+                for (int by = 0; by < blockSizeY; by++, pDstRow += dstStride)
+                {
+                    pixel* pDstPel = pDstRow + x;
+
+                    for (int bx = 0; bx < blockSizeX; bx++, pDstPel++)
+                    {
+                        int iSum = 0;
+
+                        iSum += yFilter[1] * tempArray[by + 1][bx];
+                        iSum += yFilter[2] * tempArray[by + 2][bx];
+                        iSum += yFilter[3] * tempArray[by + 3][bx];
+                        iSum += yFilter[4] * tempArray[by + 4][bx];
+                        iSum += yFilter[5] * tempArray[by + 5][bx];
+                        iSum += yFilter[6] * tempArray[by + 6][bx];
+
+                        iSum = (iSum + (1 << 11)) >> 12;
+                        iSum = iSum < 0 ? 0 : (iSum > maxValue ? maxValue : iSum);
+
+                        *pDstPel = (pixel)iSum;
+                    }
+                }
+            }
+        }
+    }
+
     /* Global MCSTF primitives table */
     MCSTFPrimitives mcstfPrim;
 
     void setupMCTFPrimitives_scalar(MCSTFPrimitives& p)
     {
         p.motionErrorLumaFrac = motionErrorLumaFrac_c;
+        p.applyMotion = applyMotion_c;
     }
 }/* namespace X265_NS */
 
@@ -392,8 +482,8 @@ void TemporalFilter::applyMotion(MV *mvs, uint32_t mvsStride, PicYuv *input, Pic
     {
         const pixel maxValue = (1 << X265_DEPTH) - 1;
 
-        const pixel *pSrcImage = input->m_picOrg[c];
-        pixel *pDstImage = output->m_picOrg[c];
+        const pixel* pSrcImage = input->m_picOrg[c];
+        pixel* pDstImage = output->m_picOrg[c];
 
         if (!c)
         {
@@ -412,73 +502,15 @@ void TemporalFilter::applyMotion(MV *mvs, uint32_t mvsStride, PicYuv *input, Pic
         const int height = input->m_picHeight >> csy;
         const int width = input->m_picWidth >> csx;
 
-        const int vShift       = (!c) ? 0 : csy;
-        const int blkRowStart  = (!rowSize) ? 0 : (blockRow * rowSize) >> vShift;
-        const int blkRowEnd    = (!rowSize) ? height : X265_MIN((blockRow * rowSize + rowSize) >> vShift, height);
+        const int vShift = (!c) ? 0 : csy;
+        const int blkRowStart = (blockRow * rowSize) >> vShift;
+        const int blkRowEnd = X265_MIN((blockRow * rowSize + rowSize) >> vShift, height);
 
-        int blockNumY       = (!rowSize) ? 0 : blkRowStart / blockSizeY;
+        const int rowStart = (!rowSize) ? 0 : blkRowStart;
+        const int rowEnd = (!rowSize) ? height : blkRowEnd;
+        int blockNumY = (!rowSize) ? 0 : blkRowStart / blockSizeY;
 
-        for (int y = blkRowStart; y + blockSizeY <= blkRowEnd; y += blockSizeY, blockNumY++)
-        {
-            for (int x = 0, blockNumX = 0; x + blockSizeX <= width; x += blockSizeX, blockNumX++)
-            {
-                int mvIdx = blockNumY * mvsStride + blockNumX;
-                const MV &mv = mvs[mvIdx];
-                const int dx = mv.x >> csx;
-                const int dy = mv.y >> csy;
-                const int xInt = mv.x >> (4 + csx);
-                const int yInt = mv.y >> (4 + csy);
-
-                const int *xFilter = s_interpolationFilter[dx & 0xf];
-                const int *yFilter = s_interpolationFilter[dy & 0xf]; // will add 6 bit.
-                const int numFilterTaps = 7;
-                const int centreTapOffset = 3;
-
-                int tempArray[lumaBlockSize + numFilterTaps][lumaBlockSize];
-
-                for (int by = 1; by < blockSizeY + numFilterTaps; by++)
-                {
-                    const int yOffset = y + by + yInt - centreTapOffset;
-                    const pixel *sourceRow = pSrcImage + yOffset * srcStride;
-                    for (int bx = 0; bx < blockSizeX; bx++)
-                    {
-                        int iBase = x + bx + xInt - centreTapOffset;
-                        const pixel *rowStart = sourceRow + iBase;
-
-                        int iSum = 0;
-                        iSum += xFilter[1] * rowStart[1];
-                        iSum += xFilter[2] * rowStart[2];
-                        iSum += xFilter[3] * rowStart[3];
-                        iSum += xFilter[4] * rowStart[4];
-                        iSum += xFilter[5] * rowStart[5];
-                        iSum += xFilter[6] * rowStart[6];
-
-                        tempArray[by][bx] = iSum;
-                    }
-                }
-
-                pixel *pDstRow = pDstImage + y * dstStride;
-                for (int by = 0; by < blockSizeY; by++, pDstRow += dstStride)
-                {
-                    pixel *pDstPel = pDstRow + x;
-                    for (int bx = 0; bx < blockSizeX; bx++, pDstPel++)
-                    {
-                        int iSum = 0;
-
-                        iSum += yFilter[1] * tempArray[by + 1][bx];
-                        iSum += yFilter[2] * tempArray[by + 2][bx];
-                        iSum += yFilter[3] * tempArray[by + 3][bx];
-                        iSum += yFilter[4] * tempArray[by + 4][bx];
-                        iSum += yFilter[5] * tempArray[by + 5][bx];
-                        iSum += yFilter[6] * tempArray[by + 6][bx];
-
-                        iSum = (iSum + (1 << 11)) >> 12;
-                        iSum = iSum < 0 ? 0 : (iSum > maxValue ? maxValue : iSum);
-                        *pDstPel = (pixel)iSum;
-                    }
-                }
-            }
-        }
+        mcstfPrim.applyMotion(pSrcImage, srcStride, pDstImage, dstStride, width, height, blockSizeX, blockSizeY, mvsStride, mvs, csx, csy, blockRow, rowSize, vShift);
     }
 }
 

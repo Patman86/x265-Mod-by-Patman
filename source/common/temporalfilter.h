@@ -74,6 +74,13 @@ namespace X265_NS {
             const pixel* buffOrigin, intptr_t buffStride,
             int x, int y, int dx, int dy,
             int bs, int besterror, int bitDepth, int errorMode);
+        void (*applyMotion)(const pixel* pSrcImage, int srcStride,
+            pixel* pDstImage, int dstStride,
+            int width, int height,
+            int blockSizeX, int blockSizeY,
+            uint32_t mvsStride, const MV* mvs,
+            int csx, int csy,
+            int blockRow, int rowSize, int vShift);
     };
 
     extern MCSTFPrimitives mcstfPrim;
