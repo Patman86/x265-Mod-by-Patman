@@ -181,6 +181,73 @@ namespace X265_NS {
         }
     }
 
+    static void computeBlockStats_c(
+        const pixel* srcPel, intptr_t srcStride,
+        const pixel* refPel, intptr_t refStride,
+        int blkSize, int* outVariance, int* outDiffsum)
+    {
+        int variance = 0, diffsum = 0;
+        for (int y1 = 0; y1 < blkSize; y1++)
+        {
+            for (int x1 = 0; x1 < blkSize; x1++)
+            {
+                int diff = *(srcPel + srcStride * y1 + x1)
+                    - *(refPel + refStride * y1 + x1);
+                variance += diff * diff;
+                if (x1 != blkSize - 1)
+                {
+                    int diffR = *(srcPel + srcStride * y1 + x1 + 1)
+                        - *(refPel + refStride * y1 + x1 + 1);
+                    diffsum += (diffR - diff) * (diffR - diff);
+                }
+                if (y1 != blkSize - 1)
+                {
+                    int diffD = *(srcPel + srcStride * (y1 + 1) + x1)
+                        - *(refPel + refStride * (y1 + 1) + x1);
+                    diffsum += (diffD - diff) * (diffD - diff);
+                }
+            }
+        }
+        *outVariance = variance;
+        *outDiffsum = diffsum;
+    }
+
+    static void bilateralWeightedFilter_c(
+        const pixel* srcBlk, intptr_t srcStride,
+        int             numRefs,
+        const pixel* const* refBlks,
+        const intptr_t* refStrides,
+        const double* vww,
+        const double* vsw,
+        double          bdw,
+        double          maxSample,
+        int             blkSize,
+        pixel* dstBlk, intptr_t dstStride)
+    {
+        for (int y = 0; y < blkSize; y++)
+        {
+            for (int x = 0; x < blkSize; x++)
+            {
+                const int orgVal = (int)srcBlk[y * srcStride + x];
+                double temporalWeightSum = 1.0;
+                double newVal = (double)orgVal;
+                for (int i = 0; i < numRefs; i++)
+                {
+                    const int refVal = (int)refBlks[i][y * refStrides[i] + x];
+                    double diff = (double)(refVal - orgVal) * bdw;
+                    double diffSq = diff * diff;
+                    const double weight = vww[i] * exp(-diffSq / vsw[i]);
+                    newVal += weight * refVal;
+                    temporalWeightSum += weight;
+                }
+                newVal /= temporalWeightSum;
+                double sampleVal = round(newVal);
+                sampleVal = (sampleVal < 0 ? 0 : (sampleVal > maxSample ? maxSample : sampleVal));
+                dstBlk[y * dstStride + x] = (pixel)sampleVal;
+            }
+        }
+    }
+
     /* Global MCSTF primitives table */
     MCSTFPrimitives mcstfPrim;
 
@@ -188,6 +255,8 @@ namespace X265_NS {
     {
         p.motionErrorLumaFrac = motionErrorLumaFrac_c;
         p.applyMotion = applyMotion_c;
+        p.computeBlockStats = computeBlockStats_c;
+        p.bilateralWeightedFilter = bilateralWeightedFilter_c;
     }
 }/* namespace X265_NS */
 
@@ -521,166 +590,96 @@ void TemporalFilter::bilateralFilter_core(Frame* frame, TemporalFilterRefPicInfo
 
     const double lumaSigmaSq = (m_QP - m_sigmaZeroPoint) * (m_QP - m_sigmaZeroPoint) * m_sigmaMultiplier;
     const double chromaSigmaSq = 30 * 30;
-
     PicYuv* orgPic = frame->m_fencPic;
 
     for (int i = 0; i < numRefs; i++)
     {
-        TemporalFilterRefPicInfo *ref = &m_mcstfRefList[i];
+        TemporalFilterRefPicInfo* ref = &m_mcstfRefList[i];
         applyMotion(m_mcstfRefList[i].mvs, m_mcstfRefList[i].mvsStride, m_mcstfRefList[i].picBuffer, ref->compensatedPic, blockRow, rowSize);
     }
 
     for (int c = 0; c < m_numComponents; c++)
     {
-        int height, width;
-        pixel *srcPelPlane = NULL;
-        intptr_t srcStride, correctedPicsStride = 0;
+        const int csx = (!c) ? 0 : CHROMA_H_SHIFT(m_internalCsp);
+        const int csy = (!c) ? 0 : CHROMA_V_SHIFT(m_internalCsp);
+        const int height = (!c) ? orgPic->m_picHeight : orgPic->m_picHeight >> csy;
+        const int width = (!c) ? orgPic->m_picWidth : orgPic->m_picWidth >> csx;
+        pixel* srcPelPlane = orgPic->m_picOrg[c];
+        const intptr_t srcStride = (!c) ? orgPic->m_stride : (intptr_t)orgPic->m_strideC;
 
-        int csx = (!c) ? 0 : CHROMA_H_SHIFT(m_internalCsp);
-        int csy = (!c) ? 0 : CHROMA_V_SHIFT(m_internalCsp);
-        if (!c)
-        {
-            height = orgPic->m_picHeight;
-            width = orgPic->m_picWidth;
-            srcPelPlane = orgPic->m_picOrg[c];
-            srcStride = orgPic->m_stride;
-        }
-        else
-        {
-
-            height = orgPic->m_picHeight >> csy;
-            width = orgPic->m_picWidth >> csx;
-            srcPelPlane = orgPic->m_picOrg[c];
-            srcStride = (int)orgPic->m_strideC;
-        }
-
-        const double sigmaSq = (!c)  ? lumaSigmaSq : chromaSigmaSq;
-        const double weightScaling = overallStrength * ( (!c) ? 0.4 : m_chromaFactor);
-
+        const double sigmaSq = (!c) ? lumaSigmaSq : chromaSigmaSq;
+        const double weightScaling = overallStrength * ((!c) ? 0.4 : m_chromaFactor);
         const double maxSampleValue = (1 << m_bitDepth) - 1;
         const double bitDepthDiffWeighting = 1024.0 / (maxSampleValue + 1);
-
         const int blkSize = (!c) ? 8 : 4;
 
-        const int vShift       = (!c) ? 0 : csy;
+        const int vShift = (!c) ? 0 : csy;
         const int planeRowStart = (blockRow * rowSize) >> vShift;
-        const int planeRowEnd   = X265_MIN((blockRow * rowSize + rowSize) >> vShift, height);
-
+        const int planeRowEnd = X265_MIN((blockRow * rowSize + rowSize) >> vShift, height);
         const int blkRowStart = (planeRowStart / blkSize) * blkSize;
-        const int blkRowEnd   = X265_MIN(((planeRowEnd + blkSize - 1) / blkSize) * blkSize, height);
+        const int blkRowEnd = X265_MIN(((planeRowEnd + blkSize - 1) / blkSize) * blkSize, height);
 
         for (int by = blkRowStart; by + blkSize <= blkRowEnd; by += blkSize)
         {
             for (int bx = 0; bx + blkSize <= width; bx += blkSize)
             {
-                double vww   [16] = {};
-                double vsw   [16] = {};
-
                 const pixel* srcPel = srcPelPlane + by * srcStride + bx;
 
+                // Step 1: noise computation via SIMD primitive
                 double minError = 9999999;
-
-                for (int i = 0; i < numRefs; i++)
-                {
-                    TemporalFilterRefPicInfo *refPicInfo = &m_mcstfRefList[i];
-
-                    if (!c)
-                        correctedPicsStride = refPicInfo->compensatedPic->m_stride;
-                    else
-                        correctedPicsStride = refPicInfo->compensatedPic->m_strideC;
-
-                    double variance = 0, diffsum = 0;
-                    const pixel *refPel = refPicInfo->compensatedPic->m_picOrg[c] + by * correctedPicsStride + bx;
-                    for (int y1 = 0; y1 < blkSize; y1++)
-                    {
-                        for (int x1 = 0; x1 < blkSize; x1++)
-                        {
-                            int pix  = *(srcPel + srcStride * y1 + x1);
-                            int ref  = *(refPel + correctedPicsStride * y1 + x1);
-                            int diff = pix - ref;
-
-                            variance += diff * diff;
-
-                            if (x1 != blkSize - 1)
-                            {
-                                int pixR  = *(srcPel + srcStride * y1 + x1 + 1);
-                                int refR  = *(refPel + correctedPicsStride * y1 + x1 + 1);
-                                int diffR = pixR - refR;
-                                diffsum += (diffR - diff) * (diffR - diff);
-                            }
-                            if (y1 != blkSize - 1)
-                            {
-                                int pixD  = *(srcPel + srcStride * y1 + x1 + srcStride);
-                                int refD  = *(refPel + correctedPicsStride * y1 + x1 + correctedPicsStride);
-                                int diffD = pixD - refD;
-                                diffsum += (diffD - diff) * (diffD - diff);
-                            }
-                        }
-                    }
-                    const int cntV = blkSize * blkSize;
-                    const int cntD = 2 * cntV - blkSize - blkSize;
-                    refPicInfo->noise[(by / blkSize) * refPicInfo->mvsStride + (bx / blkSize)] = (int)round((15.0 * cntD / cntV * variance + 5.0) / (diffsum + 5.0));
-                    minError = X265_MIN(minError, (double)refPicInfo->error[(by / blkSize) * refPicInfo->mvsStride + (bx / blkSize)]);
-                }
-
-                // ── Step 2: pre-compute vww / vsw per reference (block-level) ─
                 for (int i = 0; i < numRefs; i++)
                 {
                     TemporalFilterRefPicInfo* refPicInfo = &m_mcstfRefList[i];
+                    const intptr_t refStride = (!c) ? refPicInfo->compensatedPic->m_stride
+                        : refPicInfo->compensatedPic->m_strideC;
+                    const pixel* refPel = refPicInfo->compensatedPic->m_picOrg[c]
+                        + by * refStride + bx;
 
+                    int iVariance = 0, iDiffsum = 0;
+                    mcstfPrim.computeBlockStats(
+                        srcPel, srcStride, refPel, refStride,
+                        blkSize, &iVariance, &iDiffsum);
+
+                    const int cntV = blkSize * blkSize;
+                    const int cntD = 2 * cntV - blkSize - blkSize;
+                    refPicInfo->noise[(by / blkSize) * refPicInfo->mvsStride + (bx / blkSize)] =
+                        (int)round((15.0 * cntD / cntV * iVariance + 5.0) / (iDiffsum + 5.0));
+                    minError = X265_MIN(minError,
+                        (double)refPicInfo->error[(by / blkSize) * refPicInfo->mvsStride + (bx / blkSize)]);
+                }
+
+                // Step 2: pre-compute vww / vsw (block-level)
+                double vww[MCTF_MAX_REFS] = {};
+                double vsw[MCTF_MAX_REFS] = {};
+                for (int i = 0; i < numRefs; i++)
+                {
+                    TemporalFilterRefPicInfo* refPicInfo = &m_mcstfRefList[i];
                     const int error = refPicInfo->error[(by / blkSize) * refPicInfo->mvsStride + (bx / blkSize)];
                     const int noise = refPicInfo->noise[(by / blkSize) * refPicInfo->mvsStride + (bx / blkSize)];
-
                     const int index = X265_MIN(3, std::abs(refPicInfo->origOffset) - 1);
-
                     double ww = 1, sw = 1;
-                    ww *= (noise < 25) ? 1   : 1.2;
+                    ww *= (noise < 25) ? 1 : 1.2;
                     sw *= (noise < 25) ? 1.3 : 0.8;
                     ww *= (error < 50) ? 1.2 : ((error > 100) ? 0.8 : 1);
                     sw *= (error < 50) ? 1.3 : 1;
                     ww *= ((minError + 1) / (error + 1));
-
                     vww[i] = weightScaling * s_refStrengths[refStrengthRow][index] * ww;
                     vsw[i] = 2 * sw * sigmaSq;
                 }
 
-                // ── Step 3: pixel loop uses pre-computed vww / vsw ──────
-                for (int y = by; y < X265_MIN(by + blkSize, height); y++)
+                //  Step 3: pixel filtering via SIMD primitive
+                const pixel* refBlkPtrs[MCTF_MAX_REFS];
+                intptr_t     refBlkStrides[MCTF_MAX_REFS];
+                for (int i = 0; i < numRefs; i++)
                 {
-                    for (int x = bx; x < X265_MIN(bx + blkSize, width); x++)
-                    {
-                        const int orgVal = (int)srcPelPlane[y * srcStride + x];
-                        double temporalWeightSum = 1.0;
-                        double newVal = (double)orgVal;
-
-                        for (int i = 0; i < numRefs; i++)
-                        {
-                            TemporalFilterRefPicInfo* refPicInfo = &m_mcstfRefList[i];
-
-                            correctedPicsStride = (!c) ? refPicInfo->compensatedPic->m_stride
-                                                                : refPicInfo->compensatedPic->m_strideC;
-
-                            const pixel* pCorrectedPelPtr = refPicInfo->compensatedPic->m_picOrg[c]
-                                                          + y * correctedPicsStride + x;
-                            const int refVal = (int)*pCorrectedPelPtr;
-
-                            double diff   = (double)(refVal - orgVal);
-                            diff         *= bitDepthDiffWeighting;
-                            double diffSq = diff * diff;
-
-                            const double weight = vww[i] * exp(-diffSq / vsw[i]);
-
-                            newVal            += weight * refVal;
-                            temporalWeightSum += weight;
-                        }
-
-                        newVal /= temporalWeightSum;
-                        double sampleVal = round(newVal);
-                        sampleVal = (sampleVal < 0 ? 0 : (sampleVal > maxSampleValue ? maxSampleValue : sampleVal));
-                        srcPelPlane[y * srcStride + x] = (pixel)sampleVal;
-                    }
+                    TemporalFilterRefPicInfo* refPicInfo = &m_mcstfRefList[i];
+                    refBlkStrides[i] = (!c) ? refPicInfo->compensatedPic->m_stride
+                        : refPicInfo->compensatedPic->m_strideC;
+                    refBlkPtrs[i] = refPicInfo->compensatedPic->m_picOrg[c]
+                        + by * refBlkStrides[i] + bx;
                 }
-
+                mcstfPrim.bilateralWeightedFilter(srcPel, srcStride, numRefs, refBlkPtrs, refBlkStrides, vww, vsw, bitDepthDiffWeighting, maxSampleValue,
+                    blkSize, srcPelPlane + by * srcStride + bx, srcStride);
             }
         }
     }

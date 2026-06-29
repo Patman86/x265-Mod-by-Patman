@@ -54,6 +54,31 @@ namespace X265_NS {
 
     /* Shared helpers */
 
+    MCSTF_TARGET_AVX2
+        static inline __m256d loadPix4_pd(const pixel* p)
+    {
+#if X265_DEPTH > 8
+        __m128i v = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(p));
+        return _mm256_cvtepi32_pd(_mm_cvtepu16_epi32(v));
+#else
+        __m128i v = _mm_cvtsi32_si128(*reinterpret_cast<const int*>(p));
+        return _mm256_cvtepi32_pd(_mm_cvtepu8_epi32(v));
+#endif
+    }
+
+    MCSTF_TARGET_AVX2
+        static inline void storePix4_pd(pixel* p, __m256d v)
+    {
+        __m128i i32 = _mm256_cvtpd_epi32(v);
+#if X265_DEPTH > 8
+        _mm_storel_epi64(reinterpret_cast<__m128i*>(p),
+            _mm_packus_epi32(i32, i32));
+#else
+        __m128i u16 = _mm_packus_epi32(i32, i32);
+        *reinterpret_cast<int*>(p) = _mm_cvtsi128_si32(_mm_packus_epi16(u16, u16));
+#endif
+    }
+
     static inline int hsum_epi32(__m128i v)
     {
         __m128i hi = _mm_srli_si128(v, 8);
@@ -456,13 +481,7 @@ namespace X265_NS {
                 const int* xFilter = s_interpolationFilter[dx & 0xf];
                 const int* yFilter = s_interpolationFilter[dy & 0xf];
 
-                applyMotionBlock_AVX2(
-                    pSrcImage, srcStride,
-                    pDstImage, dstStride,
-                    x, y,
-                    blockSizeX, blockSizeY,
-                    xInt, yInt,
-                    xFilter, yFilter);
+                applyMotionBlock_AVX2( pSrcImage, srcStride, pDstImage, dstStride, x, y, blockSizeX, blockSizeY, xInt, yInt, xFilter, yFilter);
             }
         }
     }
@@ -545,6 +564,162 @@ namespace X265_NS {
         *varianceOut = varLanes[0] + varLanes[1];
     }
 
+    MCSTF_TARGET_AVX2
+        void computeBlockStats_AVX2( const pixel* srcPel, intptr_t srcStride, const pixel* refPel, intptr_t refStride, int blkSize, int* outVariance, int* outDiffsum)
+    {
+        if (blkSize == 8)
+        {
+            __m128i drow[8];
+            for (int y = 0; y < 8; y++)
+            {
+#if X265_DEPTH > 8
+                __m128i s = _mm_loadu_si128(reinterpret_cast<const __m128i*>(srcPel + y * srcStride));
+                __m128i r = _mm_loadu_si128(reinterpret_cast<const __m128i*>(refPel + y * refStride));
+#else
+                __m128i s = _mm_cvtepu8_epi16(_mm_loadl_epi64(reinterpret_cast<const __m128i*>(srcPel + y * srcStride)));
+                __m128i r = _mm_cvtepu8_epi16(_mm_loadl_epi64(reinterpret_cast<const __m128i*>(refPel + y * refStride)));
+#endif
+                drow[y] = _mm_sub_epi16(s, r);
+            }
+
+            static const int16_t maskdata[8] = { -1,-1,-1,-1,-1,-1,-1, 0 };
+            const __m128i mask7 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(maskdata));
+
+            __m256i vVar = _mm256_setzero_si256();
+            __m256i vDiff = _mm256_setzero_si256();
+
+            for (int y = 0; y < 8; y++)
+            {
+                __m256i d = _mm256_cvtepi16_epi32(drow[y]);
+                vVar = _mm256_add_epi32(vVar, _mm256_mullo_epi32(d, d));
+
+                __m128i hdiff = _mm_and_si128(
+                    _mm_sub_epi16(_mm_srli_si128(drow[y], 2), drow[y]),
+                    mask7);
+                __m256i hd = _mm256_cvtepi16_epi32(hdiff);
+                vDiff = _mm256_add_epi32(vDiff, _mm256_mullo_epi32(hd, hd));
+
+                if (y < 7)
+                {
+                    __m256i vd = _mm256_cvtepi16_epi32(_mm_sub_epi16(drow[y + 1], drow[y]));
+                    vDiff = _mm256_add_epi32(vDiff, _mm256_mullo_epi32(vd, vd));
+                }
+            }
+
+            *outVariance = hsum_epi32_avx(vVar);
+            *outDiffsum = hsum_epi32_avx(vDiff);
+        }
+        else
+        {
+            __m128i drow[4];
+            for (int y = 0; y < 4; y++)
+            {
+#if X265_DEPTH > 8
+                __m128i s = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(srcPel + y * srcStride));
+                __m128i r = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(refPel + y * refStride));
+#else
+                __m128i s = _mm_cvtepu8_epi16(_mm_cvtsi32_si128(*reinterpret_cast<const int*>(srcPel + y * srcStride)));
+                __m128i r = _mm_cvtepu8_epi16(_mm_cvtsi32_si128(*reinterpret_cast<const int*>(refPel + y * refStride)));
+#endif
+                drow[y] = _mm_sub_epi16(s, r);
+            }
+
+            static const int16_t maskdata3[8] = { -1,-1,-1, 0, 0,0,0,0 };
+            const __m128i mask3 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(maskdata3));
+
+            __m128i vVar128 = _mm_setzero_si128();
+            __m128i vDiff128 = _mm_setzero_si128();
+
+            for (int y = 0; y < 4; y++)
+            {
+                __m128i d = _mm_cvtepi16_epi32(drow[y]);
+                vVar128 = _mm_add_epi32(vVar128, _mm_mullo_epi32(d, d));
+
+                __m128i hdiff = _mm_and_si128(
+                    _mm_sub_epi16(_mm_srli_si128(drow[y], 2), drow[y]),
+                    mask3);
+                __m128i hd = _mm_cvtepi16_epi32(hdiff);
+                vDiff128 = _mm_add_epi32(vDiff128, _mm_mullo_epi32(hd, hd));
+
+                if (y < 3)
+                {
+                    __m128i vd = _mm_cvtepi16_epi32(_mm_sub_epi16(drow[y + 1], drow[y]));
+                    vDiff128 = _mm_add_epi32(vDiff128, _mm_mullo_epi32(vd, vd));
+                }
+            }
+
+            *outVariance = hsum_epi32(vVar128);
+            *outDiffsum = hsum_epi32(vDiff128);
+        }
+    }
+
+    MCSTF_TARGET_AVX2
+        void bilateralWeightedFilter_AVX2(
+            const pixel* srcBlk, intptr_t srcStride,
+            int             numRefs,
+            const pixel* const* refBlks,
+            const intptr_t* refStrides,
+            const double* vww,
+            const double* vsw,
+            double          bdw,
+            double          maxSample,
+            int             blkSize,
+            pixel* dstBlk, intptr_t dstStride)
+    {
+        const __m256d vBdw = _mm256_set1_pd(bdw);
+        const __m256d vOne = _mm256_set1_pd(1.0);
+        const __m256d vZero = _mm256_setzero_pd();
+        const __m256d vMax = _mm256_set1_pd(maxSample);
+        const __m256d vHalf = _mm256_set1_pd(0.5);
+
+        double neg_inv_vsw[MCTF_MAX_REFS];
+        for (int i = 0; i < numRefs; i++)
+            neg_inv_vsw[i] = -1.0 / vsw[i];
+
+        ALIGN_VAR_32(double, expArgs[4]);
+        ALIGN_VAR_32(double, expVals[4]);
+
+        for (int y = 0; y < blkSize; y++)
+        {
+            for (int xg = 0; xg < blkSize; xg += 4)
+            {
+                __m256d vOrgVal = loadPix4_pd(srcBlk + y * srcStride + xg);
+                __m256d vNewVal = vOrgVal;
+                __m256d vWeightSum = vOne;
+
+                for (int i = 0; i < numRefs; i++)
+                {
+                    __m256d vRefVal = loadPix4_pd(refBlks[i] + y * refStrides[i] + xg);
+
+                    __m256d vDiff = _mm256_mul_pd(_mm256_sub_pd(vRefVal, vOrgVal), vBdw);
+                    __m256d vDiffSq = _mm256_mul_pd(vDiff, vDiff);
+
+                    __m256d vExpArg = _mm256_mul_pd(vDiffSq, _mm256_set1_pd(neg_inv_vsw[i]));
+
+                    _mm256_store_pd(expArgs, vExpArg);
+                    expVals[0] = exp(expArgs[0]);
+                    expVals[1] = exp(expArgs[1]);
+                    expVals[2] = exp(expArgs[2]);
+                    expVals[3] = exp(expArgs[3]);
+                    __m256d vExpResult = _mm256_load_pd(expVals);
+
+                    __m256d vWeight = _mm256_mul_pd(_mm256_set1_pd(vww[i]), vExpResult);
+
+                    vNewVal = _mm256_add_pd(vNewVal, _mm256_mul_pd(vWeight, vRefVal));
+                    vWeightSum = _mm256_add_pd(vWeightSum, vWeight);
+                }
+
+                vNewVal = _mm256_div_pd(vNewVal, vWeightSum);
+
+                vNewVal = _mm256_floor_pd(_mm256_add_pd(vNewVal, vHalf));
+
+                vNewVal = _mm256_max_pd(vZero, _mm256_min_pd(vMax, vNewVal));
+
+                storePix4_pd(dstBlk + y * dstStride + xg, vNewVal);
+            }
+        }
+    }
+
     /* Dispatch - overrides scalar defaults with SIMD variants at runtime */
     void setupMCTFPrimitives_x86(MCSTFPrimitives & p, int cpuMask)
     {
@@ -553,6 +728,8 @@ namespace X265_NS {
             p.motionErrorLumaFrac = motionErrorLumaFrac_AVX2;
             p.applyMotion = applyMotion_AVX2;
             p.lumaBlockAvgVariance = lumaBlockAvgVariance_AVX2;
+            p.computeBlockStats = computeBlockStats_AVX2;
+            p.bilateralWeightedFilter = bilateralWeightedFilter_AVX2;
         }
     }
 } /* namespace X265_NS */
