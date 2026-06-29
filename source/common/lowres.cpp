@@ -26,6 +26,12 @@
 #include "lowres.h"
 #include "mv.h"
 
+namespace X265_NS {
+    // forward declaration - defined in pixel.cpp, no SIMD override for MCSTF path
+    void frame_init_lowres_core_mcstf(const pixel* src0, pixel* dst0, pixel* dsth, pixel* dstv, pixel* dstc,
+        intptr_t src_stride, intptr_t dst_stride, int width, int height);
+}
+
 using namespace X265_NS;
 
 /*
@@ -344,7 +350,7 @@ void Lowres::destroy(x265_param* param)
     }
 }
 // (re) initialize lowres state
-void Lowres::init(PicYuv *origPic, int poc)
+void Lowres::init(PicYuv* origPic, int poc, bool bEnableTemporalFilter)
 {
     bLastMiniGopBFrame = false;
     bKeyframe = false; // Not a keyframe unless identified by lookahead
@@ -380,9 +386,10 @@ void Lowres::init(PicYuv *origPic, int poc)
             plannedType[i] = X265_TYPE_AUTO;
 
     /* downscale and generate 4 hpel planes for lookahead */
-    primitives.frameInitLowres(origPic->m_picOrg[0],
-                               lowresPlane[0], lowresPlane[1], lowresPlane[2], lowresPlane[3],
-                               origPic->m_stride, lumaStride, width, lines);
+    if (bEnableTemporalFilter)
+        frame_init_lowres_core_mcstf(origPic->m_picOrg[0], lowresPlane[0], lowresPlane[1], lowresPlane[2], lowresPlane[3], origPic->m_stride, lumaStride, width, lines);
+    else
+        primitives.frameInitLowres(origPic->m_picOrg[0], lowresPlane[0], lowresPlane[1], lowresPlane[2], lowresPlane[3], origPic->m_stride, lumaStride, width, lines);
 
     /* extend hpel planes for motion search */
     extendPicBorder(lowresPlane[0], lumaStride, width, lines, origPic->m_lumaMarginX, origPic->m_lumaMarginY);
@@ -392,9 +399,11 @@ void Lowres::init(PicYuv *origPic, int poc)
     
     if (origPic->m_param->bEnableHME || origPic->m_param->bEnableTemporalFilter)
     {
-        primitives.frameInitLowerRes(lowresPlane[0],
-            lowerResPlane[0], lowerResPlane[1], lowerResPlane[2], lowerResPlane[3],
-            lumaStride, lumaStride/2, (width / 2), (lines / 2));
+        if (bEnableTemporalFilter)
+            frame_init_lowres_core_mcstf(lowresPlane[0], lowerResPlane[0], lowerResPlane[1], lowerResPlane[2], lowerResPlane[3], lumaStride, lumaStride / 2, (width / 2), (lines / 2));
+        else
+            primitives.frameInitLowerRes(lowresPlane[0], lowerResPlane[0], lowerResPlane[1], lowerResPlane[2], lowerResPlane[3], lumaStride, lumaStride / 2, (width / 2), (lines / 2));
+
         extendPicBorder(lowerResPlane[0], lumaStride/2, width/2, lines/2, origPic->m_lumaMarginX/2, origPic->m_lumaMarginY/2);
         extendPicBorder(lowerResPlane[1], lumaStride/2, width/2, lines/2, origPic->m_lumaMarginX/2, origPic->m_lumaMarginY/2);
         extendPicBorder(lowerResPlane[2], lumaStride/2, width/2, lines/2, origPic->m_lumaMarginX/2, origPic->m_lumaMarginY/2);

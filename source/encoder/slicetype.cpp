@@ -1755,7 +1755,7 @@ void PreLookaheadGroup::processTasks(int workerThreadID)
         ProfileLookaheadTime(m_lookahead.m_preLookaheadElapsedTime, m_lookahead.m_countPreLookahead);
         ProfileScopeEvent(prelookahead);
         m_lock.release();
-        preFrame->m_lowres.init(preFrame->m_fencPic, preFrame->m_poc);
+        preFrame->m_lowres.init(preFrame->m_fencPic, preFrame->m_poc, m_lookahead.m_param->bEnableTemporalFilter);
         if (m_lookahead.m_bAdaptiveQuant)
             tld.calcAdaptiveQuantFrame(preFrame, m_lookahead.m_param);
 
