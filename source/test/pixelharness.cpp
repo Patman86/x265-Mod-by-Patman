@@ -2845,15 +2845,6 @@ bool PixelHarness::testCorrectness(const EncoderPrimitives& ref, const EncoderPr
         }
     }
 
-    if (opt.frameSubSampleLuma)
-    {
-        if (!check_downscaleluma_t(ref.frameSubSampleLuma, opt.frameSubSampleLuma))
-        {
-            printf("SubSample Luma failed!\n");
-            return false;
-        }
-    }
-
     if (opt.scale1D_128to64[NONALIGNED])
     {
         if (!check_scale1D_pp(ref.scale1D_128to64[NONALIGNED], opt.scale1D_128to64[NONALIGNED]))
@@ -3567,12 +3558,6 @@ void PixelHarness::measureSpeed(const EncoderPrimitives& ref, const EncoderPrimi
     {
         HEADER0("downscale");
         REPORT_SPEEDUP(opt.frameInitLowres, ref.frameInitLowres, pbuf2, pbuf1, pbuf2, pbuf3, pbuf4, 64, 64, 64, 64);
-    }
-
-    if (opt.frameSubSampleLuma)
-    {
-        HEADER0("downscaleluma");
-        REPORT_SPEEDUP(opt.frameSubSampleLuma, ref.frameSubSampleLuma, pbuf2, pbuf1, 64, 64, 64, 64);
     }
 
     if (opt.scale1D_128to64[NONALIGNED])

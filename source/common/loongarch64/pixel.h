@@ -372,8 +372,6 @@ void x265_addAvg_64x64_lasx(const int16_t* src0, const int16_t* src1, pixel* dst
 
 void x265_frame_init_lowres_core_lsx(const pixel *src0, pixel *dst0, pixel *dsth, pixel *dstv, pixel *dstc, intptr_t src_stride, intptr_t dst_stride, int width, int height);
 void x265_frame_init_lowres_core_lasx(const pixel *src0, pixel *dst0, pixel *dsth, pixel *dstv, pixel *dstc, intptr_t src_stride, intptr_t dst_stride, int width, int height);
-void x265_frame_subsample_luma_lsx(const pixel *src0, pixel *dst0, intptr_t src_stride, intptr_t dst_stride, int width, int height);
-void x265_frame_subsample_luma_lasx(const pixel *src0, pixel *dst0, intptr_t src_stride, intptr_t dst_stride, int width, int height);
 void x265_cutree_fix8_unpack_lsx(double *dst, uint16_t *src, int count);
 void x265_cutree_fix8_unpack_lasx(double *dst, uint16_t *src, int count);
 void x265_cutree_fix8_pack_lsx(uint16_t *dst, double *src, int count);
