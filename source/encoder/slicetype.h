@@ -81,10 +81,9 @@ struct LookaheadTLD
     int             paddedLines;
 
 #if DETAILED_CU_STATS
-    int64_t         batchElapsedTime;
+    int64_t         framecostBatchElapsedTime;
     int64_t         coopSliceElapsedTime;
-    uint64_t        countBatches;
-    uint64_t        countCoopSlices;
+    int64_t         mcstfBatchElapsedTime;
 #endif
 
     LookaheadTLD()
@@ -96,10 +95,9 @@ struct LookaheadTLD
         widthInCU = heightInCU = ncu = paddedLines = 0;
 
 #if DETAILED_CU_STATS
-        batchElapsedTime = 0;
+        framecostBatchElapsedTime = 0;
         coopSliceElapsedTime = 0;
-        countBatches = 0;
-        countCoopSlices = 0;
+        mcstfBatchElapsedTime = 0;
 #endif
     }
 
@@ -210,9 +208,13 @@ public:
 #if DETAILED_CU_STATS
     int64_t       m_slicetypeDecideElapsedTime;
     int64_t       m_preLookaheadElapsedTime;
+    int64_t       m_framecostElapsedTime;
+    int64_t       m_temporalFilterElapsedTime;
     uint64_t      m_countSlicetypeDecide;
     uint64_t      m_countPreLookahead;
-    void          getWorkerStats(int64_t& batchElapsedTime, uint64_t& batchCount, int64_t& coopSliceElapsedTime, uint64_t& coopSliceCount);
+    uint64_t      m_countFramecosts;
+    uint64_t      m_countTemporalFilter;
+    void          getWorkerStats(int64_t& framecostBatchElapsedTime, int64_t& coopSliceElapsedTime, int64_t& mcstfBatchElapsedTime);
 #endif
 
     bool    create();

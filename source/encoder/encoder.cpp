@@ -2924,11 +2924,10 @@ void Encoder::printSummary()
         for (int i = 0; i < m_numPools; i++)
             totalWorkerCount += m_threadPool[i].m_numWorkers;
 
-        int64_t  batchElapsedTime, coopSliceElapsedTime;
-        uint64_t batchCount, coopSliceCount;
-        m_lookahead->getWorkerStats(batchElapsedTime, batchCount, coopSliceElapsedTime, coopSliceCount);
+        int64_t framecostBatchElapsedTime, coopSliceElapsedTime, mcstfBatchElapsedTime;
+        m_lookahead->getWorkerStats(framecostBatchElapsedTime, coopSliceElapsedTime, mcstfBatchElapsedTime);
         int64_t lookaheadWorkerTime = m_lookahead->m_slicetypeDecideElapsedTime + m_lookahead->m_preLookaheadElapsedTime +
-            batchElapsedTime + coopSliceElapsedTime;
+            framecostBatchElapsedTime + coopSliceElapsedTime + mcstfBatchElapsedTime;
 
         int64_t totalWorkerTime = cuStats.totalCTUTime + cuStats.loopFilterElapsedTime + cuStats.pmodeTime +
             cuStats.pmeTime + lookaheadWorkerTime + cuStats.weightAnalyzeTime + cuStats.tmeTime;
@@ -3015,10 +3014,17 @@ void Encoder::printSummary()
                 ELAPSED_MSEC(cuStats.pmodeTime) / cuStats.countPModeTasks);
         }
 
-        x265_log(m_param, X265_LOG_INFO, "CU: %%%05.2lf time spent in slicetypeDecide (avg %.3lfms) and prelookahead (avg %.3lfms)\n",
+        x265_log(m_param, X265_LOG_INFO, "CU: %%%05.2lf time spent in slicetypeDecide (avg %.3lfms), framecost estimation (avg %.3lfms) and prelookahead (avg %.3lfms)\n",
             100.0 * lookaheadWorkerTime / totalWorkerTime,
             ELAPSED_MSEC(m_lookahead->m_slicetypeDecideElapsedTime) / m_lookahead->m_countSlicetypeDecide,
+            ELAPSED_MSEC(m_lookahead->m_framecostElapsedTime) / m_lookahead->m_countFramecosts,
             ELAPSED_MSEC(m_lookahead->m_preLookaheadElapsedTime) / m_lookahead->m_countPreLookahead);
+        if (m_param->bEnableTemporalFilter)
+        {
+            x265_log(m_param, X265_LOG_INFO, "CU: %%%05.2lf time spent in temporal filtering (avg %.3lfms per frame)\n",
+                100.0 * mcstfBatchElapsedTime / totalWorkerTime,
+                ELAPSED_MSEC(m_lookahead->m_temporalFilterElapsedTime) / m_lookahead->m_countTemporalFilter);
+        }
 
         x265_log(m_param, X265_LOG_INFO, "CU: %%%05.2lf time spent in other tasks\n",
             100.0 * unaccounted / totalWorkerTime);

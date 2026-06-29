@@ -36,9 +36,11 @@
 #include "ratecontrol.h"
 
 #if DETAILED_CU_STATS
-#define ProfileLookaheadTime(elapsed, count) ScopedElapsedTime _scope(elapsed); count++
+#define ProfileLookaheadTimeCount(elapsed, count) ScopedElapsedTime _scope(elapsed); count++
+#define ProfileLookaheadTime(elapsed) ScopedElapsedTime _scope(elapsed)
 #else
-#define ProfileLookaheadTime(elapsed, count)
+#define ProfileLookaheadTimeCount(elapsed, count)
+#define ProfileLookaheadTime(elapsed)
 #endif
 
 using namespace X265_NS;
@@ -1055,8 +1057,12 @@ Lookahead::Lookahead(x265_param *param, ThreadPool* pool)
 #if DETAILED_CU_STATS
     m_slicetypeDecideElapsedTime = 0;
     m_preLookaheadElapsedTime = 0;
+    m_framecostElapsedTime = 0;
+    m_temporalFilterElapsedTime = 0;
     m_countSlicetypeDecide = 0;
     m_countPreLookahead = 0;
+    m_countFramecosts = 0;
+    m_countTemporalFilter = 0;
 #endif
 
     m_accHistDiffRunningAvgCb = X265_MALLOC(uint32_t*, NUMBER_OF_SEGMENTS_IN_WIDTH * sizeof(uint32_t*));
@@ -1104,17 +1110,17 @@ Lookahead::Lookahead(x265_param *param, ThreadPool* pool)
 }
 
 #if DETAILED_CU_STATS
-void Lookahead::getWorkerStats(int64_t& batchElapsedTime, uint64_t& batchCount, int64_t& coopSliceElapsedTime, uint64_t& coopSliceCount)
+void Lookahead::getWorkerStats(int64_t& framecostBatchElapsedTime, int64_t& coopSliceElapsedTime, int64_t& mcstfBatchElapsedTime)
 {
-    batchElapsedTime = coopSliceElapsedTime = 0;
-    coopSliceCount = batchCount = 0;
+    framecostBatchElapsedTime = 0;
+    coopSliceElapsedTime = 0;
+    mcstfBatchElapsedTime = 0;
     int tldCount = m_pool ? m_pool->m_numWorkers : 1;
     for (int i = 0; i < tldCount; i++)
     {
-        batchElapsedTime += m_tld[i].batchElapsedTime;
+        framecostBatchElapsedTime += m_tld[i].framecostBatchElapsedTime;
         coopSliceElapsedTime += m_tld[i].coopSliceElapsedTime;
-        batchCount += m_tld[i].countBatches;
-        coopSliceCount += m_tld[i].countCoopSlices;
+        mcstfBatchElapsedTime += m_tld[i].mcstfBatchElapsedTime;
     }
 }
 #endif
@@ -1283,7 +1289,7 @@ void Lookahead::findJob(int /*workerThreadID*/)
     if (!doDecide)
         return;
 
-    ProfileLookaheadTime(m_slicetypeDecideElapsedTime, m_countSlicetypeDecide);
+    ProfileLookaheadTimeCount(m_slicetypeDecideElapsedTime, m_countSlicetypeDecide);
     ProfileScopeEvent(slicetypeDecideEV);
 
     slicetypeDecide();
@@ -1752,7 +1758,6 @@ void PreLookaheadGroup::processTasks(int workerThreadID)
     while (m_jobAcquired < m_jobTotal)
     {
         Frame* preFrame = m_preframes[m_jobAcquired++];
-        ProfileLookaheadTime(m_lookahead.m_preLookaheadElapsedTime, m_lookahead.m_countPreLookahead);
         ProfileScopeEvent(prelookahead);
         m_lock.release();
         preFrame->m_lowres.init(preFrame->m_fencPic, preFrame->m_poc, m_lookahead.m_param->bEnableTemporalFilter);
@@ -1942,6 +1947,7 @@ void Lookahead::slicetypeDecide()
     /* perform pre-analysis on frames which need it, using a bonded task group */
     if (pre.m_jobTotal)
     {
+        ProfileLookaheadTimeCount(m_preLookaheadElapsedTime, m_countPreLookahead);
         if (m_pool)
             pre.tryBondPeers(*m_pool, pre.m_jobTotal);
         pre.processTasks(-1);
@@ -2161,6 +2167,8 @@ void Lookahead::slicetypeDecide()
                     x265_log(m_param, X265_LOG_ERROR, "Failed to initialize MCSTFReferencePicInfo at POC %d\n", frameEnc->m_poc);
                     fflush(stderr);
                 }
+
+                ProfileLookaheadTimeCount(m_temporalFilterElapsedTime, m_countTemporalFilter);
 
                 const int rowMELevels      = 4;
                 const int rowSize          = 16;
@@ -2812,6 +2820,7 @@ void Lookahead::slicetypeAnalyse(Lowres **frames, bool bKeyframe)
 
         if (m_bBatchMotionSearch)
         {
+            ProfileLookaheadTimeCount(m_framecostElapsedTime, m_countFramecosts);
             /* pre-calculate all motion searches, using many worker threads */
             CostEstimateGroup estGroup(*this, frames);
             for (int b = 2; b < numFrames; b++)
@@ -4104,13 +4113,13 @@ void CostEstimateGroup::processTasks(int workerThreadID)
 
         if (m_batchMode)
         {
-            ProfileLookaheadTime(tld.batchElapsedTime, tld.countBatches);
             ProfileScopeEvent(estCostSingle);
-
             Estimate& e = m_estimates[i];
             Frame* curFrame = e.frame;
             if (m_lookahead.m_param->bEnableTemporalFilter && curFrame && (curFrame->m_lowres.sliceType == X265_TYPE_IDR || curFrame->m_lowres.sliceType == X265_TYPE_I || curFrame->m_lowres.sliceType == X265_TYPE_P))
             {
+                ProfileLookaheadTime(tld.mcstfBatchElapsedTime);
+
                 m_metld.m_bitDepth = curFrame->m_param->internalBitDepth;
                 TemporalFilterRefPicInfo* ref = &curFrame->m_mcstfRefList[e.p0];
 
@@ -4128,11 +4137,14 @@ void CostEstimateGroup::processTasks(int workerThreadID)
                 }
             }
             else
+            {
+                ProfileLookaheadTime(tld.framecostBatchElapsedTime);
                 estimateFrameCost(tld, e.p0, e.p1, e.b, false);
+            }
         }
         else
         {
-            ProfileLookaheadTime(tld.coopSliceElapsedTime, tld.countCoopSlices);
+            ProfileLookaheadTime(tld.coopSliceElapsedTime);
             ProfileScopeEvent(estCostCoop);
 
             X265_CHECK(i < MAX_COOP_SLICES, "impossible number of coop slices\n");
