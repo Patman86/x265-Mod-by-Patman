@@ -105,14 +105,12 @@ namespace X265_NS {
         static const int centreTapOffset = 3;
         const int maxValue = (1 << X265_DEPTH) - 1;
 
-        const int blkRowStart = (blockRow * rowSize) >> vShift;
-        const int blkRowEnd = X265_MIN((blockRow * rowSize + rowSize) >> vShift, height);
-        const int rowStart = (!rowSize) ? 0 : blkRowStart;
-        const int rowEnd = (!rowSize) ? height : blkRowEnd;
-        int       blockNumY = (!rowSize) ? 0 : blkRowStart / blockSizeY;
+        const int blkRowStart = (!rowSize) ? 0 : (blockRow * rowSize) >> vShift;
+        const int blkRowEnd   = (!rowSize) ? height : X265_MIN((blockRow * rowSize + rowSize) >> vShift, height);
+        int       blockNumY   = (!rowSize) ? 0 : blkRowStart / blockSizeY;
 
-        for (int y = rowStart;
-            y + blockSizeY <= rowEnd;
+        for (int y = blkRowStart;
+            y + blockSizeY <= blkRowEnd;
             y += blockSizeY, blockNumY++)
         {
             for (int x = 0, blockNumX = 0;
@@ -549,7 +547,6 @@ void TemporalFilter::applyMotion(MV *mvs, uint32_t mvsStride, PicYuv *input, Pic
     int csx = 0, csy = 0;
     for (int c = 0; c < m_numComponents; c++)
     {
-        const pixel maxValue = (1 << X265_DEPTH) - 1;
 
         const pixel* pSrcImage = input->m_picOrg[c];
         pixel* pDstImage = output->m_picOrg[c];
@@ -572,18 +569,12 @@ void TemporalFilter::applyMotion(MV *mvs, uint32_t mvsStride, PicYuv *input, Pic
         const int width = input->m_picWidth >> csx;
 
         const int vShift = (!c) ? 0 : csy;
-        const int blkRowStart = (blockRow * rowSize) >> vShift;
-        const int blkRowEnd = X265_MIN((blockRow * rowSize + rowSize) >> vShift, height);
-
-        const int rowStart = (!rowSize) ? 0 : blkRowStart;
-        const int rowEnd = (!rowSize) ? height : blkRowEnd;
-        int blockNumY = (!rowSize) ? 0 : blkRowStart / blockSizeY;
 
         mcstfPrim.applyMotion(pSrcImage, srcStride, pDstImage, dstStride, width, height, blockSizeX, blockSizeY, mvsStride, mvs, csx, csy, blockRow, rowSize, vShift);
     }
 }
 
-void TemporalFilter::bilateralFilter_core(Frame* frame, TemporalFilterRefPicInfo* m_mcstfRefList, int numRefs, int blockRow, int rowSize, double overallStrength)
+void TemporalFilter::bilateralFilterCore(Frame* frame, TemporalFilterRefPicInfo* m_mcstfRefList, int numRefs, int blockRow, int rowSize, double overallStrength)
 {
 
     int refStrengthRow = 0;
@@ -614,8 +605,8 @@ void TemporalFilter::bilateralFilter_core(Frame* frame, TemporalFilterRefPicInfo
         const int blkSize = (!c) ? 8 : 4;
 
         const int vShift = (!c) ? 0 : csy;
-        const int planeRowStart = (blockRow * rowSize) >> vShift;
-        const int planeRowEnd = X265_MIN((blockRow * rowSize + rowSize) >> vShift, height);
+        const int planeRowStart = (!rowSize) ? 0 : (blockRow * rowSize) >> vShift;
+        const int planeRowEnd =  (!rowSize) ? height : X265_MIN((blockRow * rowSize + rowSize) >> vShift, height);
         const int blkRowStart = (planeRowStart / blkSize) * blkSize;
         const int blkRowEnd = X265_MIN(((planeRowEnd + blkSize - 1) / blkSize) * blkSize, height);
 
@@ -626,7 +617,7 @@ void TemporalFilter::bilateralFilter_core(Frame* frame, TemporalFilterRefPicInfo
                 const pixel* srcPel = srcPelPlane + by * srcStride + bx;
 
                 // Step 1: noise computation via SIMD primitive
-                double minError = 9999999;
+                double minError = INT64_MAX;
                 for (int i = 0; i < numRefs; i++)
                 {
                     TemporalFilterRefPicInfo* refPicInfo = &m_mcstfRefList[i];
@@ -698,7 +689,7 @@ void TemporalFilter::bilateralFilter(Frame* curFrame, TemporalFilterRefPicInfo* 
 
     if (!pool)
     {
-        bilateralFilter_core(curFrame, mctfRefList, numRef, 0, 0, overallStrength);
+        bilateralFilterCore(curFrame, mctfRefList, numRef, 0, 0, overallStrength);
         return;
     }
 
@@ -832,7 +823,7 @@ void MotionEstimatorTLD::motionEstimationLumaDoubleRes(MotionEstimatorTLD& m_met
     const int origHeight = orig->m_picHeight;
     int rowStart         = row * rowSize;
 
-    if (row * rowSize > origHeight)
+    if (rowStart > origHeight)
         return;   // row beyond frame edge — nothing to do
 
     int rowEnd = (!rowSize) ? origHeight : X265_MIN(rowStart + rowSize, origHeight);

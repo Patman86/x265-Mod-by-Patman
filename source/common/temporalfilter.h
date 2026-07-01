@@ -225,7 +225,7 @@ namespace X265_NS {
                             double                    overallStrength,
                             ThreadPool*               pool);
 
-        void bilateralFilter_core(Frame*                    frame,
+        void bilateralFilterCore(Frame*                    frame,
                                 TemporalFilterRefPicInfo* mctfRefList,
                                 int                       numRef,
                                 int                       blockRow,
@@ -286,7 +286,7 @@ namespace X265_NS {
             m_jobTotal = m_jobAcquired = 0;
         }
 
-        void processTasks(int /*workerThreadID*/) override
+        void processTasks(int /*workerThreadID*/)
         {
             m_lock.acquire();
             while (m_jobAcquired < m_jobTotal)
@@ -295,7 +295,7 @@ namespace X265_NS {
                 m_lock.release();
 
                 const FilterJob& j = m_jobs[i];
-                m_filter.bilateralFilter_core(j.frame, j.mctfRefList, j.numRef,
+                m_filter.bilateralFilterCore(j.frame, j.mctfRefList, j.numRef,
                                             j.blockRow, j.rowSize,
                                             j.overallStrength);
                 m_lock.acquire();

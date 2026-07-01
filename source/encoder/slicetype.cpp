@@ -2160,7 +2160,7 @@ void Lookahead::slicetypeDecide()
         Frame* frameEnc = m_inputQueue.first();
         for (int b = 0; b < m_inputQueue.size(); b++)
         {
-            if (m_param->bEnableTemporalFilter && isFilterThisframe(frameEnc->m_mcstf->m_sliceTypeConfig, frameEnc->m_lowres.sliceType))
+            if (isFilterThisframe(frameEnc->m_mcstf->m_sliceTypeConfig, frameEnc->m_lowres.sliceType))
             {
                 if (!generatemcstf(frameEnc, m_origPicBuf->m_mcstfPicList, m_inputQueue.last()->m_poc))
                 {
@@ -4122,17 +4122,17 @@ void CostEstimateGroup::processTasks(int workerThreadID)
 
                 m_metld.m_bitDepth = curFrame->m_param->internalBitDepth;
                 TemporalFilterRefPicInfo* ref = &curFrame->m_mcstfRefList[e.p0];
-
+                int rowSize = 16;
                 if (e.MElevel == 0)
-                    m_metld.motionEstimationLuma(m_metld, ref->mvs0, ref->mvsStride0, curFrame->m_lowres.lowerResPlane[0], (int)(curFrame->m_lowres.lumaStride / 2), (curFrame->m_lowres.lines / 2), (curFrame->m_lowres.width / 2), ref->lowerRes, 16, curFrame->m_param->searchRangeForLayer2, e.blockRow, 16);
+                    m_metld.motionEstimationLuma(m_metld, ref->mvs0, ref->mvsStride0, curFrame->m_lowres.lowerResPlane[0], (int)(curFrame->m_lowres.lumaStride / 2), (curFrame->m_lowres.lines / 2), (curFrame->m_lowres.width / 2), ref->lowerRes, 16, curFrame->m_param->searchRangeForLayer2, e.blockRow, rowSize);
                 else if (e.MElevel == 1)
-                    m_metld.motionEstimationLuma(m_metld, ref->mvs1, ref->mvsStride1, curFrame->m_lowres.lowresPlane[0], (int)(curFrame->m_lowres.lumaStride), (curFrame->m_lowres.lines), (curFrame->m_lowres.width), ref->lowres, 16, curFrame->m_param->searchRangeForLayer1, e.blockRow, 16, ref->mvs0, ref->mvsStride0, 2);
+                    m_metld.motionEstimationLuma(m_metld, ref->mvs1, ref->mvsStride1, curFrame->m_lowres.lowresPlane[0], (int)(curFrame->m_lowres.lumaStride), (curFrame->m_lowres.lines), (curFrame->m_lowres.width), ref->lowres, 16, curFrame->m_param->searchRangeForLayer1, e.blockRow, rowSize, ref->mvs0, ref->mvsStride0, 2);
                 else if (e.MElevel == 2)
-                    m_metld.motionEstimationLuma(m_metld, ref->mvs2, ref->mvsStride2, curFrame->m_fencPic->m_picOrg[0], (int)curFrame->m_fencPic->m_stride, curFrame->m_fencPic->m_picHeight, curFrame->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, curFrame->m_param->searchRangeForLayer0, e.blockRow, 16, ref->mvs1, ref->mvsStride1, 2);
+                    m_metld.motionEstimationLuma(m_metld, ref->mvs2, ref->mvsStride2, curFrame->m_fencPic->m_picOrg[0], (int)curFrame->m_fencPic->m_stride, curFrame->m_fencPic->m_picHeight, curFrame->m_fencPic->m_picWidth, ref->picBuffer->m_picOrg[0], 16, curFrame->m_param->searchRangeForLayer0, e.blockRow, rowSize, ref->mvs1, ref->mvsStride1, 2);
                 else if (e.MElevel == 3)
                 {
-                    m_metld.motionEstimationLumaDoubleRes(m_metld, ref->mvs, ref->mvsStride, curFrame->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error, e.blockRow, 16);
-                    if (e.blockRow == (int)(curFrame->m_fencPic->m_picHeight - 15)/16 - 1)
+                    m_metld.motionEstimationLumaDoubleRes(m_metld, ref->mvs, ref->mvsStride, curFrame->m_fencPic, ref->picBuffer, 8, ref->mvs2, ref->mvsStride2, 1, ref->error, e.blockRow, rowSize);
+                    if (e.blockRow == (int)(curFrame->m_fencPic->m_picHeight + (rowSize - 1))/rowSize - 1)
                         curFrame->m_lowres.lowresMcstfMvs[0][e.p0][0].x = 1;
                 }
             }

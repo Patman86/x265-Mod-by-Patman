@@ -1960,6 +1960,11 @@ int x265_check_params(x265_param* param)
             }
         }
     }
+    if (param->mcstfFrameRange > 8)
+    {
+        param->mcstfFrameRange = 8;
+        x265_log(param, X265_LOG_WARNING, "MCSTF reference range should not exceed 8. Setting MCSTF reference range to 8\n");
+    }
     if (param->bEnableHME)
     {
         for (int level = 0; level < 3; level++)

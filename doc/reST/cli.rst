@@ -1368,6 +1368,14 @@ Temporal / motion search options
 
 	Note : MCSTF should be enabled only with frame threads 1
 
+.. option:: --mcstf-ref-range
+
+	Number of reference frames to consider on each side (past and future) of the
+	current frame during Motion-compensated spatio-temporal filtering. A higher value
+	includes more temporal neighbors for filtering, which can improve noise reduction
+	at the cost of increased memory usage and processing time. The valid range is 1 to 4.
+	Default: 2
+
 Spatial/intra options
 =====================
 
