@@ -418,10 +418,6 @@ void x265_param_default(x265_param* param)
 
     /* MCSTF */
     param->bEnableTemporalFilter = 0;
-    param->temporalFilterStrength = 0.95;
-    param->searchRangeForLayer0 = 3;
-    param->searchRangeForLayer1 = 3;
-    param->searchRangeForLayer2 = 3;
 
     /* Threaded ME */
     param->tmeTaskBlockSize = 1;
@@ -1960,10 +1956,10 @@ int x265_check_params(x265_param* param)
             }
         }
     }
-    if (param->mcstfFrameRange > 8)
+    if (param->mcstfFrameRange > 4)
     {
-        param->mcstfFrameRange = 8;
-        x265_log(param, X265_LOG_WARNING, "MCSTF reference range should not exceed 8. Setting MCSTF reference range to 8\n");
+        param->mcstfFrameRange = 4;
+        x265_log(param, X265_LOG_WARNING, "MCSTF reference range should not exceed 4. Setting MCSTF reference range to 4\n");
     }
     if (param->bEnableHME)
     {
@@ -3036,10 +3032,6 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     }
     dst->bField = src->bField;
     dst->bEnableTemporalFilter = src->bEnableTemporalFilter;
-    dst->temporalFilterStrength = src->temporalFilterStrength;
-    dst->searchRangeForLayer0 = src->searchRangeForLayer0;
-    dst->searchRangeForLayer1 = src->searchRangeForLayer1;
-    dst->searchRangeForLayer2 = src->searchRangeForLayer2;
     dst->confWinRightOffset = src->confWinRightOffset;
     dst->confWinBottomOffset = src->confWinBottomOffset;
     dst->bliveVBV2pass = src->bliveVBV2pass;

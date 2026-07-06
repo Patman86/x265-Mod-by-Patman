@@ -31,6 +31,7 @@
 #include "yuv.h"
 #include "motion.h"
 #include "threadpool.h"
+#include <float.h>
 
 const int s_interpolationFilter[16][8] =
 {
@@ -119,24 +120,26 @@ namespace X265_NS {
             me.init(X265_CSP_I400);
             me.setQP(X265_LOOKAHEAD_QP);
             predPUYuv.create(FENC_STRIDE, X265_CSP_I400);
-            m_useSADinME = 0;
             m_motionVectorFactor = 16;
+            m_searchRange = 3;
+            m_blockSize = 16;
         }
 
         Yuv  predPUYuv;
-        int m_useSADinME;
         int m_motionVectorFactor;
         int32_t  m_bitDepth;
+        int m_searchRange;
+        int m_blockSize;
 
         void init(const x265_param* param);
 
-        void motionEstimationLuma(MotionEstimatorTLD& m_tld, MV* mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, pixel* buf, int bs, int sRange, int row, int rowSize,
+        void motionEstimationLuma(MV* mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, pixel* buf, int row, const int rowSize,
             MV* previous = 0, uint32_t prevmvStride = 0, int factor = 1);
 
-        void motionEstimationLumaDoubleRes(MotionEstimatorTLD& m_tld, MV* mvs, uint32_t mvStride, PicYuv* orig, PicYuv* buffer, int blockSize,
-            MV* previous, uint32_t prevMvStride, int factor, int* minError, int row, int rowSize);
+        void motionEstimationLumaDoubleRes(MV* mvs, uint32_t mvStride, PicYuv* orig, PicYuv* buffer,
+            MV* previous, uint32_t prevMvStride, int factor, int* minError, int row, const int rowSize);
 
-        int motionErrorLumaSSD(MotionEstimatorTLD& m_tld, pixel* src,
+        int motionErrorLumaSSD(pixel* src,
             int stride,
             pixel* buf,
             int x,
@@ -209,20 +212,19 @@ namespace X265_NS {
         uint8_t m_sliceTypeConfig;
 
         MotionEstimatorTLD* m_metld;
+        double m_overallStrength;
 
         int createRefPicInfo(TemporalFilterRefPicInfo* refFrame, x265_param* param);
 
         void bilateralFilter(Frame*                    frame,
                             TemporalFilterRefPicInfo* mcstfRefList,
-                            double                    overallStrength,
                             ThreadPool*               pool);
 
         void bilateralFilterCore(Frame*                    frame,
                                 TemporalFilterRefPicInfo* mcstfRefList,
                                 int                       numRef,
                                 int                       blockRow,
-                                int                       blockSize,
-                                double                    overallStrength);
+                                int                       blockSize);
 
         void destroyRefPicInfo(TemporalFilterRefPicInfo* curFrame);
 
@@ -243,7 +245,6 @@ namespace X265_NS {
             int                       numRef;
             int                       blockRow;
             int                       rowSize;
-            double                    overallStrength;
         };
 
         static const int MAX_FILTER_JOBS = 512;
@@ -256,7 +257,7 @@ namespace X265_NS {
             : m_filter(f), m_pool(pool), m_jobTotal(0), m_jobAcquired(0) {}
 
         void add(Frame* frame, TemporalFilterRefPicInfo* mcstfRefList,
-                int numRef, int blockRow, int rowSize, double strength)
+                int numRef, int blockRow, int rowSize)
         {
             X265_CHECK(m_jobTotal < MAX_FILTER_JOBS,
                     "BilateralFilterGroup overflow\n");
@@ -266,7 +267,6 @@ namespace X265_NS {
             j.numRef        = numRef;
             j.blockRow      = blockRow;
             j.rowSize       = rowSize;
-            j.overallStrength = strength;
         }
 
         void finishBatch()
@@ -288,8 +288,7 @@ namespace X265_NS {
 
                 const FilterJob& j = m_jobs[i];
                 m_filter.bilateralFilterCore(j.frame, j.mcstfRefList, j.numRef,
-                                            j.blockRow, j.rowSize,
-                                            j.overallStrength);
+                                            j.blockRow, j.rowSize);
                 m_lock.acquire();
             }
             m_lock.release();

@@ -200,11 +200,6 @@ bool Lowres::create(x265_param* param, PicYuv *origPic, uint32_t qgSize)
         }
     }
 
-    for (int i = 0; i < 4; i++)
-    {
-        CHECKED_MALLOC(lowresMcstfMvs[0][i], MV, cuCount);
-    }
-
     for (int i = 0; i < bframes + 2; i++)
     {
         CHECKED_MALLOC(lowresMvs[0][i], MV, cuCount);
@@ -293,10 +288,6 @@ void Lowres::destroy(x265_param* param)
         }
     }
 
-    for (int i = 0; i < 4; i++)
-    {
-        X265_FREE(lowresMcstfMvs[0][i]);
-    }
     X265_FREE(qpAqOffset);
     X265_FREE(invQscaleFactor);
     X265_FREE(qpCuTreeOffset);
@@ -372,11 +363,6 @@ void Lowres::init(PicYuv* origPic, int poc, bool bEnableTemporalFilter)
     {
         lowresMvs[0][i][0].x = 0x7FFF;
         lowresMvs[1][i][0].x = 0x7FFF;
-    }
-
-    for (int i = 0; i < 4; i++)
-    {
-        lowresMcstfMvs[0][i][0].x = 0x7FFF;
     }
 
     for (int i = 0; i < bframes + 2; i++)
