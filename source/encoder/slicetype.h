@@ -183,6 +183,7 @@ public:
     bool          m_outputSignalRequired;
     bool          m_bBatchMotionSearch;
     bool          m_bBatchFrameCosts;
+    bool          m_bMcstfMotionSearch;
     bool          m_filled;
     bool          m_isSceneTransition;
     int           m_numPools;

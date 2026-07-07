@@ -1024,6 +1024,14 @@ Lookahead::Lookahead(x265_param *param, ThreadPool* pool)
      * of work */
     m_bBatchFrameCosts = m_bBatchMotionSearch;
 
+    /* MCSTF motion search is independent of --b-adapt: it reuses the batched
+     * CostEstimateGroup plumbing but is functionally decoupled from the frame
+     * cost DP. finishBatch() runs serially on the lookahead thread when no pool
+     * is present, so this needs neither a pool nor trellis b-adapt. Unlike
+     * m_bBatchMotionSearch it must NOT self-disable on small pools (MCSTF has no
+     * lazy fallback), so keep it a simple enable flag. */
+    m_bMcstfMotionSearch = m_param->bEnableTemporalFilter;
+
     if (m_param->lookaheadSlices && !m_pool)
     {
         x265_log(param, X265_LOG_WARNING, "No pools found; disabling lookahead-slices\n");
@@ -2154,7 +2162,7 @@ void Lookahead::slicetypeDecide()
         }
     }
 
-    if (m_bBatchMotionSearch && m_param->bEnableTemporalFilter)
+    if (m_bMcstfMotionSearch)
     {
         m_inputLock.acquire();
         Frame* frameEnc = m_inputQueue.first();
@@ -2197,9 +2205,6 @@ void Lookahead::slicetypeDecide()
             frameEnc = frameEnc->m_next;
         }
         m_inputLock.release();
-
-        /* auto-disable after the first batch if pool is small */
-        m_bBatchMotionSearch &= m_pool->m_numWorkers >= 4;
     }
 
     if (m_param->bEnableTemporalSubLayers > 2)
