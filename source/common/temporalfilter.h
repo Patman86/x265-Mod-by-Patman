@@ -65,9 +65,9 @@ namespace X265_NS {
 
     /* MCSTF runtime SIMD dispatch
      * Function-pointer table for MCSTF SIMD kernels. Defaults are scalar
-     * implementations defined in temporalfilter.cpp; setupMCSTFPrimitives_x86
-     * (in common/x86/temporalfilter_simd.cpp) overrides them with SSE4.1/AVX2
-     * variants when the runtime CPU supports the required ISA.*/
+     * implementations defined in temporalfilter.cpp; setupIntrinsicMCSTF_avx2
+     * (in common/vec/temporalfilter-avx2.cpp) overrides them with AVX2 variants,
+     * called from setupIntrinsicPrimitives() when the runtime CPU supports it.*/
 
     struct MCSTFPrimitives
     {
@@ -88,6 +88,11 @@ namespace X265_NS {
     extern MCSTFPrimitives mcstfPrim;
 
     void setupMCSTFPrimitives_scalar(MCSTFPrimitives& p);
+#if X265_ARCH_X86
+    /* defined in common/vec/temporalfilter-avx2.cpp; exposed here so the test
+     * bench can exercise it directly without going through the global mcstfPrim */
+    void setupIntrinsicMCSTF_avx2(MCSTFPrimitives& p);
+#endif
 
     class OrigPicBuffer
     {

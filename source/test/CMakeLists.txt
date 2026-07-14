@@ -53,7 +53,8 @@ add_executable(TestBench ${NASM_SRC}
     pixelharness.cpp pixelharness.h
     mbdstharness.cpp mbdstharness.h
     ipfilterharness.cpp ipfilterharness.h
-    intrapredharness.cpp intrapredharness.h)
+    intrapredharness.cpp intrapredharness.h
+    mcstfharness.cpp mcstfharness.h)
 
 target_link_libraries(TestBench x265-static ${PLATFORM_LIBS})
 if(LINKER_OPTIONS)

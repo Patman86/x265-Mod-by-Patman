@@ -31,6 +31,7 @@
 #include "mbdstharness.h"
 #include "ipfilterharness.h"
 #include "intrapredharness.h"
+#include "mcstfharness.h"
 #include "param.h"
 #include "cpu.h"
 
@@ -131,7 +132,7 @@ void do_help()
     printf("usage: TestBench [--cpuid CPU] [--testbench BENCH] [--nobench] [--help]\n\n");
     printf("       CPU is comma separated SIMD architecture list, for example: SSE4,AVX\n");
     printf("       Use `--cpuid list` to print a list of detected SIMD architectures\n\n");
-    printf("       BENCH is one of (pixel,transforms,interp,intrapred)\n\n");
+    printf("       BENCH is one of (pixel,transforms,interp,intrapred,mcstf)\n\n");
     printf("       `--nobench` disables running benchmarks, only run correctness tests\n\n");
     printf("By default, the test bench will test all benches on detected CPU architectures\n");
     printf("Options and testbench name may be truncated.\n");
@@ -141,6 +142,7 @@ PixelHarness  HPixel;
 MBDstHarness  HMBDist;
 IPFilterHarness HIPFilter;
 IntraPredHarness HIPred;
+MCSTFHarness  HMCSTF;
 
 int main(int argc, char *argv[])
 {
@@ -269,6 +271,30 @@ int main(int argc, char *argv[])
         }
     }
 
+#if X265_ARCH_X86
+    /* MCSTFPrimitives is a standalone table with a single SIMD tier (AVX2), so
+     * it is tested once against the effective (possibly --cpuid restricted)
+     * cpuid rather than through the per-arch EncoderPrimitives loop above. */
+    if (!testname || !strncmp(testname, HMCSTF.getName(), strlen(testname)))
+    {
+        MCSTFPrimitives mcstfCRef;
+        memset(&mcstfCRef, 0, sizeof(mcstfCRef));
+        setupMCSTFPrimitives_scalar(mcstfCRef);
+
+        MCSTFPrimitives mcstfOpt;
+        memset(&mcstfOpt, 0, sizeof(mcstfOpt));
+        if (cpuid & X265_CPU_AVX2)
+            setupIntrinsicMCSTF_avx2(mcstfOpt);
+
+        if (!HMCSTF.testCorrectness(mcstfCRef, mcstfOpt))
+        {
+            fflush(stdout);
+            fprintf(stderr, "\nx265: mcstf primitive has failed. Go and fix that Right Now!\n");
+            return -1;
+        }
+    }
+#endif
+
     /******************* Cycle count for all primitives **********************/
     if (run_benchmarks)
     {
@@ -298,6 +324,23 @@ int main(int argc, char *argv[])
             printf("== %s primitives ==\n", harness[h]->getName());
             harness[h]->measureSpeed(cprim, optprim);
         }
+
+#if X265_ARCH_X86
+        if (!testname || !strncmp(testname, HMCSTF.getName(), strlen(testname)))
+        {
+            MCSTFPrimitives mcstfCRef;
+            memset(&mcstfCRef, 0, sizeof(mcstfCRef));
+            setupMCSTFPrimitives_scalar(mcstfCRef);
+
+            MCSTFPrimitives mcstfOpt;
+            memset(&mcstfOpt, 0, sizeof(mcstfOpt));
+            if (cpuid & X265_CPU_AVX2)
+                setupIntrinsicMCSTF_avx2(mcstfOpt);
+
+            printf("== %s primitives ==\n", HMCSTF.getName());
+            HMCSTF.measureSpeed(mcstfCRef, mcstfOpt);
+        }
+#endif
 
         printf("\n");
     }
