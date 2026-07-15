@@ -23,6 +23,7 @@
 
 #include "common.h"
 #include "primitives.h"
+#include <stdio.h>
 
 namespace X265_NS {
 // x265 private namespace
@@ -210,41 +211,54 @@ void setupAliasPrimitives(EncoderPrimitives &p)
     p.chroma[X265_CSP_I422].cu[BLOCK_422_2x4].sse_pp = NULL;
 }
 
+static void x265_build_simd_string(x265_param* param, char* buf, size_t bufSize)
+{
+    int cpuid = param->cpuid;
+
+    char *p = buf + snprintf(buf, bufSize, "using cpu capabilities:");
+    char *none = p;
+    for (int i = 0; X265_NS::cpu_names[i].flags; i++)
+    {
+        if (!strcmp(X265_NS::cpu_names[i].name, "SSE")
+            && (cpuid & X265_CPU_SSE2))
+            continue;
+        if (!strcmp(X265_NS::cpu_names[i].name, "SSE2")
+            && (cpuid & (X265_CPU_SSE2_IS_FAST | X265_CPU_SSE2_IS_SLOW)))
+            continue;
+        if (!strcmp(X265_NS::cpu_names[i].name, "SSE3")
+            && (cpuid & X265_CPU_SSSE3 || !(cpuid & X265_CPU_CACHELINE_64)))
+            continue;
+        if (!strcmp(X265_NS::cpu_names[i].name, "SSE4.1")
+            && (cpuid & X265_CPU_SSE42))
+            continue;
+        if (!strcmp(X265_NS::cpu_names[i].name, "BMI1")
+            && (cpuid & X265_CPU_BMI2))
+            continue;
+        if ((cpuid & X265_NS::cpu_names[i].flags) == X265_NS::cpu_names[i].flags
+            && (!i || X265_NS::cpu_names[i].flags != X265_NS::cpu_names[i - 1].flags))
+            p += snprintf(p, bufSize - (p - buf), " %s", X265_NS::cpu_names[i].name);
+    }
+
+    if (p == none)
+        snprintf(p, bufSize - (p - buf), " none!");
+}
+
 void x265_report_simd(x265_param* param)
 {
     if (param->logLevel >= X265_LOG_INFO)
     {
-        int cpuid = param->cpuid;
-
         char buf[1000];
-        char *p = buf + snprintf(buf, sizeof(buf), "using cpu capabilities:");
-        char *none = p;
-        for (int i = 0; X265_NS::cpu_names[i].flags; i++)
-        {
-            if (!strcmp(X265_NS::cpu_names[i].name, "SSE")
-                && (cpuid & X265_CPU_SSE2))
-                continue;
-            if (!strcmp(X265_NS::cpu_names[i].name, "SSE2")
-                && (cpuid & (X265_CPU_SSE2_IS_FAST | X265_CPU_SSE2_IS_SLOW)))
-                continue;
-            if (!strcmp(X265_NS::cpu_names[i].name, "SSE3")
-                && (cpuid & X265_CPU_SSSE3 || !(cpuid & X265_CPU_CACHELINE_64)))
-                continue;
-            if (!strcmp(X265_NS::cpu_names[i].name, "SSE4.1")
-                && (cpuid & X265_CPU_SSE42))
-                continue;
-            if (!strcmp(X265_NS::cpu_names[i].name, "BMI1")
-                && (cpuid & X265_CPU_BMI2))
-                continue;
-            if ((cpuid & X265_NS::cpu_names[i].flags) == X265_NS::cpu_names[i].flags
-                && (!i || X265_NS::cpu_names[i].flags != X265_NS::cpu_names[i - 1].flags))
-                p += snprintf(p, sizeof(buf) - (p - buf), " %s", X265_NS::cpu_names[i].name);
-        }
-
-        if (p == none)
-            snprintf(p, sizeof(buf) - (p - buf), " none!");
+        x265_build_simd_string(param, buf, sizeof(buf));
         x265_log(param, X265_LOG_INFO, "%s\n", buf);
     }
+}
+
+void x265_report_simd_stdout(x265_param* param)
+{
+    char buf[1000];
+    x265_build_simd_string(param, buf, sizeof(buf));
+    fprintf(stdout, "x265 [info]: %s\n", buf);
+    fflush(stdout);
 }
 
 void x265_setup_primitives(x265_param *param)

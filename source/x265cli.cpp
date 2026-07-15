@@ -44,6 +44,12 @@ namespace X265_NS {
         x265_log(param, X265_LOG_INFO, "build info %s\n", api->build_info_str);
     }
 
+    static void printVersionStdout(const x265_api* api)
+    {
+        fprintf(stdout, "x265 [info]: HEVC encoder version %s [Mod by Patman]\n", api->version_str);
+        fprintf(stdout, "x265 [info]: build info %s\n", api->build_info_str);
+    }
+
     static void showHelp(x265_param *param)
     {
         int level = param->logLevel;
@@ -912,9 +918,12 @@ namespace X265_NS {
                 break;
 
             case 'V':
-                printVersion(param, api);
-                x265_report_simd(param);
+            {
+                printVersionStdout(api);
+                x265_report_simd_stdout(param);
+                fflush(stdout);
                 exit(0);
+            }
 
             default:
                 if (long_options_index < 0 && c > 0)
