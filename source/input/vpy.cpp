@@ -238,10 +238,6 @@ void VPYInput::load_vs()
         return;
     }
 
-    /* WICHTIG:
-       Bibliothek hier NICHT schließen.
-       vssapi/getVSScriptAPI/getVSScriptAPILastError/vsapi bleiben in Benutzung
-       bis release(). */
 }
 
 int VPYInput::clampParallelRequests(int requested, int numThreads, int totalFrames) const
