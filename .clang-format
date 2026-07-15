@@ -1,0 +1,15 @@
+# x265 C/C++ formatting rules.
+#
+# These options mirror exactly the configuration enforced by the "Code Quality"
+# job in .github/workflows/ci.yml, so running clang-format locally produces the
+# same result CI checks against. They are also consistent with the long-standing
+# house style captured in doc/uncrustify/codingstyle.cfg (Allman braces,
+# 4-space indent, no tabs).
+#
+# Note: CI only checks lines changed by a pull request, not whole files. Please
+# do not reformat unrelated code; keep diffs limited to the lines you touch.
+BasedOnStyle: LLVM
+IndentWidth: 4
+UseTab: Never
+ColumnLimit: 120
+BreakBeforeBraces: Allman

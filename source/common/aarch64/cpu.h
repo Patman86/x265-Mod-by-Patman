@@ -43,9 +43,9 @@ static inline bool have_feature(const char *feature)
     return feature_present;
 }
 
-static inline int aarch64_get_cpu_flags()
+static inline uint32_t aarch64_get_cpu_flags()
 {
-    int flags = 0;
+    uint32_t flags = 0;
 
 #if HAVE_NEON
     flags |= X265_CPU_NEON;
@@ -66,9 +66,9 @@ static inline int aarch64_get_cpu_flags()
 
 #include <windows.h>
 
-static inline int aarch64_get_cpu_flags()
+static inline uint32_t aarch64_get_cpu_flags()
 {
-    int flags = 0;
+    uint32_t flags = 0;
 // IsProcessorFeaturePresent() parameter documentation:
 // https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-isprocessorfeaturepresent#parameters
 #if HAVE_NEON
@@ -137,9 +137,9 @@ static inline int aarch64_get_cpu_flags()
 #define X265_AARCH64_HWCAP2_SVEBITPERM (1 << 4)
 #define X265_AARCH64_HWCAP2_I8MM (1 << 13)
 
-static inline int aarch64_get_cpu_flags()
+static inline uint32_t aarch64_get_cpu_flags()
 {
-    int flags = 0;
+    uint32_t flags = 0;
 
 #if HAVE_NEON_DOTPROD || HAVE_SVE
     unsigned long hwcap = x265_getauxval(AT_HWCAP);
@@ -177,9 +177,9 @@ static inline int aarch64_get_cpu_flags()
     "-DAARCH64_RUNTIME_CPU_DETECT=OFF."
 #endif // defined(__APPLE__)
 
-static inline int aarch64_cpu_detect()
+static inline uint32_t aarch64_cpu_detect()
 {
-    int flags = aarch64_get_cpu_flags();
+    uint32_t flags = aarch64_get_cpu_flags();
 
     // Restrict flags: FEAT_I8MM assumes that FEAT_DotProd is available.
     if (!(flags & X265_CPU_NEON_DOTPROD)) flags &= ~X265_CPU_NEON_I8MM;
@@ -199,9 +199,9 @@ static inline int aarch64_cpu_detect()
 
 #else // if AARCH64_RUNTIME_CPU_DETECT
 
-static inline int aarch64_cpu_detect()
+static inline uint32_t aarch64_cpu_detect()
 {
-    int flags = 0;
+    uint32_t flags = 0;
 
 #if HAVE_NEON
     flags |= X265_CPU_NEON;

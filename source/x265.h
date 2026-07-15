@@ -566,6 +566,10 @@ typedef enum
 #define X265_CPU_RVV             (1 << 0)   /* RISCV vector */
 #define X265_CPU_ZBB             (1 << 1)   /* RISCV zbb */
 
+/* LOONGARCH */
+#define X265_CPU_LSX             0x0000001
+#define X265_CPU_LASX            0x0000002
+
 /* IBM Power8 */
 #define X265_CPU_ALTIVEC         0x0000001
 

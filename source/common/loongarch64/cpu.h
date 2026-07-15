@@ -1,7 +1,7 @@
 /*****************************************************************************
- * Copyright (C) 2025 MulticoreWare, Inc
+ * Copyright (C) 2026 MulticoreWare, Inc
  *
- * Authors: Changsheng Wu <wu.changsheng@sanechips.com.cn>
+ * Authors: PengXu <pengxu@loongson.cn>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,85 +21,68 @@
  * For more information, contact us at license @ x265.com.
  *****************************************************************************/
 
-#ifndef X265_COMMON_RISCV64_CPU_H
-#define X265_COMMON_RISCV64_CPU_H
+#ifndef X265_COMMON_LOONGARCH64_CPU_H
+#define X265_COMMON_LOONGARCH64_CPU_H
 
 #include "x265.h"
 
-#if RISCV64_RUNTIME_CPU_DETECT
+#if LOONGARCH64_RUNTIME_CPU_DETECT
 
-#if HAVE_GETAUXVAL || HAVE_ELF_AUX_INFO
+#if HAVE_GETAUXVAL
 
 #include <sys/auxv.h>
 
-#define HWCAP_RISCV64_RVV     (1 << ('V' - 'A'))
+#define LA_HWCAP_LSX    ( 1U << 4 )
+#define LA_HWCAP_LASX   ( 1U << 5 )
 
-#ifdef __linux__
-static int parse_proc_cpuinfo(const char *flag) {
-    FILE *file = fopen("/proc/cpuinfo", "r");
-    if (file == NULL)
-        return 0;
-
-    char line[1024];
-    int found = 0;
-
-    while (fgets(line, sizeof(line), file)) {
-        if (strstr(line, flag) != NULL) {
-            found = 1;
-            break;
-        }
-    }
-
-    fclose(file);
-    return found;
-}
-#endif
-
-static inline uint32_t riscv64_get_cpu_flags()
+static inline uint32_t loongarch64_get_cpu_flags()
 {
     uint32_t flags = 0;
-
+#if HAVE_LSX || HAVE_LSX
     unsigned long hwcap = x265_getauxval(AT_HWCAP);
-
-    if (hwcap & HWCAP_RISCV64_RVV) {
-        flags |= X265_CPU_RVV;
-
-#ifdef __linux__
-        if (parse_proc_cpuinfo("zbb"))
-            flags |= X265_CPU_ZBB;
 #endif
-    }
+
+#if HAVE_LSX
+    if( hwcap & LA_HWCAP_LSX )
+        flags |= X265_CPU_LSX;
+#endif
+#if HAVE_LASX
+    if( hwcap & LA_HWCAP_LASX )
+        flags |= X265_CPU_LASX;
+#endif
 
     return flags;
 }
 
-#else // HAVE_GETAUXVAL || HAVE_ELF_AUX_INFO
+#else // HAVE_GETAUXVAL
 #error                                                                 \
     "Run-time CPU feature detection selected, but no detection method" \
     "available for your platform. Rerun cmake configure with"          \
-    "-DRISCV64_RUNTIME_CPU_DETECT=OFF."
-#endif // HAVE_GETAUXVAL || HAVE_ELF_AUX_INFO
+    "-DLOONGARCH64_RUNTIME_CPU_DETECT=OFF."
+#endif // HAVE_GETAUXVAL
 
-static inline uint32_t riscv64_cpu_detect()
+static inline uint32_t loongarch64_cpu_detect()
 {
-  uint32_t flags = riscv64_get_cpu_flags();
+    uint32_t flags = loongarch64_get_cpu_flags();
 
-  return flags;
+    return flags;
 }
 
-#else // if RISCV64_RUNTIME_CPU_DETECT
+#else // if LOONGARCH64_RUNTIME_CPU_DETECT
 
-static inline uint32_t riscv64_cpu_detect()
+static inline uint32_t loongarch64_cpu_detect()
 {
     uint32_t flags = 0;
 
-#if HAVE_RVV
-    flags |= X265_CPU_RVV;
-    flags |= X265_CPU_ZBB;
+#if HAVE_LSX
+    flags |= X265_CPU_LSX;
+#endif
+#if HAVE_LASX
+    flags |= X265_CPU_LASX;
 #endif
     return flags;
 }
 
-#endif // if RISCV64_RUNTIME_CPU_DETECT
+#endif // if LOONGARCH64_RUNTIME_CPU_DETECT
 
-#endif // ifndef X265_COMMON_RISCV64_CPU_H
+#endif // ifndef X265_COMMON_LOONGARCH64_CPU_H

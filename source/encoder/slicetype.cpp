@@ -3257,7 +3257,7 @@ bool Lookahead::scenecut(Lowres **frames, int p0, int p1, bool bRealScenecut, in
        analysis detected scenecuts which were later nulled due to scene transitioning, in which 
        case do not return a true scenecut for this frame */
 
-    if (!frames[p1]->bScenecut)
+    if (!frames[p1]->bScenecut && m_param->bframes)
         return false;
 
     return scenecutInternal(frames, p0, p1, bRealScenecut);
@@ -3298,6 +3298,7 @@ bool Lookahead::scenecutInternal(Lowres **frames, int p0, int p1, bool bRealScen
     {
         int imb = frame->intraMbs[p1 - p0];
         int pmb = m_8x8Blocks - imb;
+        frame->bScenecut = res; // for csv log
         x265_log(m_param, X265_LOG_DEBUG, "scene cut at %d Icost:%d Pcost:%d ratio:%.4f bias:%.4f gop:%d (imb:%d pmb:%d)\n",
                  frame->frameNum, icost, pcost, 1. - (double)pcost / icost, bias, gopSize, imb, pmb);
     }

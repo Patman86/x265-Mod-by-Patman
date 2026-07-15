@@ -257,6 +257,17 @@ int ThreadPool::tryBondPeers(int maxPeers, sleepbitmap_t peerBitmap, BondedTaskG
 
     return bondCount;
 }
+/* Computes the number of physical pools to create so that each pool has at
+ * most MAX_POOL_THREADS threads, matching the bit length of the masks used
+ * for thread pool bookkeeping. */
+static int getPhysicalPoolCount(int threads)
+{
+    if (threads <= 0)
+    {
+        return 0;
+    }
+    return (threads + MAX_POOL_THREADS - 1) / MAX_POOL_THREADS;
+}
 
 /* Distributes totalNumThreads between ThreadedME and FrameEncoder pools.
  * Modifies threadsPerPool[], nodeMaskPerPool[], numNumaNodes, and numPools in-place.
@@ -280,7 +291,8 @@ static void distributeThreadsForTme(
     }
 
     int targetTME = ThreadPool::configureTmeThreadCount(p, totalNumThreads);
-    targetTME = (targetTME < 1) ? 1 : targetTME;
+    // TME is always assigned to the first pool, and each pool can have at most MAX_POOL_THREADS threads.
+    targetTME = X265_MIN((targetTME < 1) ? 1 : targetTME, MAX_POOL_THREADS);
 
     threadsFrameEnc = totalNumThreads - targetTME;
     int defaultNumFT = ThreadPool::getFrameThreadsCount(p, totalNumThreads);
@@ -363,11 +375,13 @@ static void distributeThreadsForTme(
         memset(threadsPerPool, 0, sizeof(int) * (numNumaNodes + 2));
         memset(nodeMaskPerPool, 0, sizeof(uint64_t) * (numNumaNodes + 2));
 
-        numPools = numNumaNodes = static_cast<int>(threads.size());
-        for (int pool = 0; pool < numPools; pool++)
+        numPools = 0;
+        numNumaNodes = static_cast<int>(threads.size());
+        for (int pool = 0; pool < numNumaNodes; pool++)
         {
             threadsPerPool[pool] = threads[pool];
             nodeMaskPerPool[pool] = nodeMasks[pool];
+            numPools += getPhysicalPoolCount(threadsPerPool[pool]);
         }
     }
     else
@@ -378,13 +392,15 @@ static void distributeThreadsForTme(
         memset(threadsPerPool, 0, sizeof(int) * (numNumaNodes + 2));
         memset(nodeMaskPerPool, 0, sizeof(uint64_t) * (numNumaNodes + 2));
 
+        numPools = 0;
+
         threadsPerPool[0] = targetTME;
         nodeMaskPerPool[0] = 1;
+        numPools += 1;
 
         threadsPerPool[1] = threadsFrameEnc;
         nodeMaskPerPool[1] = 1;
-
-        numPools = 2;
+        numPools += getPhysicalPoolCount(threadsFrameEnc);
     }
 }
 
@@ -442,7 +458,7 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
     /* limit threads based on param->numaPools
      * For windows because threads can't be allocated to live across sockets
      * changing the default behavior to be per-socket pools -- FIXME */
-#if defined(_WIN32_WINNT) && _WIN32_WINNT >= _WIN32_WINNT_WIN7 || HAVE_LIBNUMA
+#if defined(_WIN32_WINNT) && _WIN32_WINNT >= _WIN32_WINNT_WIN7
     if (!strlen(p->numaPools) || (strcmp(p->numaPools, "NULL") == 0 || strcmp(p->numaPools, "*") == 0 || strcmp(p->numaPools, "") == 0))
     {
          char poolString[50] = "";
@@ -550,7 +566,7 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
             
             if (threadsPerPool[i])
             {
-                numPools += (threadsPerPool[i] + MAX_POOL_THREADS - 1) / MAX_POOL_THREADS;
+                numPools += getPhysicalPoolCount(threadsPerPool[i]);
                 totalNumThreads += threadsPerPool[i];
             }
         }
@@ -591,7 +607,8 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
             
             while (!threadsPerPool[node])
                 node++;
-            int numThreads = threadsPerPool[node];
+            // Consume a block no larger than MAX_POOL_THREADS when creating a physical pool.
+            int numThreads = X265_MIN(threadsPerPool[node], MAX_POOL_THREADS);
             int origNumThreads = numThreads;
 
             if (i == 0 && p->lookaheadThreads > numThreads / 2)
@@ -609,8 +626,9 @@ ThreadPool* ThreadPool::allocThreadPools(x265_param* p, int& numPools, bool isTh
                 numThreads -= p->lookaheadThreads;
 
             if (!p->bThreadedME)
+            {
                 X265_CHECK(numThreads <= MAX_POOL_THREADS, "a single thread pool cannot have more than MAX_POOL_THREADS threads\n");
-
+            }
             if (!pools[i].create(numThreads, maxProviders, nodeMaskPerPool[node]))
             {
                 delete[] pools;

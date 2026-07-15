@@ -108,6 +108,9 @@ struct test_arch_t
 #elif X265_ARCH_RISCV64
     { "RVV", X265_CPU_RVV},
     { "Zbb", X265_CPU_RVV | X265_CPU_ZBB},
+#elif X265_ARCH_LOONGARCH64
+    { "LSX", X265_CPU_LSX },
+    { "LASX", X265_CPU_LASX },
 #endif
     { "", 0 },
 };

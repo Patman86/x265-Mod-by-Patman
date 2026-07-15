@@ -35,7 +35,7 @@ static inline int16x8_t rev16(const int16x8_t a)
     const uint8x16_t tbl = vld1q_u8(rev16_tbl);
     const int8x16_t a_s8 = vreinterpretq_s8_s16(a);
 
-    return vreinterpretq_s16_s8(vqtbx1q_s8(a_s8, a_s8, tbl));
+    return vreinterpretq_s16_s8(vqtbl1q_s8(a_s8, tbl));
 }
 
 static inline int32x4_t rev32(const int32x4_t a)
@@ -43,7 +43,7 @@ static inline int32x4_t rev32(const int32x4_t a)
     const uint8x16_t tbl = vld1q_u8(rev32_tbl);
     const int8x16_t a_s8 = vreinterpretq_s8_s32(a);
 
-    return vreinterpretq_s32_s8(vqtbx1q_s8(a_s8, a_s8, tbl));
+    return vreinterpretq_s32_s8(vqtbl1q_s8(a_s8, tbl));
 }
 
 // x265 private namespace

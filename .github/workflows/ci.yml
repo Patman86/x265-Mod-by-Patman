@@ -1636,7 +1636,7 @@ jobs:
 
   smoke-windows:
     name: "Smoke - Windows (${{ matrix.build }})"
-    runs-on: windows-latest
+    runs-on: windows-2022
     needs: [code-quality]
     if: github.event_name == 'pull_request_target'
     timeout-minutes: 60
@@ -1794,6 +1794,8 @@ jobs:
 
       - name: "Install dependencies"
         run: |
+          choco install nasm -y --no-progress
+          echo "C:\Program Files\NASM" >> $GITHUB_PATH
           python3 -m pip install msal requests psutil setuptools
           echo "[OK] Dependencies installed"
 

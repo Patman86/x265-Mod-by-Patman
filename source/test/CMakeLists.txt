@@ -37,6 +37,17 @@ if(POWER)
     set(NASM_SRC)
 endif(POWER)
 
+# add LoongArch64 assembly files
+if(LOONGARCH64)
+    enable_language(ASM)
+    set(NASM_SRC checkasm-loongarch64.S)
+    add_custom_command(
+        OUTPUT checkasm-loongarch64.obj
+        COMMAND ${CMAKE_CXX_COMPILER}
+        ARGS ${NASM_FLAGS} ${CMAKE_CURRENT_SOURCE_DIR}/checkasm-loongarch64.S -o checkasm-loongarch64.obj
+        DEPENDS checkasm-loongarch64.S)
+endif(LOONGARCH64)
+
 add_executable(TestBench ${NASM_SRC}
     testbench.cpp testharness.h
     pixelharness.cpp pixelharness.h
