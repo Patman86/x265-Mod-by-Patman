@@ -28,7 +28,7 @@
 
 namespace X265_NS {
     // forward declaration - defined in pixel.cpp, no SIMD override for MCSTF path
-    void frame_init_lowres_core_mcstf(const pixel* src0, pixel* dst0, pixel* dsth, pixel* dstv, pixel* dstc,
+    void frameInitLowresCoreMCSTF(const pixel* src0, pixel* dst0, pixel* dsth, pixel* dstv, pixel* dstc,
         intptr_t src_stride, intptr_t dst_stride, int width, int height);
 }
 
@@ -387,7 +387,7 @@ void Lowres::init(PicYuv* origPic, int poc, bool bEnableTemporalFilter)
 
     /* downscale and generate 4 hpel planes for lookahead */
     if (bEnableTemporalFilter)
-        frame_init_lowres_core_mcstf(origPic->m_picOrg[0], lowresPlane[0], lowresPlane[1], lowresPlane[2], lowresPlane[3], origPic->m_stride, lumaStride, width, lines);
+        frameInitLowresCoreMCSTF(origPic->m_picOrg[0], lowresPlane[0], lowresPlane[1], lowresPlane[2], lowresPlane[3], origPic->m_stride, lumaStride, width, lines);
     else
         primitives.frameInitLowres(origPic->m_picOrg[0], lowresPlane[0], lowresPlane[1], lowresPlane[2], lowresPlane[3], origPic->m_stride, lumaStride, width, lines);
 
@@ -400,7 +400,7 @@ void Lowres::init(PicYuv* origPic, int poc, bool bEnableTemporalFilter)
     if (origPic->m_param->bEnableHME || origPic->m_param->bEnableTemporalFilter)
     {
         if (bEnableTemporalFilter)
-            frame_init_lowres_core_mcstf(lowresPlane[0], lowerResPlane[0], lowerResPlane[1], lowerResPlane[2], lowerResPlane[3], lumaStride, lumaStride / 2, (width / 2), (lines / 2));
+            frameInitLowresCoreMCSTF(lowresPlane[0], lowerResPlane[0], lowerResPlane[1], lowerResPlane[2], lowerResPlane[3], lumaStride, lumaStride / 2, (width / 2), (lines / 2));
         else
             primitives.frameInitLowerRes(lowresPlane[0], lowerResPlane[0], lowerResPlane[1], lowerResPlane[2], lowerResPlane[3], lumaStride, lumaStride / 2, (width / 2), (lines / 2));
 

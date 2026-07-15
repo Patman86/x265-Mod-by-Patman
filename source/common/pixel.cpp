@@ -1014,7 +1014,7 @@ namespace X265_NS {
 // x265 private namespace
 
 /* Scalar lowres downscale for MCSTF path - HM-equivalent filter, no SIMD override */
-    void frame_init_lowres_core_mcstf(const pixel* src0, pixel* dst0, pixel* dsth, pixel* dstv, pixel* dstc,
+    void frameInitLowresCoreMCSTF(const pixel* src0, pixel* dst0, pixel* dsth, pixel* dstv, pixel* dstc,
         intptr_t src_stride, intptr_t dst_stride, int width, int height)
     {
         for (int y = 0; y < height; y++)
