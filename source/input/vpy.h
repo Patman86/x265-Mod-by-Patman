@@ -24,24 +24,29 @@
 #ifndef X265_VPY_H
 #define X265_VPY_H
 
-#include <unordered_map>
 #include <atomic>
+#include <map>
 #include <string>
 #include <vector>
-#include <map>
-#include <array>
+#include <cstdlib>
+#include <cstring>
+
 #include <vapoursynth/VSScript4.h>
 #include <vapoursynth/VSHelper4.h>
+
 #include "input.h"
 
 #if _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 using lib_path_t = std::wstring;
 using lib_t = HMODULE;
 using func_t = FARPROC;
 #else
 #include <unistd.h>
-#define Sleep(x) usleep(x)
+#define Sleep(x) usleep((x) * 1000)
 #include <dlfcn.h>
 #define __stdcall
 using lib_path_t = std::string;
@@ -55,89 +60,98 @@ using func_t = void*;
 #include "event.h"
 #endif
 
-#ifdef X86_64
-    #define LOAD_VS_FUNC(name, _) \
-    {\
-        vss_func.name = reinterpret_cast<decltype(vss_func.name)>((void*)vs_address("vsscript_" #name));\
-        if (!vss_func.name) goto fail;\
-    }
-#else
-    #define LOAD_VS_FUNC(name, decorated_name) \
-    {\
-        vss_func.name = reinterpret_cast<decltype(vss_func.name)>((void*)vs_address(decorated_name));\
-        if (!vss_func.name) goto fail;\
-    }
-#endif
-
 namespace X265_NS {
 
 using vss_api = const VSSCRIPTAPI* (VS_CC*)(int version);
+using vss_last_error_func = const char* (VS_CC*)();
 
 class VPYInput : public InputFile
 {
 protected:
+    struct FrameSlot
+    {
+        int frameNumber = -1;
+        bool ready = false;
+        const VSFrame* frame = nullptr;
+        HANDLE event = nullptr;
+    };
 
-    std::unordered_map<int, std::pair<HANDLE, const VSFrame*>> frameMap;
-    int parallelRequests {-1};
-    std::atomic<int> requestedFrames {-1};
-    std::atomic<int> completedFrames {-1};
-    int framesToRequest {-1};
-    std::atomic<bool> isRunning {false};
-    int nextFrame {0};
-    int nodeIndex {0};
-    bool useScriptSar {false};
-    bool vpyFailed {false};
-    char frameError[512];
-    size_t frame_size {0};
-    uint8_t* frame_buffer {nullptr};
-    InputFileInfo _info;
-    lib_t vss_library;
-    #if _WIN32
-        lib_path_t vss_library_path {L"vsscript"};
-        void vs_open() { vss_library = LoadLibraryW(vss_library_path.c_str()); }
-        void vs_close() { FreeLibrary(vss_library); vss_library = nullptr; }
-        func_t vs_address(LPCSTR func) { return GetProcAddress(vss_library, func); }
-    #else
-        #ifdef __MACH__
-            lib_path_t vss_library_path {"libvapoursynth-script.dylib"};
-        #else
-            lib_path_t vss_library_path {"libvapoursynth-script.so"};
-        #endif
-        void vs_open() { vss_library = dlopen(vss_library_path.c_str(), RTLD_GLOBAL | RTLD_LAZY | RTLD_NOW); }
-        void vs_close() { dlclose(vss_library); vss_library = nullptr; }
-        func_t vs_address(const char* func) { return dlsym(vss_library, func); }
-    #endif
-	lib_path_t convertLibraryPath(std::string);
-    void parseVpyOptions(const char* _options);
+    std::vector<FrameSlot> frameSlots;
+    std::atomic<int> requestedFrames{ 0 };
+    std::atomic<int> completedFrames{ 0 };
+    std::atomic<int> pendingFrames{ 0 };
+    std::atomic<bool> isRunning{ false };
+    int framesToRequest{ 0 };
+    int nextFrame{ 0 };
+    int parallelRequests{ -1 };
+    int nodeIndex{ 0 };
+    int asyncFailedFrame{ -1 };
+    bool abortAsync{ false };
+    bool useScriptSar{ false };
+    bool vpyFailed{ false };
+    char frameError[512]{};
+    size_t frameSize{ 0 };
+    uint8_t* frameBuffer{ nullptr };
+    InputFileInfo _info{};
+    lib_t vss_library{ nullptr };
+
+#if _WIN32
+    lib_path_t vss_library_path{ L"vsscript" };
+    void vs_open() { vss_library = LoadLibraryW(vss_library_path.c_str()); }
+    void vs_close() { if (vss_library) { FreeLibrary(vss_library); vss_library = nullptr; } }
+    func_t vs_address(LPCSTR func) { return GetProcAddress(vss_library, func); }
+#else
+#ifdef __MACH__
+    lib_path_t vss_library_path{ "libvsscript.dylib" };
+#else
+    lib_path_t vss_library_path{ "libvsscript.so" };
+#endif
+    void vs_open() { vss_library = dlopen(vss_library_path.c_str(), RTLD_GLOBAL | RTLD_NOW); }
+    void vs_close() { if (vss_library) { dlclose(vss_library); vss_library = nullptr; } }
+    func_t vs_address(const char* func) { return dlsym(vss_library, func); }
+#endif
+
+    lib_path_t convertLibraryPath(const std::string& path);
+    void parseVpyOptions(const char* options);
+    void load_vs();
+    bool tryLoadLibraryPath(const lib_path_t& path);
+    void applyEnvironmentLibraryPath();
+    int clampParallelRequests(int requested, int numThreads, int totalFrames) const;
+    int slotIndex(int frameNumber) const;
+    FrameSlot* getSlot(int frameNumber);
+    void resetSlot(FrameSlot& slot, bool closeEvent = false);
+    bool createSlotEvents();
+    void freeSlotFrames();
+    void releaseSlots();
+    void requestFrame(int n);
     const VSFrame* getAsyncFrame(int n);
+
     const VSAPI* vsapi = nullptr;
-    vss_api getVSScriptAPI;
+    vss_api getVSScriptAPI = nullptr;
+    vss_last_error_func getVSScriptAPILastError = nullptr;
     const VSSCRIPTAPI* vssapi = nullptr;
     VSScript* script = nullptr;
     VSNode* node = nullptr;
     VSCore* core = nullptr;
-	void load_vs();
 
 public:
-
     VPYInput(InputFileInfo& info);
-    ~VPYInput() {};
+    ~VPYInput() {}
+
     void setAsyncFrame(int n, const VSFrame* f, const char* errorMsg);
     void release();
-    bool isEof() const                            { return nextFrame >= _info.frameCount; }
+    bool isEof() const { return nextFrame >= _info.frameCount; }
     bool isFail() { return vpyFailed; }
     void startReader();
     void stopReader();
-    bool readPicture(x265_picture&);
+    bool readPicture(x265_picture& pic);
 
-    const char* getName() const                   { return "vpy"; }
-
-    int getWidth() const                          { return _info.width; }
-
-    int getHeight() const                         { return _info.height; }
-
-    int outputFrame()                             { return nextFrame; }
+    const char* getName() const { return "vpy"; }
+    int getWidth() const { return _info.width; }
+    int getHeight() const { return _info.height; }
+    int outputFrame() { return nextFrame; }
 };
+
 }
 
-#endif // ifndef X265_VPY_H
+#endif // X265_VPY_H
