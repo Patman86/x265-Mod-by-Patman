@@ -39,7 +39,7 @@ namespace X265_NS {
         const pixel* origOrigin, intptr_t origStride,
         const pixel* buffOrigin, intptr_t buffStride,
         int x, int y, int dx, int dy,
-        int bs, int besterror, int bitDepth, int errorMode)
+        int bs, int besterror, int bitDepth)
     {
         const int* xFilter = s_interpolationFilter[dx & 0xF];
         const int* yFilter = s_interpolationFilter[dy & 0xF];
@@ -82,10 +82,7 @@ namespace X265_NS {
                 iSum = iSum < 0 ? 0 : (iSum > maxSampleValue ? maxSampleValue : iSum);
 
                 int diff = iSum - origRow[x + x1];
-                if (errorMode == 0)
-                    error += abs(diff);
-                else
-                    error += diff * diff;
+                error += diff * diff;
             }
             if (error > besterror)
                 return error;
@@ -179,6 +176,49 @@ namespace X265_NS {
         }
     }
 
+    static void lumaBlockAvgVariance_c(
+        const pixel* origin,
+        intptr_t stride,
+        int blockX,
+        int blockY,
+        int blockSize,
+        double* avgOut,
+        double* varianceOut)
+    {
+        const pixel* base = origin + blockY * stride + blockX;
+
+        int64_t totalSum = 0;
+
+        // Pass 1: Compute sum
+        for (int y = 0; y < blockSize; y++)
+        {
+            const pixel* row = base + y * stride;
+
+            for (int x = 0; x < blockSize; x++)
+                totalSum += row[x];
+        }
+
+        const int N = blockSize * blockSize;
+        const double avg = (double)totalSum / N;
+        *avgOut = avg;
+
+        // Pass 2: Compute sum of squared differences
+        double variance = 0.0;
+
+        for (int y = 0; y < blockSize; y++)
+        {
+            const pixel* row = base + y * stride;
+
+            for (int x = 0; x < blockSize; x++)
+            {
+                double diff = (double)row[x] - avg;
+                variance += diff * diff;
+            }
+        }
+
+        *varianceOut = variance;
+    }
+
     static void computeBlockStats_c(
         const pixel* srcPel, intptr_t srcStride,
         const pixel* refPel, intptr_t refStride,
@@ -210,7 +250,7 @@ namespace X265_NS {
         *outDiffsum = diffsum;
     }
 
-    static void bilateralWeightedFilter_c(
+    static void bilateralFilter_c(
         const pixel* srcBlk, intptr_t srcStride,
         int             numRefs,
         const pixel* const* refBlks,
@@ -249,12 +289,13 @@ namespace X265_NS {
     /* Global MCSTF primitives table */
     MCSTFPrimitives mcstfPrim;
 
-    void setupMCTFPrimitives_scalar(MCSTFPrimitives& p)
+    void setupMCSTFPrimitives_scalar(MCSTFPrimitives& p)
     {
         p.motionErrorLumaFrac = motionErrorLumaFrac_c;
         p.applyMotion = applyMotion_c;
+        p.lumaBlockAvgVariance = lumaBlockAvgVariance_c;
         p.computeBlockStats = computeBlockStats_c;
-        p.bilateralWeightedFilter = bilateralWeightedFilter_c;
+        p.bilateralFilter = bilateralFilter_c;
     }
 }/* namespace X265_NS */
 
@@ -420,65 +461,6 @@ fail:
     return 0;
 }
 
-int MotionEstimatorTLD::motionErrorLumaSAD(MotionEstimatorTLD& m_metld,
-    pixel* src,
-    int stride,
-    pixel* buf,
-    int x,
-    int y,
-    int dx,
-    int dy,
-    int bs,
-    int besterror)
-{
-
-    pixel* origOrigin = src;
-    intptr_t origStride = stride;
-    pixel *buffOrigin = buf;
-    intptr_t buffStride = stride;
-    int error = 0;// dx * 10 + dy * 10;
-    if (((dx | dy) & 0xF) == 0)
-    {
-        dx /= m_motionVectorFactor;
-        dy /= m_motionVectorFactor;
-
-        const pixel* bufferRowStart = buffOrigin + (y + dy) * buffStride + (x + dx);
-#if 0
-        const pixel* origRowStart = origOrigin + y *origStride + x;
-
-        for (int y1 = 0; y1 < bs; y1++)
-        {
-            for (int x1 = 0; x1 < bs; x1++)
-            {
-                int diff = origRowStart[x1] - bufferRowStart[x1];
-                error += abs(diff);
-            }
-
-            origRowStart += origStride;
-            bufferRowStart += buffStride;
-        }
-#else
-        int partEnum = partitionFromSizes(bs, bs);
-        /* copy PU block into cache */
-        primitives.pu[partEnum].copy_pp(predPUYuv.m_buf[0], FENC_STRIDE, bufferRowStart, buffStride);
-
-        error = m_metld.me.bufSAD(predPUYuv.m_buf[0], FENC_STRIDE);
-#endif
-        if (error > besterror)
-        {
-            return error;
-        }
-    }
-    else
-    {
-        error = mcstfPrim.motionErrorLumaFrac(
-            origOrigin, origStride, buffOrigin, buffStride,
-            x, y, dx, dy, bs, besterror, m_bitDepth, 0 /*SAD*/);
-        if (error > besterror) return error;
-    }
-    return error;
-}
-
 int MotionEstimatorTLD::motionErrorLumaSSD(MotionEstimatorTLD& m_metld,
     pixel* src,
     int stride,
@@ -533,7 +515,7 @@ int MotionEstimatorTLD::motionErrorLumaSSD(MotionEstimatorTLD& m_metld,
     {
         error = mcstfPrim.motionErrorLumaFrac(
             origOrigin, origStride, buffOrigin, buffStride,
-            x, y, dx, dy, bs, besterror, m_bitDepth, 1 /*SAD*/);
+            x, y, dx, dy, bs, besterror, m_bitDepth);
         if (error > besterror) return error;
     }
     return error;
@@ -640,8 +622,8 @@ void TemporalFilter::bilateralFilterCore(Frame* frame, TemporalFilterRefPicInfo*
                 }
 
                 // Step 2: pre-compute vww / vsw (block-level)
-                double vww[MCTF_MAX_REFS] = {};
-                double vsw[MCTF_MAX_REFS] = {};
+                double vww[MCSTF_MAX_REFS] = {};
+                double vsw[MCSTF_MAX_REFS] = {};
                 for (int i = 0; i < numRefs; i++)
                 {
                     TemporalFilterRefPicInfo* refPicInfo = &m_mcstfRefList[i];
@@ -659,8 +641,8 @@ void TemporalFilter::bilateralFilterCore(Frame* frame, TemporalFilterRefPicInfo*
                 }
 
                 //  Step 3: pixel filtering via SIMD primitive
-                const pixel* refBlkPtrs[MCTF_MAX_REFS];
-                intptr_t     refBlkStrides[MCTF_MAX_REFS];
+                const pixel* refBlkPtrs[MCSTF_MAX_REFS];
+                intptr_t     refBlkStrides[MCSTF_MAX_REFS];
                 for (int i = 0; i < numRefs; i++)
                 {
                     TemporalFilterRefPicInfo* refPicInfo = &m_mcstfRefList[i];
@@ -669,7 +651,7 @@ void TemporalFilter::bilateralFilterCore(Frame* frame, TemporalFilterRefPicInfo*
                     refBlkPtrs[i] = refPicInfo->compensatedPic->m_picOrg[c]
                         + by * refBlkStrides[i] + bx;
                 }
-                mcstfPrim.bilateralWeightedFilter(srcPel, srcStride, numRefs, refBlkPtrs, refBlkStrides, vww, vsw, bitDepthDiffWeighting, maxSampleValue,
+                mcstfPrim.bilateralFilter(srcPel, srcStride, numRefs, refBlkPtrs, refBlkStrides, vww, vsw, bitDepthDiffWeighting, maxSampleValue,
                     blkSize, srcPelPlane + by * srcStride + bx, srcStride);
             }
         }
@@ -677,7 +659,7 @@ void TemporalFilter::bilateralFilterCore(Frame* frame, TemporalFilterRefPicInfo*
 }
 
 //  Splits the frame into 64-row blocks, dispatches jobs to the threadpool via BilateralFilterGroup, then returns.
-void TemporalFilter::bilateralFilter(Frame* curFrame, TemporalFilterRefPicInfo* mctfRefList, double overallStrength, ThreadPool* pool)
+void TemporalFilter::bilateralFilter(Frame* curFrame, TemporalFilterRefPicInfo* mcstfRefList, double overallStrength, ThreadPool* pool)
 {
     const int numRef       = curFrame->m_mcstf->m_numRef;
     const int rowSize      = 64;
@@ -689,14 +671,14 @@ void TemporalFilter::bilateralFilter(Frame* curFrame, TemporalFilterRefPicInfo* 
 
     if (!pool)
     {
-        bilateralFilterCore(curFrame, mctfRefList, numRef, 0, 0, overallStrength);
+        bilateralFilterCore(curFrame, mcstfRefList, numRef, 0, 0, overallStrength);
         return;
     }
 
     BilateralFilterGroup filterGroup(*this, pool);
 
     for (int row = 0; row < numBlockRows; row++)
-        filterGroup.add(curFrame, mctfRefList, numRef, row, rowSize, overallStrength);
+        filterGroup.add(curFrame, mcstfRefList, numRef, row, rowSize, overallStrength);
 
     filterGroup.finishBatch();
 }

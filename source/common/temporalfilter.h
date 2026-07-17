@@ -59,19 +59,20 @@ const double s_refStrengths[3][4] =
   {1.13, 0.97, 0.81, 0.57},  // m_range
   {0.30, 0.30, 0.30, 0.30}   // otherwise
 };
+#define MCSTF_MAX_REFS 16
 
 namespace X265_NS {
 
     /* MCSTF runtime SIMD dispatch
      * Function-pointer table for MCSTF SIMD kernels. Defaults are scalar
-     * implementations defined in temporalfilter.cpp; setupMCTFPrimitives_x86
+     * implementations defined in temporalfilter.cpp; setupMCSTFPrimitives_x86
      * (in common/x86/temporalfilter_simd.cpp) overrides them with SSE4.1/AVX2
      * variants when the runtime CPU supports the required ISA.*/
 
     struct MCSTFPrimitives
     {
         int (*motionErrorLumaFrac)(const pixel* origOrigin, intptr_t origStride, const pixel* buffOrigin, intptr_t buffStride, int x, int y,
-            int dx, int dy, int bs, int besterror, int bitDepth, int errorMode);
+            int dx, int dy, int bs, int besterror, int bitDepth);
 
         void (*applyMotion)(const pixel* pSrcImage, int srcStride, pixel* pDstImage, int dstStride, int width, int height, int blockSizeX,
             int blockSizeY, uint32_t mvsStride, const MV* mvs, int csx, int csy, int blockRow, int rowSize, int vShift);
@@ -80,17 +81,13 @@ namespace X265_NS {
 
         void (*computeBlockStats)(const pixel* srcPel, intptr_t srcStride, const pixel* refPel, intptr_t refStride, int blkSize, int* outVariance, int* outDiffsum);
 
-        void (*bilateralWeightedFilter)(const pixel* srcBlk, intptr_t srcStride, int numRefs, const pixel* const* refBlks, const intptr_t* refStrides,
+        void (*bilateralFilter)(const pixel* srcBlk, intptr_t srcStride, int numRefs, const pixel* const* refBlks, const intptr_t* refStrides,
             const double* vww, const double* vsw, double bdw, double maxSample, int blkSize, pixel* dstBlk, intptr_t dstStride);
     };
-#define MCTF_MAX_REFS 16
 
     extern MCSTFPrimitives mcstfPrim;
 
-    void setupMCTFPrimitives_scalar(MCSTFPrimitives& p);
-#if X265_ARCH_X86
-    void setupMCTFPrimitives_x86(MCSTFPrimitives& p, int cpuMask);
-#endif
+    void setupMCSTFPrimitives_scalar(MCSTFPrimitives& p);
 
     class OrigPicBuffer
     {
@@ -135,16 +132,6 @@ namespace X265_NS {
             MV* previous, uint32_t prevMvStride, int factor, int* minError, int row, int rowSize);
 
         int motionErrorLumaSSD(MotionEstimatorTLD& m_tld, pixel* src,
-            int stride,
-            pixel* buf,
-            int x,
-            int y,
-            int dx,
-            int dy,
-            int bs,
-            int besterror = 8 * 8 * 1024 * 1024);
-
-        int motionErrorLumaSAD(MotionEstimatorTLD& m_tld, pixel* src,
             int stride,
             pixel* buf,
             int x,
@@ -221,12 +208,12 @@ namespace X265_NS {
         int createRefPicInfo(TemporalFilterRefPicInfo* refFrame, x265_param* param);
 
         void bilateralFilter(Frame*                    frame,
-                            TemporalFilterRefPicInfo* mctfRefList,
+                            TemporalFilterRefPicInfo* mcstfRefList,
                             double                    overallStrength,
                             ThreadPool*               pool);
 
         void bilateralFilterCore(Frame*                    frame,
-                                TemporalFilterRefPicInfo* mctfRefList,
+                                TemporalFilterRefPicInfo* mcstfRefList,
                                 int                       numRef,
                                 int                       blockRow,
                                 int                       blockSize,
@@ -247,7 +234,7 @@ namespace X265_NS {
         struct FilterJob
         {
             Frame*                    frame;
-            TemporalFilterRefPicInfo* mctfRefList;
+            TemporalFilterRefPicInfo* mcstfRefList;
             int                       numRef;
             int                       blockRow;
             int                       rowSize;
@@ -263,14 +250,14 @@ namespace X265_NS {
         BilateralFilterGroup(TemporalFilter& f, ThreadPool* pool)
             : m_filter(f), m_pool(pool), m_jobTotal(0), m_jobAcquired(0) {}
 
-        void add(Frame* frame, TemporalFilterRefPicInfo* mctfRefList,
+        void add(Frame* frame, TemporalFilterRefPicInfo* mcstfRefList,
                 int numRef, int blockRow, int rowSize, double strength)
         {
             X265_CHECK(m_jobTotal < MAX_FILTER_JOBS,
                     "BilateralFilterGroup overflow\n");
             FilterJob& j    = m_jobs[m_jobTotal++];
             j.frame         = frame;
-            j.mctfRefList   = mctfRefList;
+            j.mcstfRefList   = mcstfRefList;
             j.numRef        = numRef;
             j.blockRow      = blockRow;
             j.rowSize       = rowSize;
@@ -295,7 +282,7 @@ namespace X265_NS {
                 m_lock.release();
 
                 const FilterJob& j = m_jobs[i];
-                m_filter.bilateralFilterCore(j.frame, j.mctfRefList, j.numRef,
+                m_filter.bilateralFilterCore(j.frame, j.mcstfRefList, j.numRef,
                                             j.blockRow, j.rowSize,
                                             j.overallStrength);
                 m_lock.acquire();

@@ -23,6 +23,7 @@
 
 #include "primitives.h"
 #include "x265.h"
+#include "temporalfilter.h"
 
 /* The #if logic here must match the file lists in CMakeLists.txt */
 #if X265_ARCH_X86
@@ -57,6 +58,7 @@ namespace X265_NS {
 void setupIntrinsicDCT_sse3(EncoderPrimitives&);
 void setupIntrinsicDCT_ssse3(EncoderPrimitives&);
 void setupIntrinsicDCT_sse41(EncoderPrimitives&);
+void setupIntrinsicMCSTF_avx2(MCSTFPrimitives&);
 
 /* Use primitives for the best available vector architecture */
 void setupIntrinsicPrimitives(EncoderPrimitives &p, int cpuMask)
@@ -78,6 +80,10 @@ void setupIntrinsicPrimitives(EncoderPrimitives &p, int cpuMask)
     {
         setupIntrinsicDCT_sse41(p);
     }
+#endif
+#ifdef HAVE_AVX2
+    if (cpuMask & X265_CPU_AVX2)
+        setupIntrinsicMCSTF_avx2(mcstfPrim);
 #endif
     (void)p;
     (void)cpuMask;

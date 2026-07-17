@@ -21,21 +21,19 @@
 * For more information, contact us at license @ x265.com.
 *****************************************************************************/
 
-/* MCTF SIMD kernels - Provides AVX2 implementations of MCSTF primitives
- * declared in temporalfilter.h (MCTFPrimitives).
+/* MCSTF SIMD kernels - Provides AVX2 implementations of MCSTF primitives
+ * declared in temporalfilter.h (MCSTFPrimitives).
  *
- * Entry point: setupMCTFPrimitives_x86(MCTFPrimitives&, int cpuMask)
- * Called from primitives.cpp after setupMCTFPrimitives_scalar().
+ * Entry point: setupMCSTFPrimitives_x86(MCSTFPrimitives&, int cpuMask)
+ * Called from primitives.cpp after setupMCSTFPrimitives_scalar().
  * Overrides only the function pointers whose ISA requirement is met.
  */
 
-#if ENABLE_ASSEMBLY && X265_ARCH_X86
 
 #include <emmintrin.h>   /* SSE2   */
 #include <tmmintrin.h>   /* SSSE3  */
 #include <smmintrin.h>   /* SSE4.1 */
 #include <immintrin.h>   /* AVX2   */
-#include <cmath>
 
 #include "common.h"
 #include "primitives.h"
@@ -43,6 +41,9 @@
 #include "mv.h"
 #include "cpu.h"
 
+using namespace X265_NS;
+
+namespace X265_NS {
 
 #if defined(_MSC_VER) && !defined(__clang__) && !defined(__INTEL_COMPILER)
 #  define MCSTF_TARGET_AVX2
@@ -50,7 +51,6 @@
 #  define MCSTF_TARGET_AVX2 __attribute__((target("avx2")))
 #endif
 
-namespace X265_NS {
 
     /* Shared helpers */
 
@@ -87,9 +87,9 @@ namespace X265_NS {
         v = _mm_add_epi32(v, hi);
         return _mm_cvtsi128_si32(v);
     }
-	
-	MCSTF_TARGET_AVX2
-    static inline int hsum_epi32_avx(__m256i v)
+
+    MCSTF_TARGET_AVX2
+        static inline int hsum_epi32_avx(__m256i v)
     {
         __m128i lo = _mm256_castsi256_si128(v);
         __m128i hi = _mm256_extracti128_si256(v, 1);
@@ -158,19 +158,23 @@ namespace X265_NS {
     }
 
     MCSTF_TARGET_AVX2
-        static int motionErrorLumaFrac_AVX2(
+        static int motionErrorLumaFrac_avx2(
             const pixel* origOrigin, intptr_t origStride,
             const pixel* buffOrigin, intptr_t buffStride,
             int x, int y, int dx, int dy,
-            int bs, int besterror, int bitDepth, int errorMode)
+            int bs, int besterror, int bitDepth)
     {
         const int* xFilter = s_interpolationFilter[dx & 0xF];
         const int* yFilter = s_interpolationFilter[dy & 0xF];
 
+        X265_CHECK(bs <= 16, "Unsupported block size\n");
         int tempArray[64 + 8][64];
         const int int_dx = dx >> 4;
         const int int_dy = dy >> 4;
+        int error = 0;
 
+        // HEVC interpolation filters always have zero-valued end taps
+        // (xFilter[0] and xFilter[7]), so only taps 1..6 are processed.
         const __m128i xf12_128 = _mm_unpacklo_epi16(
             _mm_set1_epi16((int16_t)xFilter[1]),
             _mm_set1_epi16((int16_t)xFilter[2]));
@@ -197,11 +201,11 @@ namespace X265_NS {
 
 
 #if X265_DEPTH > 8
-                 /* uint16 pixels: load 8× uint16 directly into 128-bit reg.
-                  * _mm256_set_m128i places lo_half in [127:0] and hi_half in
-                  * [255:128].  We build the 256-bit interleaved pairs:
-                  *   pairs_ab[255:0] = { unpackhi(s_a, s_b) | unpacklo(s_a, s_b) }
-                  * so madd lane i gives  s_a[i]*f_a + s_b[i]*f_b.                 */
+                /* uint16 pixels: load 8× uint16 directly into 128-bit reg.
+                 * _mm256_set_m128i places lo_half in [127:0] and hi_half in
+                 * [255:128].  We build the 256-bit interleaved pairs:
+                 *   pairs_ab[255:0] = { unpackhi(s_a, s_b) | unpacklo(s_a, s_b) }
+                 * so madd lane i gives  s_a[i]*f_a + s_b[i]*f_b.                 */
                 __m128i s1 = _mm_loadu_si128((const __m128i*) & rowStart[1]);
                 __m128i s2 = _mm_loadu_si128((const __m128i*) & rowStart[2]);
                 __m128i s3 = _mm_loadu_si128((const __m128i*) & rowStart[3]);
@@ -237,6 +241,7 @@ namespace X265_NS {
             }
         }
 
+        // End taps yFilter[0] and yFilter[7] are always zero.
         const __m256i yt1 = _mm256_set1_epi32(yFilter[1]);
         const __m256i yt2 = _mm256_set1_epi32(yFilter[2]);
         const __m256i yt3 = _mm256_set1_epi32(yFilter[3]);
@@ -286,26 +291,22 @@ namespace X265_NS {
 
                 __m256i diff = _mm256_sub_epi32(v, orig);
 
-                __m256i row_err;
-                if (errorMode == 0)  /* SAD */
-                    row_err = _mm256_abs_epi32(diff);
-                else                 /* SSD */
-                    row_err = _mm256_mullo_epi32(diff, diff);
+                __m256i row_err = _mm256_mullo_epi32(diff, diff); /* SSD */
 
                 xerror = _mm256_add_epi32(xerror, row_err);
             }
 
-            int error = hsum_epi32_avx(xerror);
+            error = hsum_epi32_avx(xerror);
             if (error > besterror)
                 return error;
         }
 
-        return hsum_epi32_avx(xerror);
+        return error;
     }
 
     /* Per-block separable 6-tap filter worker */
     MCSTF_TARGET_AVX2
-        static void applyMotionBlock_AVX2(
+        static void applyMotionBlock_avx2(
             const pixel* pSrcImage, int srcStride,
             pixel* pDstImage, int dstStride,
             int x, int y,
@@ -314,7 +315,11 @@ namespace X265_NS {
             const int* xFilter,
             const int* yFilter)
     {
-        int tempArray[15][8];
+        X265_CHECK(blockSizeX == 4 || blockSizeX == 8, "Unsupported block width\n");
+
+        static const int numFilterTaps = 7;
+        static const int maxBlockSize = 8;
+        int tempArray[maxBlockSize + numFilterTaps][8];
 
         const __m256i xf1 = _mm256_set1_epi32(xFilter[1]);
         const __m256i xf2 = _mm256_set1_epi32(xFilter[2]);
@@ -335,7 +340,7 @@ namespace X265_NS {
         const __m256i vmax = _mm256_set1_epi32((1 << X265_DEPTH) - 1);
 
         const int hColBase = x + xInt - 3;
-        const int hRowEnd = blockSizeY + 6;
+        const int hRowEnd = blockSizeY + 5;
 
         /* H-PASS */
         if (blockSizeX == 8)
@@ -447,7 +452,7 @@ namespace X265_NS {
     }
 
     MCSTF_TARGET_AVX2
-        static void applyMotion_AVX2(
+        static void applyMotion_avx2(
             const pixel* pSrcImage, int srcStride,
             pixel* pDstImage, int dstStride,
             int width, int height,
@@ -481,14 +486,16 @@ namespace X265_NS {
                 const int* xFilter = s_interpolationFilter[dx & 0xf];
                 const int* yFilter = s_interpolationFilter[dy & 0xf];
 
-                applyMotionBlock_AVX2( pSrcImage, srcStride, pDstImage, dstStride, x, y, blockSizeX, blockSizeY, xInt, yInt, xFilter, yFilter);
+                applyMotionBlock_avx2(pSrcImage, srcStride, pDstImage, dstStride, x, y, blockSizeX, blockSizeY, xInt, yInt, xFilter, yFilter);
             }
         }
     }
 
     MCSTF_TARGET_AVX2
-        static void lumaBlockAvgVariance_AVX2(const pixel* origin, intptr_t stride, int blockX,int blockY,int blockSize,double* avgOut, double* varianceOut)
+        static void lumaBlockAvgVariance_avx2(const pixel* origin, intptr_t stride, int blockX, int blockY, int blockSize, double* avgOut, double* varianceOut)
     {
+        X265_CHECK((blockSize & 7) == 0, "Supports blockSize multiple of 8");
+
         const pixel* base = origin + blockY * stride + blockX;
 
         __m256i sumAcc = _mm256_setzero_si256();
@@ -565,7 +572,7 @@ namespace X265_NS {
     }
 
     MCSTF_TARGET_AVX2
-        void computeBlockStats_AVX2( const pixel* srcPel, intptr_t srcStride, const pixel* refPel, intptr_t refStride, int blkSize, int* outVariance, int* outDiffsum)
+        static void computeBlockStats_avx2(const pixel* srcPel, intptr_t srcStride, const pixel* refPel, intptr_t refStride, int blkSize, int* outVariance, int* outDiffsum)
     {
         if (blkSize == 8)
         {
@@ -654,7 +661,7 @@ namespace X265_NS {
     }
 
     MCSTF_TARGET_AVX2
-        void bilateralWeightedFilter_AVX2(
+        static void bilateralFilter_avx2(
             const pixel* srcBlk, intptr_t srcStride,
             int             numRefs,
             const pixel* const* refBlks,
@@ -672,7 +679,7 @@ namespace X265_NS {
         const __m256d vMax = _mm256_set1_pd(maxSample);
         const __m256d vHalf = _mm256_set1_pd(0.5);
 
-        double neg_inv_vsw[MCTF_MAX_REFS];
+        double neg_inv_vsw[MCSTF_MAX_REFS];
         for (int i = 0; i < numRefs; i++)
             neg_inv_vsw[i] = -1.0 / vsw[i];
 
@@ -719,19 +726,15 @@ namespace X265_NS {
             }
         }
     }
+} // anonymous namespace
 
-    /* Dispatch - overrides scalar defaults with SIMD variants at runtime */
-    void setupMCTFPrimitives_x86(MCSTFPrimitives & p, int cpuMask)
+namespace X265_NS {
+    void setupIntrinsicMCSTF_avx2(MCSTFPrimitives & p)
     {
-        if (cpuMask & X265_CPU_AVX2)
-        {
-            p.motionErrorLumaFrac = motionErrorLumaFrac_AVX2;
-            p.applyMotion = applyMotion_AVX2;
-            p.lumaBlockAvgVariance = lumaBlockAvgVariance_AVX2;
-            p.computeBlockStats = computeBlockStats_AVX2;
-            p.bilateralWeightedFilter = bilateralWeightedFilter_AVX2;
-        }
+        p.motionErrorLumaFrac = motionErrorLumaFrac_avx2;
+        p.applyMotion = applyMotion_avx2;
+        p.lumaBlockAvgVariance = lumaBlockAvgVariance_avx2;
+        p.computeBlockStats = computeBlockStats_avx2;
+        p.bilateralFilter = bilateralFilter_avx2;
     }
-} /* namespace X265_NS */
-
-#endif /* ENABLE_ASSEMBLY && X265_ARCH_X86 */
+} // namespace X265_NS
