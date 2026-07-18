@@ -32,7 +32,7 @@
 extern "C" {
 #endif
 
-#if _MSC_VER
+#ifdef _MSC_VER
 #pragma warning(disable: 4201) // non-standard extension used (nameless struct/union)
 #endif
 
@@ -183,7 +183,7 @@ typedef struct x265_weight_param
     int      wtPresent;
 }x265_weight_param;
 
-#if X265_DEPTH < 10
+#if defined(X265_DEPTH) && X265_DEPTH < 10
 typedef uint32_t sse_t;
 #else
 typedef uint64_t sse_t;
@@ -2665,7 +2665,7 @@ void x265_csvlog_encode(const x265_param*, const x265_stats *, int padx, int pad
 /* In-place downshift from a bit-depth greater than 8 to a bit-depth of 8, using
  * the residual bits to dither each row. */
 void x265_dither_image(x265_picture *, int picWidth, int picHeight, int16_t *errorBuf, int bitDepth);
-#if ENABLE_LIBVMAF
+#if defined(ENABLE_LIBVMAF) && ENABLE_LIBVMAF
 /* x265_calculate_vmafScore:
  *    returns VMAF score for the input video.
  *    This api must be called only after encoding was done. */
@@ -2737,7 +2737,7 @@ typedef struct x265_api
     void          (*csvlog_encode)(const x265_param*, const x265_stats *, int, int, int, char**);
     void          (*dither_image)(x265_picture*, int, int, int16_t*, int);
     int           (*set_analysis_data)(x265_encoder *encoder, x265_analysis_data *analysis_data, int poc, uint32_t cuBytes);
-#if ENABLE_LIBVMAF
+#if defined(ENABLE_LIBVMAF) && ENABLE_LIBVMAF
     double        (*calculate_vmafscore)(x265_param *, x265_vmaf_data *);
     double        (*calculate_vmaf_framelevelscore)(x265_param *, x265_vmaf_framedata *);
     void          (*vmaf_encoder_log)(x265_encoder*, int, char**, x265_param *, x265_vmaf_data *);
