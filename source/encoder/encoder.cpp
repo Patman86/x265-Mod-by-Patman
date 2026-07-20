@@ -4270,9 +4270,16 @@ void Encoder::configure(x265_param *p)
     if (p->bSelectiveMCSTF && !p->bEnableTemporalFilter)
         p->bEnableTemporalFilter = 1;
 
-    if ((p->bEnableTemporalFilter) && (p->bframes < 5)){
-        x265_log(p, X265_LOG_WARNING, "Setting the number of B-frames to 5, as MCSTF filter is enabled.\n");
-        p->bframes = 5;
+    if ((p->bEnableTemporalFilter) && (p->mcstfFrameRange > p->lookaheadDepth))
+    {
+        x265_log(p, X265_LOG_WARNING, "MCSTF frame range is greater than lookahead depth. Disabling MCSTF.\n");
+        p->bEnableTemporalFilter = 0;
+    }
+
+    if (p->bSelectiveMCSTF && !p->bEnableTemporalFilter)
+    {
+        x265_log(p, X265_LOG_WARNING, "selective-mcstf requires mcstf to be enabled. Disabling selective-mcstf.\n");
+        p->bSelectiveMCSTF = 0;
     }
 
     if ((p->bEnableTemporalSubLayers > 2) && !p->bframes)
