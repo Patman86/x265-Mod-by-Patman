@@ -391,6 +391,7 @@ namespace X265_NS {
         H0("   --dup-threshold <integer>     PSNR threshold for Frame duplication. Default %d\n", param->dupThreshold);
         H0("   --[no-]mcstf                  Enable GOP-based temporal filter. Default %d\n", param->bEnableTemporalFilter);
         H0("   --mcstf-ref-range <0..4>      Maximum number of range for MCSTF. Default %d\n", param->mcstfFrameRange);
+        H0("   --[no-]selective-mcstf        Skip MCSTF for GOPs estimated as clean (low noise). Default %d\n", param->bSelectiveMCSTF);
 #if ENABLE_ALPHA
         H0("   --alpha                       Enable alpha channel support. Default %d\n", param->bEnableAlpha);
 #endif

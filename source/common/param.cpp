@@ -418,6 +418,7 @@ void x265_param_default(x265_param* param)
 
     /* MCSTF */
     param->bEnableTemporalFilter = 0;
+    param->bSelectiveMCSTF = 0;
 
     /* Threaded ME */
     param->tmeTaskBlockSize = 1;
@@ -1497,6 +1498,7 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
         OPT("aom-film-grain") p->aomFilmGrain = (char*)value;
         OPT("mcstf") p->bEnableTemporalFilter = atobool(value);
         OPT("mcstf-ref-range") p->mcstfFrameRange = atoi(value);
+        OPT("selective-mcstf") p->bSelectiveMCSTF = atobool(value);
         OPT("sbrc") p->bEnableSBRC = atobool(value);
 #if ENABLE_ALPHA
         OPT("alpha")
@@ -2234,6 +2236,7 @@ void x265_print_params(x265_param* param)
     {
         TOOLOPT(param->bEnableTemporalFilter, "mcstf");
         TOOLVAL(param->mcstfFrameRange, "mcstf-ref-range=%d");
+        TOOLOPT(param->bSelectiveMCSTF, "selective-mcstf");
     }
     x265_log(param, X265_LOG_INFO, "tools:%s\n", buf);
     fflush(stderr);
@@ -2499,7 +2502,10 @@ char *x265_param2string(x265_param* p, int padx, int pady)
         s += snprintf(s, bufSize - (s - buf), " aom-film-grain=%s", p->aomFilmGrain);
     BOOL(p->bEnableTemporalFilter, "mcstf");
     if (p->bEnableTemporalFilter)
+    {
         s += snprintf(s, bufSize - (s - buf), " mcstf-ref-range=%d", p->mcstfFrameRange);
+        BOOL(p->bSelectiveMCSTF, "selective-mcstf");
+    }
 #if ENABLE_ALPHA
     BOOL(p->bEnableAlpha, "alpha");
 #endif
@@ -2734,6 +2740,7 @@ bool parseMaskingStrength(x265_param* p, const char* value)
 void x265_copy_params(x265_param* dst, x265_param* src)
 {
     dst->mcstfFrameRange = src->mcstfFrameRange;
+    dst->bSelectiveMCSTF = src->bSelectiveMCSTF;
     dst->cpuid = src->cpuid;
     dst->frameNumThreads = src->frameNumThreads;
     if (strlen(src->numaPools)) snprintf(dst->numaPools, X265_MAX_STRING_SIZE, "%s", src->numaPools);

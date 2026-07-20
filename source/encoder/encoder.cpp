@@ -3326,6 +3326,12 @@ void Encoder::finishFrameStats(Frame* curFrame, FrameEncoder *curEncoder, x265_f
             frameStats->currTrQP = curFrame->m_targetQp;
         }
 
+        if (m_param->bSelectiveMCSTF && m_param->csvLogLevel >= 2)
+        {
+            frameStats->frameNoise     = curFrame->m_lowres.noiseScore;
+            frameStats->isMCSTFEnabled = curFrame->m_lowres.filterThisGOP ? 1 : 0;
+        }
+
         if (m_param->csvLogLevel >= 1)
         {
             frameStats->cuStats.percentIntraNxN = curFrame->m_encData->m_frameStats.percentIntraNxN;
@@ -4260,6 +4266,9 @@ void Encoder::configure(x265_param *p)
         x265_log(p, X265_LOG_WARNING, "Limit reference options 2 and 3 are not supported with pmode. Disabling limit reference\n");
         p->limitReferences = 0;
     }
+
+    if (p->bSelectiveMCSTF && !p->bEnableTemporalFilter)
+        p->bEnableTemporalFilter = 1;
 
     if ((p->bEnableTemporalFilter) && (p->bframes < 5)){
         x265_log(p, X265_LOG_WARNING, "Setting the number of B-frames to 5, as MCSTF filter is enabled.\n");

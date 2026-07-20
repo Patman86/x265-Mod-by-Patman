@@ -1358,12 +1358,15 @@ Temporal / motion search options
 
 	Motion-compensated spatio-temporal filtering (MCSTF) improves the compression
 	efficiency of videos that contain a high level of noise. It introduces a
-	temporal filter before encoding and this filter is applied only to the I- and P-frames.
+	temporal filter before encoding, and this filter is applied unconditionally
+	to every I- and P-frame regardless of how noisy the source content actually is.
 	It utilizes previously generated motion vectors across different video content
 	resolutions to find the best temporal correspondence for low-pass filtering. Here,
 	motion estimation is applied between the central picture and each future or past
 	picture, thereby generating multiple motion-compensated predictions, which are then
 	combined by using adaptive filtering to produce a final noise-reduced picture.
+	To filter frames selectively based on their estimated noise level instead, use
+	:option:`--selective-mcstf`.
 	Default: disabled
 
 .. option:: --mcstf-ref-range
@@ -1373,6 +1376,15 @@ Temporal / motion search options
 	includes more temporal neighbors for filtering, which can improve noise reduction
 	at the cost of increased memory usage and processing time. The valid range is 1 to 4.
 	Default: 2
+
+.. option:: --selective-mcstf, --no-selective-mcstf
+
+	Gate MCSTF with a per-GOP noise estimate: skip the filter for GOPs whose
+	starting I/IDR frame (or scenecut) is estimated as clean (low noise), and
+	apply it only where it helps. Implicitly enables :option:`--mcstf` if it
+	was not already turned on. When :option:`--csv-log-level` is 2 or higher,
+	adds a Frame Noise and IsMCSTFEnabled column to the per-frame CSV log.
+	Default: disabled
 
 Spatial/intra options
 =====================
