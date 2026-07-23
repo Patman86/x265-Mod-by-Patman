@@ -1001,9 +1001,14 @@ int32_t Lookahead::estimateNoise(Frame* curFrame)
     }
 
     /* Gradient magnitudes via computeEdge — pass NULL edgePic, receive raw float magnitudes
-     * (cast to int32_t) in gradMag for the adaptive threshold step. */
-    int32_t* gradMag = X265_MALLOC(int32_t, stride * height);
-    if (!gradMag) return -65536;
+     * (cast to int32_t) in gradMag for the adaptive threshold step.
+     * Lazy-allocate once per encode; stride*height is constant for a given source. */
+    if (!m_gradMagBuf)
+    {
+        m_gradMagBuf = X265_MALLOC(int32_t, stride * height);
+        if (!m_gradMagBuf) return -65536;
+    }
+    int32_t* gradMag = m_gradMagBuf;
     memset(gradMag, 0, stride * height * sizeof(int32_t));
 
     computeEdge(NULL, blurSrc, NULL, stride, height, width, false, EDGE_THRESHOLD, gradMag);
@@ -1032,7 +1037,6 @@ int32_t Lookahead::estimateNoise(Frame* curFrame)
                         + src[k+(int)stride-1] + src[k+(int)stride+1]);
             sum += abs(v); ++num;
         }
-    X265_FREE(gradMag);
     if (num < 16) return -65536;
     return (int32_t)((sum * 82137) / (6 * num * (1 << (X265_DEPTH - 8))));
 }
@@ -1047,6 +1051,7 @@ Lookahead::Lookahead(x265_param *param, ThreadPool* pool)
     m_scratch        = NULL;
     m_tld            = NULL;
     m_noiseBlurBuf   = NULL;
+    m_gradMagBuf     = NULL;
     m_filterThisGOP  = false;
     m_filled   = false;
     m_outputSignalRequired = false;
@@ -1268,6 +1273,7 @@ void Lookahead::destroy()
     X265_FREE(m_accHistDiffRunningAvg[0]);
     X265_FREE(m_accHistDiffRunningAvg);
     X265_FREE(m_noiseBlurBuf);
+    X265_FREE(m_gradMagBuf);
     X265_FREE(m_scratch);
     delete [] m_tld;
     if (m_param->lookaheadThreads > 0)

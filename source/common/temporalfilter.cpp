@@ -176,49 +176,6 @@ namespace X265_NS {
         }
     }
 
-    static void lumaBlockAvgVariance_c(
-        const pixel* origin,
-        intptr_t stride,
-        int blockX,
-        int blockY,
-        int blockSize,
-        double* avgOut,
-        double* varianceOut)
-    {
-        const pixel* base = origin + blockY * stride + blockX;
-
-        int64_t totalSum = 0;
-
-        // Pass 1: Compute sum
-        for (int y = 0; y < blockSize; y++)
-        {
-            const pixel* row = base + y * stride;
-
-            for (int x = 0; x < blockSize; x++)
-                totalSum += row[x];
-        }
-
-        const int N = blockSize * blockSize;
-        const double avg = (double)totalSum / N;
-        *avgOut = avg;
-
-        // Pass 2: Compute sum of squared differences
-        double variance = 0.0;
-
-        for (int y = 0; y < blockSize; y++)
-        {
-            const pixel* row = base + y * stride;
-
-            for (int x = 0; x < blockSize; x++)
-            {
-                double diff = (double)row[x] - avg;
-                variance += diff * diff;
-            }
-        }
-
-        *varianceOut = variance;
-    }
-
     static void computeBlockStats_c(
         const pixel* srcPel, intptr_t srcStride,
         const pixel* refPel, intptr_t refStride,
@@ -293,7 +250,6 @@ namespace X265_NS {
     {
         p.motionErrorLumaFrac = motionErrorLumaFrac_c;
         p.applyMotion = applyMotion_c;
-        p.lumaBlockAvgVariance = lumaBlockAvgVariance_c;
         p.computeBlockStats = computeBlockStats_c;
         p.bilateralFilter = bilateralFilter_c;
     }
@@ -924,10 +880,12 @@ void MotionEstimatorTLD::motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStrid
                 }
             }
 
-            double avg, variance;
-            mcstfPrim.lumaBlockAvgVariance(
-                orig->m_picOrg[0], orig->m_stride,
-                blockX, blockY, blockSize, &avg, &variance);
+            const pixel* blkOrigin = orig->m_picOrg[0] + blockY * orig->m_stride + blockX;
+            uint64_t sumSqr = primitives.cu[partitionFromSizes(blockSize, blockSize)].var(blkOrigin, orig->m_stride);
+            uint32_t sum = (uint32_t)sumSqr;
+            uint32_t sqr = (uint32_t)(sumSqr >> 32);
+            const int N = blockSize * blockSize;
+            double variance = (double)sqr - ((double)sum * sum) / N;
 
             leastError = (int)(20 * ((leastError + 5.0) / (variance + 5.0)) + (leastError / (blockSize * blockSize)) / 50);
 

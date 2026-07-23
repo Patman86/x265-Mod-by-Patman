@@ -78,8 +78,6 @@ namespace X265_NS {
         void (*applyMotion)(const pixel* pSrcImage, int srcStride, pixel* pDstImage, int dstStride, int width, int height, int blockSizeX,
             int blockSizeY, uint32_t mvsStride, const MV* mvs, int csx, int csy, int blockRow, int rowSize, int vShift);
 
-        void (*lumaBlockAvgVariance)(const pixel* origin, intptr_t stride, int blockX, int blockY, int blockSize, double* avgOut, double* varianceOut);
-
         void (*computeBlockStats)(const pixel* srcPel, intptr_t srcStride, const pixel* refPel, intptr_t refStride, int blkSize, int* outVariance, int* outDiffsum);
 
         void (*bilateralFilter)(const pixel* srcBlk, intptr_t srcStride, int numRefs, const pixel* const* refBlks, const intptr_t* refStrides,

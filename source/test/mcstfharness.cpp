@@ -128,34 +128,6 @@ bool MCSTFHarness::check_applyMotion(const MCSTFPrimitives& ref, const MCSTFPrim
     return true;
 }
 
-bool MCSTFHarness::check_lumaBlockAvgVariance(const MCSTFPrimitives& ref, const MCSTFPrimitives& opt)
-{
-    const int blockSizes[] = { 8, 16 };
-
-    for (size_t bi = 0; bi < sizeof(blockSizes) / sizeof(int); bi++)
-    {
-        int blockSize = blockSizes[bi];
-
-        for (int i = 0; i < ITERS; i++)
-        {
-            double avgRef, varRef, avgOpt, varOpt;
-            ref.lumaBlockAvgVariance(m_origBuf, TEST_STRIDE, CENTER, CENTER, blockSize, &avgRef, &varRef);
-            opt.lumaBlockAvgVariance(m_origBuf, TEST_STRIDE, CENTER, CENTER, blockSize, &avgOpt, &varOpt);
-
-            double avgTol = 1e-6 * X265_MAX(1.0, fabs(avgRef));
-            double varTol = 1e-6 * X265_MAX(1.0, fabs(varRef));
-
-            if (fabs(avgRef - avgOpt) > avgTol || fabs(varRef - varOpt) > varTol)
-            {
-                printf("lumaBlockAvgVariance[bs=%d]: failed (avg %.6f vs %.6f, var %.6f vs %.6f)\n",
-                    blockSize, avgRef, avgOpt, varRef, varOpt);
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
 bool MCSTFHarness::check_computeBlockStats(const MCSTFPrimitives& ref, const MCSTFPrimitives& opt)
 {
     const int blkSizes[] = { 4, 8 };
@@ -238,8 +210,6 @@ bool MCSTFHarness::testCorrectness(const MCSTFPrimitives& ref, const MCSTFPrimit
         return false;
     if (opt.applyMotion && !check_applyMotion(ref, opt))
         return false;
-    if (opt.lumaBlockAvgVariance && !check_lumaBlockAvgVariance(ref, opt))
-        return false;
     if (opt.computeBlockStats && !check_computeBlockStats(ref, opt))
         return false;
     if (opt.bilateralFilter && !check_bilateralFilter(ref, opt))
@@ -263,14 +233,6 @@ void MCSTFHarness::measureSpeed(const MCSTFPrimitives& ref, const MCSTFPrimitive
         printf("applyMotion[8x8]\t");
         REPORT_SPEEDUP(opt.applyMotion, ref.applyMotion,
             planeOrigin, TEST_STRIDE, m_dstBufOpt, TEST_STRIDE, 64, 64, 8, 8, 8, mvs, 0, 0, 0, 0, 0);
-    }
-
-    if (opt.lumaBlockAvgVariance)
-    {
-        double avg, variance;
-        printf("lumaBlockAvgVariance[bs=8]\t");
-        REPORT_SPEEDUP(opt.lumaBlockAvgVariance, ref.lumaBlockAvgVariance,
-            m_origBuf, TEST_STRIDE, CENTER, CENTER, 8, &avg, &variance);
     }
 
     if (opt.computeBlockStats)

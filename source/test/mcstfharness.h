@@ -45,7 +45,6 @@ protected:
 
     bool check_motionErrorLumaFrac(const MCSTFPrimitives& ref, const MCSTFPrimitives& opt);
     bool check_applyMotion(const MCSTFPrimitives& ref, const MCSTFPrimitives& opt);
-    bool check_lumaBlockAvgVariance(const MCSTFPrimitives& ref, const MCSTFPrimitives& opt);
     bool check_computeBlockStats(const MCSTFPrimitives& ref, const MCSTFPrimitives& opt);
     bool check_bilateralFilter(const MCSTFPrimitives& ref, const MCSTFPrimitives& opt);
 
