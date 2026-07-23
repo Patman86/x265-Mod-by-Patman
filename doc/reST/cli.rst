@@ -3026,4 +3026,27 @@ Screen Content Coding (SCC) Options
 
 **CLI_ONLY**
 
+Foveated Encoding Options
+=========================
+
+    Foveated encoding is a smart video compression technique that saves network bandwidth by matching how human eyes see detail.
+	It delivers high image quality right where you look and lower quality in your side vision. It speeds up video streaming and decoding
+	for virtual reality and cloud gaming.
+
+.. option:: --fovea-gaze <x,y>
+
+	Static gaze fixation in pixels (e.g. 960,540 for center).
+
+.. option:: --fovea-delta <float>
+    
+	Max QP offset at periphery (0=disabled, range 5..40). Default 0.
+
+.. option:: --fovea-sigma <float>
+
+	Gaussian sigma in pixels (0=auto, 95px = 2.5 deg @ 60cm/24in). Default 0.
+
+.. option:: --fovea-gaze-file <path>
+
+	Per-frame gaze file (format: 'frame_num x y', one per line). Overrides --fovea-gaze.
+
 .. vim: noet

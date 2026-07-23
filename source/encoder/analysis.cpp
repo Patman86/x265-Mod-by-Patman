@@ -4396,6 +4396,31 @@ int Analysis::calculateQpforCuSize(const CUData& ctu, const CUGeom& cuGeom, int3
         }
     }
 
+    /* Fovea direct path: when quantOffsets are set but the AQ machinery is disabled
+     * (e.g. CQP mode forces aqMode=0), average them over this CU's 16x16 blocks. */
+    if (m_frame->m_quantOffsets && m_param->rc.aqMode == 0)
+    {
+        uint32_t width = m_frame->m_fencPic->m_picWidth;
+        uint32_t height = m_frame->m_fencPic->m_picHeight;
+        uint32_t block_x = ctu.m_cuPelX + g_zscanToPelX[cuGeom.absPartIdx];
+        uint32_t block_y = ctu.m_cuPelY + g_zscanToPelY[cuGeom.absPartIdx];
+        uint32_t maxCols = (width + 15) / 16;  /* 16-pixel grid matches quantOffsets layout */
+        uint32_t blockSize = m_param->maxCUSize >> cuGeom.depth;
+        double dQpOffset = 0;
+        uint32_t cnt = 0;
+        for (uint32_t block_yy = block_y; block_yy < block_y + blockSize && block_yy < height; block_yy += 16)
+        {
+            for (uint32_t block_xx = block_x; block_xx < block_x + blockSize && block_xx < width; block_xx += 16)
+            {
+                uint32_t idx = ((block_yy / 16) * maxCols) + (block_xx / 16);
+                dQpOffset += m_frame->m_quantOffsets[idx];
+                cnt++;
+            }
+        }
+        if (cnt)
+            qp += dQpOffset / cnt;
+    }
+
     return x265_clip3(m_param->rc.qpMin, m_param->rc.qpMax, (int)(qp + 0.5));
 }
 

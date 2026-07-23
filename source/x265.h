@@ -2378,6 +2378,30 @@ typedef struct x265_param
 
     /*tune*/
     const char* tune;
+
+    /* === FOVEATED ENCODING PARAMETERS (added for gaze-contingent QP mapping) ===
+     * All zero/NULL = disabled; encoder behavior is bit-for-bit identical to
+     * upstream x265 when foveaDelta == 0 or foveaGazeFile == NULL with no gaze set. */
+
+    /* Gaze fixation point in pixel coordinates. (0,0) = top-left.
+     * Ignored when foveaDelta == 0. */
+    float    foveaGazeX;
+
+    /* Gaze fixation point Y in pixel coordinates. */
+    float    foveaGazeY;
+
+    /* Maximum QP offset applied at the periphery (positive = lower quality).
+     * 0 = foveated encoding disabled. Recommended range: 5..40. */
+    float    foveaDelta;
+
+    /* Gaussian sigma in pixels defining the foveal quality falloff radius.
+     * 0 = use default (95px = 2.5 degrees visual angle at 60cm / 24-inch monitor). */
+    float    foveaSigma;
+
+    /* Path to a per-frame gaze file (one line per frame: "frame_num x y").
+     * When set, overrides foveaGazeX/foveaGazeY with per-frame values.
+     * NULL = use static gaze from foveaGazeX/foveaGazeY. */
+    char* foveaGazeFile;
 } x265_param;
 
 /* x265_param_alloc:

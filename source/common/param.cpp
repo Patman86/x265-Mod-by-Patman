@@ -448,6 +448,14 @@ void x265_param_default(x265_param* param)
     param->bEnableSCC = 0;
 
     param->bConfigRCFrame = 0;
+
+    /* Foveated encoding - all disabled by default; encoder is bit-for-bit
+     * identical to upstream when foveaDelta == 0 */
+    param->foveaGazeX    = -1.0f;  /* -1 = use frame center */
+    param->foveaGazeY    = -1.0f;
+    param->foveaDelta    = 0.0f;   /* 0 = foveation disabled */
+    param->foveaSigma    = 0.0f;   /* 0 = auto (95px) */
+    param->foveaGazeFile = NULL;
 }
 
 int x265_param_default_preset(x265_param* param, const char* preset, const char* tune)
@@ -880,6 +888,22 @@ int x265_zone_param_parse(x265_param* p, const char* name, const char* value)
     OPT("tskip-fast") p->bEnableTSkipFast = atobool(value);
     OPT("rdpenalty") p->rdPenalty = atoi(value);
     OPT("dynamic-rd") p->dynamicRd = atof(value);
+    /* Foveated encoding parameters */
+    OPT("fovea-gaze")
+    {
+        /* Expects "x,y" format, e.g. "960,540" */
+        float x = 0.0f, y = 0.0f;
+        if (sscanf(value, "%f,%f", &x, &y) == 2)
+        {
+            p->foveaGazeX = x;
+            p->foveaGazeY = y;
+        }
+        else
+            bError = true;
+    }
+    OPT("fovea-delta") p->foveaDelta = (float)atof(value);
+    OPT("fovea-sigma") p->foveaSigma = (float)atof(value);
+    OPT("fovea-gaze-file") p->foveaGazeFile = strdup(value);
     else
         return X265_PARAM_BAD_NAME;
 
@@ -1528,6 +1552,21 @@ int x265_param_parse(x265_param* p, const char* name, const char* value)
 #endif
         OPT("frame-rc") p->bConfigRCFrame = atobool(value);
         OPT("threaded-me") p->bThreadedME = atobool(value);
+        /* Foveated encoding parameters (also parsed here for x265_param_parse API) */
+        OPT("fovea-gaze")
+        {
+            float x = 0.0f, y = 0.0f;
+            if (sscanf(value, "%f,%f", &x, &y) == 2)
+            {
+                p->foveaGazeX = x;
+                p->foveaGazeY = y;
+            }
+            else
+                bError = true;
+        }
+        OPT("fovea-delta") p->foveaDelta = (float)atof(value);
+        OPT("fovea-sigma") p->foveaSigma = (float)atof(value);
+        OPT("fovea-gaze-file") p->foveaGazeFile = strdup(value);
         else
             return X265_PARAM_BAD_NAME;
     }
@@ -3069,6 +3108,12 @@ void x265_copy_params(x265_param* dst, x265_param* src)
     dst->bEnableSBRC = src->bEnableSBRC;
     dst->bConfigRCFrame = src->bConfigRCFrame;
     dst->isAbrLadderEnable = src->isAbrLadderEnable;
+    /* Foveated encoding */
+    dst->foveaGazeX    = src->foveaGazeX;
+    dst->foveaGazeY    = src->foveaGazeY;
+    dst->foveaDelta    = src->foveaDelta;
+    dst->foveaSigma    = src->foveaSigma;
+    dst->foveaGazeFile = src->foveaGazeFile;
 }
 
 #ifdef SVT_HEVC

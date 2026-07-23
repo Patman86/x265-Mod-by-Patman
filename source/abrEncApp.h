@@ -96,6 +96,14 @@ namespace X265_NS {
         FILE*    m_dolbyVisionRpu;/* File containing Dolby Vision BL RPU metadata */
         FILE*    m_scenecutAwareQpConfig;
 
+        /* Foveated encoding state - per-frame Gaussian QP offset map */
+        float*   m_foveaQpOffsets;    /* flat float32 array, size = qgBlocksX*qgBlocksY */
+        int      m_foveaQgBlocksX;    /* ceil(width/16)  */
+        int      m_foveaQgBlocksY;    /* ceil(height/16) */
+        FILE*    m_foveaGazeFileFP;   /* open handle to per-frame gaze file, or NULL */
+        float    m_prevGazeX;         /* previous frame gaze (for saccade detection) */
+        float    m_prevGazeY;
+
         int m_ret;
 
         PassEncoder(uint32_t id, CLIOptions cliopt, AbrEncoder *parent);

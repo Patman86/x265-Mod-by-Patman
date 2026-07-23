@@ -403,10 +403,11 @@ static const struct option long_options[] =
     { "no-frame-rc",no_argument, NULL, 0 },
     { "threaded-me", no_argument, NULL, 0 },
     { "no-threaded-me", no_argument, NULL, 0 },
-    { 0, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 0, 0, 0, 0 },
-    { 0, 0, 0, 0 },
+    /* Foveated encoding options */
+    { "fovea-gaze",      required_argument, NULL, 0 },
+    { "fovea-delta",     required_argument, NULL, 0 },
+    { "fovea-sigma",     required_argument, NULL, 0 },
+    { "fovea-gaze-file", required_argument, NULL, 0 },
     { 0, 0, 0, 0 }
 };
 

@@ -281,6 +281,11 @@ namespace X265_NS {
         H0("   --[no-]aq-motion              Block level QP adaptation based on the relative motion between the block and the frame. Default %s\n", OPT(param->bAQMotion));
         H1("   --[no-]sbrc                   Enables the segment based rate control. Default %s\n", OPT(param->bEnableSBRC));
         H0("   --qg-size <int>               Specifies the size of the quantization group (64, 32, 16, 8). Default %d\n", param->rc.qgSize);
+        H0("\nFoveated encoding options (gaze-contingent per-QG QP mapping):\n");
+        H0("   --fovea-gaze <x,y>            Static gaze fixation in pixels (e.g. 960,540 for center).\n");
+        H0("   --fovea-delta <float>         Max QP offset at periphery (0=disabled, range 5..40). Default 0.\n");
+        H0("   --fovea-sigma <float>         Gaussian sigma in pixels (0=auto: 95px = 2.5 deg @ 60cm/24in). Default 0.\n");
+        H0("   --fovea-gaze-file <path>      Per-frame gaze file (format: 'frame_num x y', one per line). Overrides --fovea-gaze.\n");
         H0("   --[no-]cutree                 Enable cutree for Adaptive Quantization. Default %s\n", OPT(param->rc.cuTree));
         H0("   --[no-]rc-grain               Enable rate-control mode to handle grains specifically. Turned on with tune grain. Default %s\n", OPT(param->rc.bEnableGrain));
         H1("   --ipratio <float>             QP factor between I and P. Default %.2f\n", param->rc.ipFactor);
@@ -483,6 +488,10 @@ namespace X265_NS {
         if (output)
             output->release();
         output = NULL;
+
+        if (param->foveaGazeFile)
+            free(param->foveaGazeFile);
+
         if (param && api)
         {
             api->param_free(param);
