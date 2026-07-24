@@ -640,7 +640,7 @@ void TemporalFilter::bilateralFilter(Frame* curFrame, TemporalFilterRefPicInfo* 
 }
 
 void MotionEstimatorTLD::motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel* src,int stride, int height, int width, pixel* buf,
-                                              int row, const int rowSize, MV* previous, uint32_t prevMvStride, int factor)
+                                              int row, const int rowSize, const MV* previous, uint32_t prevMvStride, int factor)
 {
 
     int range = m_searchRange;
@@ -655,7 +655,7 @@ void MotionEstimatorTLD::motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel*
     if (rowStart > height)
         return;
 
-    int rowEnd = (!rowSize) ? height : X265_MIN(rowStart + rowSize, height);  
+    int rowEnd = (!rowSize) ? height : X265_MIN(rowStart + rowSize, height);
     int error;
 
     for (int blockY = rowStart; blockY + blockSize <= rowEnd; blockY += stepSize)
@@ -749,7 +749,7 @@ void MotionEstimatorTLD::motionEstimationLuma(MV *mvs, uint32_t mvStride, pixel*
 
 
 void MotionEstimatorTLD::motionEstimationLumaDoubleRes(MV *mvs, uint32_t mvStride, PicYuv *orig, PicYuv *buffer,
-                                                       MV *previous, uint32_t prevMvStride, int factor, int* minError, int row, const int rowSize)
+                                                       const MV *previous, uint32_t prevMvStride, int factor, int* minError, int row, const int rowSize)
 {
 
     int range = 0;

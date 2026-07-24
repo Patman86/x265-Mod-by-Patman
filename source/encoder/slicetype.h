@@ -344,6 +344,6 @@ protected:
     CostEstimateGroup& operator=(const CostEstimateGroup&);
 };
 
-bool computeEdge(pixel* edgePic, pixel* refPic, pixel* edgeTheta, intptr_t stride, int height, int width, bool bcalcTheta, pixel whitePixel = EDGE_THRESHOLD, int32_t* gradMag = NULL);
+bool computeEdge(pixel* edgePic, const pixel* refPic, pixel* edgeTheta, intptr_t stride, int height, int width, bool bcalcTheta, pixel whitePixel = (pixel)EDGE_THRESHOLD, int32_t* gradMag = NULL);
 }
 #endif // ifndef X265_SLICETYPE_H

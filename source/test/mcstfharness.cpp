@@ -222,6 +222,7 @@ void MCSTFHarness::measureSpeed(const MCSTFPrimitives& ref, const MCSTFPrimitive
     if (opt.motionErrorLumaFrac)
     {
         printf("motionErrorLumaFrac[bs=16]\t");
+        // cppcheck-suppress unsignedPositive
         REPORT_SPEEDUP(opt.motionErrorLumaFrac, ref.motionErrorLumaFrac,
             m_origBuf, TEST_STRIDE, m_refBuf, TEST_STRIDE, CENTER, CENTER, 20, 5, 16, INT_MAX, X265_DEPTH);
     }
@@ -231,6 +232,7 @@ void MCSTFHarness::measureSpeed(const MCSTFPrimitives& ref, const MCSTFPrimitive
         static MV mvs[64];
         pixel* planeOrigin = m_origBuf + PAD * TEST_STRIDE + PAD;
         printf("applyMotion[8x8]\t");
+        // cppcheck-suppress unsignedPositive
         REPORT_SPEEDUP(opt.applyMotion, ref.applyMotion,
             planeOrigin, TEST_STRIDE, m_dstBufOpt, TEST_STRIDE, 64, 64, 8, 8, 8, mvs, 0, 0, 0, 0, 0);
     }
@@ -239,6 +241,7 @@ void MCSTFHarness::measureSpeed(const MCSTFPrimitives& ref, const MCSTFPrimitive
     {
         int variance, diffsum;
         printf("computeBlockStats[bs=8]\t");
+        // cppcheck-suppress unsignedPositive
         REPORT_SPEEDUP(opt.computeBlockStats, ref.computeBlockStats,
             m_origBuf + CENTER * TEST_STRIDE + CENTER, TEST_STRIDE,
             m_refBuf + CENTER * TEST_STRIDE + CENTER, TEST_STRIDE, 8, &variance, &diffsum);
@@ -260,6 +263,7 @@ void MCSTFHarness::measureSpeed(const MCSTFPrimitives& ref, const MCSTFPrimitive
         const double bdw = 1024.0 / (PIXEL_MAX + 1);
 
         printf("bilateralFilter[bs=8,refs=4]\t");
+        // cppcheck-suppress unsignedPositive
         REPORT_SPEEDUP(opt.bilateralFilter, ref.bilateralFilter,
             srcBlk, TEST_STRIDE, 4, refBlks, refStrides, vww, vsw, bdw, (double)PIXEL_MAX, 8, m_dstBufOpt, TEST_STRIDE);
     }

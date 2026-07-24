@@ -97,7 +97,7 @@ uint32_t acEnergyVarHist(uint64_t sum_ssd, int shift)
     return ssd - ((uint64_t)sum * sum >> shift);
 }
 
-bool computeEdge(pixel* edgePic, pixel* refPic, pixel* edgeTheta, intptr_t stride, int height, int width, bool bcalcTheta, pixel whitePixel, int32_t* gradMag)
+bool computeEdge(pixel* edgePic, const pixel* refPic, pixel* edgeTheta, intptr_t stride, int height, int width, bool bcalcTheta, pixel whitePixel, int32_t* gradMag)
 {
     intptr_t rowOne = 0, rowTwo = 0, rowThree = 0, colOne = 0, colTwo = 0, colThree = 0;
     intptr_t middle = 0, topLeft = 0, topRight = 0, bottomLeft = 0, bottomRight = 0;
@@ -975,12 +975,12 @@ int32_t Lookahead::estimateNoise(Frame* curFrame)
     int      width  = curFrame->m_fencPic->m_picWidth;
     int      height = curFrame->m_fencPic->m_picHeight;
     intptr_t stride = curFrame->m_fencPic->m_stride;
-    pixel*   src    = curFrame->m_fencPic->m_picOrg[0];
+    const pixel* src = curFrame->m_fencPic->m_picOrg[0];
 
     /* Blur source for Sobel: reuse m_gaussianPic (5×5 Gaussian, already computed by
      * edgeFilter() during xPreanalyzeQp) when AQ-edge mode ran it; otherwise compute
      * a 3×3 box blur inline. */
-    pixel* blurSrc;
+    const pixel *blurSrc;
     if (m_param->rc.aqMode == X265_AQ_EDGE)
     {
         blurSrc = curFrame->m_gaussianPic
@@ -1011,7 +1011,7 @@ int32_t Lookahead::estimateNoise(Frame* curFrame)
     int32_t* gradMag = m_gradMagBuf;
     memset(gradMag, 0, stride * height * sizeof(int32_t));
 
-    computeEdge(NULL, blurSrc, NULL, stride, height, width, false, EDGE_THRESHOLD, gradMag);
+    computeEdge(NULL, blurSrc, NULL, stride, height, width, false, (pixel)EDGE_THRESHOLD, gradMag);
 
     /* Find peak magnitude then apply adaptive threshold at 15% of peak.
      * Sits between Canny's low (10%) and high (30%) thresholds. */
@@ -2286,7 +2286,7 @@ void Lookahead::slicetypeDecide()
 
                     for (int j = 1; j <= frameEnc->m_mcstf->m_numRef; j++)
                     {
-                        TemporalFilterRefPicInfo* ref = &frameEnc->m_mcstfRefList[j - 1];
+                        const TemporalFilterRefPicInfo* ref = &frameEnc->m_mcstfRefList[j - 1];
                         int refpoc = ref->poc;
 
                         for (int row = 0; row < numBlockRows; row++)

@@ -107,9 +107,9 @@ namespace X265_NS {
         static inline __m256i load8px_epi32(const pixel* p)
     {
 #if X265_DEPTH > 8
-        return _mm256_cvtepu16_epi32(_mm_loadu_si128((const __m128i*)p));
+        return _mm256_cvtepu16_epi32(_mm_loadu_si128(reinterpret_cast<const __m128i*>(p)));
 #else
-        return _mm256_cvtepu8_epi32(_mm_loadl_epi64((const __m128i*)p));
+        return _mm256_cvtepu8_epi32(_mm_loadl_epi64(reinterpret_cast<const __m128i*>(p)));
 #endif
     }
 
@@ -117,9 +117,9 @@ namespace X265_NS {
         static inline __m256i load4px_epi32(const pixel* p)
     {
 #if X265_DEPTH > 8
-        return _mm256_cvtepu16_epi32(_mm_loadl_epi64((const __m128i*)p));
+        return _mm256_cvtepu16_epi32(_mm_loadl_epi64(reinterpret_cast<const __m128i*>(p)));
 #else
-        return _mm256_cvtepu8_epi32(_mm_cvtsi32_si128(*(const int*)p));
+        return _mm256_cvtepu8_epi32(_mm_cvtsi32_si128(*reinterpret_cast<const int*>(p)));
 #endif
     }
 
@@ -132,14 +132,14 @@ namespace X265_NS {
         __m256i packed = _mm256_packus_epi32(v, v);
         __m128i out = _mm256_castsi256_si128(
             _mm256_permute4x64_epi64(packed, 0x08));
-        _mm_storeu_si128((__m128i*)dst, out);
+        _mm_storeu_si128(reinterpret_cast<__m128i*>(dst), out);
 #else
         __m256i as16 = _mm256_packs_epi32(v, v);
         __m128i lo = _mm256_castsi256_si128(as16);
         __m128i hi = _mm256_extracti128_si256(as16, 1);
         __m128i merged = _mm_unpacklo_epi64(lo, hi);
         __m128i out8 = _mm_packus_epi16(merged, merged);
-        _mm_storel_epi64((__m128i*)dst, out8);
+        _mm_storel_epi64(reinterpret_cast<__m128i*>(dst), out8);
 #endif
     }
 
@@ -149,11 +149,11 @@ namespace X265_NS {
         __m128i lo = _mm256_castsi256_si128(v);  /* only lower 4 lanes valid */
 #if X265_DEPTH > 8
         __m128i out = _mm_packus_epi32(lo, _mm_setzero_si128());
-        _mm_storel_epi64((__m128i*)dst, out);
+        _mm_storel_epi64(reinterpret_cast<__m128i*>(dst), out);
 #else
         __m128i as16 = _mm_packs_epi32(lo, _mm_setzero_si128());
         __m128i out8 = _mm_packus_epi16(as16, _mm_setzero_si128());
-        *(int*)dst = _mm_cvtsi128_si32(out8);
+        *reinterpret_cast<int*>(dst) = _mm_cvtsi128_si32(out8);
 #endif
     }
 
@@ -206,19 +206,19 @@ namespace X265_NS {
                  * [255:128].  We build the 256-bit interleaved pairs:
                  *   pairs_ab[255:0] = { unpackhi(s_a, s_b) | unpacklo(s_a, s_b) }
                  * so madd lane i gives  s_a[i]*f_a + s_b[i]*f_b.                 */
-                __m128i s1 = _mm_loadu_si128((const __m128i*) & rowStart[1]);
-                __m128i s2 = _mm_loadu_si128((const __m128i*) & rowStart[2]);
-                __m128i s3 = _mm_loadu_si128((const __m128i*) & rowStart[3]);
-                __m128i s4 = _mm_loadu_si128((const __m128i*) & rowStart[4]);
-                __m128i s5 = _mm_loadu_si128((const __m128i*) & rowStart[5]);
-                __m128i s6 = _mm_loadu_si128((const __m128i*) & rowStart[6]);
+                __m128i s1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rowStart[1]));
+                __m128i s2 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rowStart[2]));
+                __m128i s3 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rowStart[3]));
+                __m128i s4 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rowStart[4]));
+                __m128i s5 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rowStart[5]));
+                __m128i s6 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&rowStart[6]));
 #else
-                __m128i s1 = _mm_cvtepu8_epi16(_mm_loadl_epi64((const __m128i*) & rowStart[1]));
-                __m128i s2 = _mm_cvtepu8_epi16(_mm_loadl_epi64((const __m128i*) & rowStart[2]));
-                __m128i s3 = _mm_cvtepu8_epi16(_mm_loadl_epi64((const __m128i*) & rowStart[3]));
-                __m128i s4 = _mm_cvtepu8_epi16(_mm_loadl_epi64((const __m128i*) & rowStart[4]));
-                __m128i s5 = _mm_cvtepu8_epi16(_mm_loadl_epi64((const __m128i*) & rowStart[5]));
-                __m128i s6 = _mm_cvtepu8_epi16(_mm_loadl_epi64((const __m128i*) & rowStart[6]));
+                __m128i s1 = _mm_cvtepu8_epi16(_mm_loadl_epi64(reinterpret_cast<const __m128i*>(&rowStart[1])));
+                __m128i s2 = _mm_cvtepu8_epi16(_mm_loadl_epi64(reinterpret_cast<const __m128i*>(&rowStart[2])));
+                __m128i s3 = _mm_cvtepu8_epi16(_mm_loadl_epi64(reinterpret_cast<const __m128i*>(&rowStart[3])));
+                __m128i s4 = _mm_cvtepu8_epi16(_mm_loadl_epi64(reinterpret_cast<const __m128i*>(&rowStart[4])));
+                __m128i s5 = _mm_cvtepu8_epi16(_mm_loadl_epi64(reinterpret_cast<const __m128i*>(&rowStart[5])));
+                __m128i s6 = _mm_cvtepu8_epi16(_mm_loadl_epi64(reinterpret_cast<const __m128i*>(&rowStart[6])));
 #endif
 
                 __m256i pairs12 = _mm256_set_m128i(
@@ -237,7 +237,7 @@ namespace X265_NS {
                         _mm256_madd_epi16(pairs34, xf34)),
                     _mm256_madd_epi16(pairs56, xf56));
 
-                _mm256_storeu_si256((__m256i*) & tempArray[y1][x1], h_out);
+                _mm256_storeu_si256(reinterpret_cast<__m256i*>(&tempArray[y1][x1]), h_out);
             }
         }
 
@@ -260,12 +260,12 @@ namespace X265_NS {
 
             for (int x1 = 0; x1 < bs; x1 += 8)
             {
-                __m256i t1 = _mm256_loadu_si256((const __m256i*) & tempArray[outY + 1][x1]);
-                __m256i t2 = _mm256_loadu_si256((const __m256i*) & tempArray[outY + 2][x1]);
-                __m256i t3 = _mm256_loadu_si256((const __m256i*) & tempArray[outY + 3][x1]);
-                __m256i t4 = _mm256_loadu_si256((const __m256i*) & tempArray[outY + 4][x1]);
-                __m256i t5 = _mm256_loadu_si256((const __m256i*) & tempArray[outY + 5][x1]);
-                __m256i t6 = _mm256_loadu_si256((const __m256i*) & tempArray[outY + 6][x1]);
+                __m256i t1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&tempArray[outY + 1][x1]));
+                __m256i t2 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&tempArray[outY + 2][x1]));
+                __m256i t3 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&tempArray[outY + 3][x1]));
+                __m256i t4 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&tempArray[outY + 4][x1]));
+                __m256i t5 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&tempArray[outY + 5][x1]));
+                __m256i t6 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&tempArray[outY + 6][x1]));
 
                 __m256i v = _mm256_add_epi32(
                     _mm256_add_epi32(
@@ -281,9 +281,9 @@ namespace X265_NS {
 
 #if X265_DEPTH > 8
                 __m256i orig = _mm256_cvtepu16_epi32(
-                    _mm_loadu_si128((const __m128i*) & origRowBase[x1]));
+                    _mm_loadu_si128(reinterpret_cast<const __m128i*>(&origRowBase[x1])));
 #else
-                __m128i xorig = _mm_loadl_epi64((const __m128i*) & origRowBase[x1]);
+                __m128i xorig = _mm_loadl_epi64(reinterpret_cast<const __m128i*>(&origRowBase[x1]));
                 __m256i orig = _mm256_set_m128i(
                     _mm_cvtepu8_epi32(_mm_srli_si128(xorig, 4)),
                     _mm_cvtepu8_epi32(xorig));
@@ -363,7 +363,7 @@ namespace X265_NS {
                 acc = _mm256_add_epi32(acc, _mm256_mullo_epi32(s5, xf5));
                 acc = _mm256_add_epi32(acc, _mm256_mullo_epi32(s6, xf6));
 
-                _mm256_storeu_si256((__m256i*) & tempArray[by][0], acc);
+                _mm256_storeu_si256(reinterpret_cast<__m256i*>(&tempArray[by][0]), acc);
             }
         }
         else
@@ -386,7 +386,7 @@ namespace X265_NS {
                 acc = _mm256_add_epi32(acc, _mm256_mullo_epi32(s5, xf5));
                 acc = _mm256_add_epi32(acc, _mm256_mullo_epi32(s6, xf6));
 
-                _mm_storeu_si128((__m128i*) & tempArray[by][0],
+                _mm_storeu_si128(reinterpret_cast<__m128i*>(&tempArray[by][0]),
                     _mm256_castsi256_si128(acc));
             }
         }
@@ -398,12 +398,12 @@ namespace X265_NS {
             {
                 pixel* pDstPel = pDstImage + (y + by) * dstStride + x;
 
-                __m256i t1 = _mm256_loadu_si256((const __m256i*) & tempArray[by + 1][0]);
-                __m256i t2 = _mm256_loadu_si256((const __m256i*) & tempArray[by + 2][0]);
-                __m256i t3 = _mm256_loadu_si256((const __m256i*) & tempArray[by + 3][0]);
-                __m256i t4 = _mm256_loadu_si256((const __m256i*) & tempArray[by + 4][0]);
-                __m256i t5 = _mm256_loadu_si256((const __m256i*) & tempArray[by + 5][0]);
-                __m256i t6 = _mm256_loadu_si256((const __m256i*) & tempArray[by + 6][0]);
+                __m256i t1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&tempArray[by + 1][0]));
+                __m256i t2 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&tempArray[by + 2][0]));
+                __m256i t3 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&tempArray[by + 3][0]));
+                __m256i t4 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&tempArray[by + 4][0]));
+                __m256i t5 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&tempArray[by + 5][0]));
+                __m256i t6 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&tempArray[by + 6][0]));
 
                 __m256i acc = _mm256_mullo_epi32(t1, yf1);
                 acc = _mm256_add_epi32(acc, _mm256_mullo_epi32(t2, yf2));
@@ -427,12 +427,12 @@ namespace X265_NS {
             {
                 pixel* pDstPel = pDstImage + (y + by) * dstStride + x;
 
-                __m256i t1 = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i*) & tempArray[by + 1][0]));
-                __m256i t2 = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i*) & tempArray[by + 2][0]));
-                __m256i t3 = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i*) & tempArray[by + 3][0]));
-                __m256i t4 = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i*) & tempArray[by + 4][0]));
-                __m256i t5 = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i*) & tempArray[by + 5][0]));
-                __m256i t6 = _mm256_castsi128_si256(_mm_loadu_si128((const __m128i*) & tempArray[by + 6][0]));
+                __m256i t1 = _mm256_castsi128_si256(_mm_loadu_si128(reinterpret_cast<const __m128i*>(&tempArray[by + 1][0])));
+                __m256i t2 = _mm256_castsi128_si256(_mm_loadu_si128(reinterpret_cast<const __m128i*>(&tempArray[by + 2][0])));
+                __m256i t3 = _mm256_castsi128_si256(_mm_loadu_si128(reinterpret_cast<const __m128i*>(&tempArray[by + 3][0])));
+                __m256i t4 = _mm256_castsi128_si256(_mm_loadu_si128(reinterpret_cast<const __m128i*>(&tempArray[by + 4][0])));
+                __m256i t5 = _mm256_castsi128_si256(_mm_loadu_si128(reinterpret_cast<const __m128i*>(&tempArray[by + 5][0])));
+                __m256i t6 = _mm256_castsi128_si256(_mm_loadu_si128(reinterpret_cast<const __m128i*>(&tempArray[by + 6][0])));
 
                 __m256i acc = _mm256_mullo_epi32(t1, yf1);
                 acc = _mm256_add_epi32(acc, _mm256_mullo_epi32(t2, yf2));

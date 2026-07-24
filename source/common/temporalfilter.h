@@ -132,10 +132,10 @@ namespace X265_NS {
         void init(const x265_param* param);
 
         void motionEstimationLuma(MV* mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, pixel* buf, int row, const int rowSize,
-            MV* previous = 0, uint32_t prevmvStride = 0, int factor = 1);
+            const MV* previous = 0, uint32_t prevmvStride = 0, int factor = 1);
 
         void motionEstimationLumaDoubleRes(MV* mvs, uint32_t mvStride, PicYuv* orig, PicYuv* buffer,
-            MV* previous, uint32_t prevMvStride, int factor, int* minError, int row, const int rowSize);
+            const MV* previous, uint32_t prevMvStride, int factor, int* minError, int row, const int rowSize);
 
         int motionErrorLumaSSD(pixel* src,
             int stride,
@@ -247,12 +247,9 @@ namespace X265_NS {
 
         static const int MAX_FILTER_JOBS = 512;
         FilterJob m_jobs[MAX_FILTER_JOBS];
-        int       m_jobTotal;
-        int       m_jobAcquired;
-        Lock      m_lock;
 
         BilateralFilterGroup(TemporalFilter& f, ThreadPool* pool)
-            : m_filter(f), m_pool(pool), m_jobTotal(0), m_jobAcquired(0) {}
+            : m_filter(f), m_pool(pool), m_jobs() {}
 
         void add(Frame* frame, TemporalFilterRefPicInfo* mcstfRefList,
                 int numRef, int blockRow, int rowSize)

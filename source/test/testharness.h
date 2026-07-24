@@ -107,7 +107,7 @@ static inline uint32_t __rdtsc(void)
  * Then measures the C reference with BENCH_RUNS / 4 runs and reports X factor and average cycles.*/
 #define REPORT_SPEEDUP(RUNOPT, RUNREF, ...) \
     { \
-        uint32_t cycles = 0; int runs = 0; \
+        uint32_t cycles = 0; uint32_t runs = 0; \
         RUNOPT(__VA_ARGS__); \
         for (int ti = 0; ti < BENCH_RUNS; ti++) { \
             uint32_t t0 = (uint32_t)__rdtsc(); \
@@ -118,7 +118,7 @@ static inline uint32_t __rdtsc(void)
             uint32_t t1 = (uint32_t)__rdtsc() - t0; \
             if (t1 * runs <= cycles * 4 && ti > 0) { cycles += t1; runs++; } \
         } \
-        uint32_t refcycles = 0; int refruns = 0; \
+        uint32_t refcycles = 0; uint32_t refruns = 0; \
         RUNREF(__VA_ARGS__); \
         for (int ti = 0; ti < BENCH_RUNS / 4; ti++) { \
             uint32_t t0 = (uint32_t)__rdtsc(); \
