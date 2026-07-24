@@ -49,6 +49,8 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
 
       - name: Install tools
         run: |
@@ -1504,10 +1506,56 @@ jobs:
           path: summaries/*.log
           retention-days: 3
 
+  prep-assets:
+    name: "Prepare Assets"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'pull_request_target'
+    steps:
+      - name: "Download smoke assets"
+        run: |
+          REPO="${{ secrets.ASSETS_ORG_AND_REPO }}"
+          TAG="v4.2"
+          TOKEN="${{ secrets.ASSETS_TOKEN }}"
+          mkdir -p assets
+          download_asset() {
+            local filename=$1
+            echo "=== Downloading $filename ==="
+            ASSET_ID=$(curl -fsSL \
+              -H "Authorization: token $TOKEN" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/$REPO/releases/tags/$TAG" \
+              | python3 -c "import sys, json; data = json.load(sys.stdin); asset = next((a for a in data['assets'] if a['name'] == '$filename'), None); print(asset['id'] if asset else '')")
+            if [ -z "$ASSET_ID" ]; then
+              echo "Asset '$filename' not found in release $TAG"
+              exit 1
+            fi
+            curl -fsSL \
+              -H "Authorization: token $TOKEN" \
+              -H "Accept: application/octet-stream" \
+              "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID" \
+              -o "assets/$filename"
+            echo "[OK] $filename downloaded"
+          }
+          download_asset "videos.tar.gz"
+          download_asset "goldens-linux.tar.gz"
+          download_asset "goldens-windows.tar.gz"
+          download_asset "decoders-linux.tar.gz"
+          download_asset "decoders-windows.tar.gz"
+          download_asset "conf.tar.gz"
+          download_asset "smoke-tests.tar.gz"
+
+      - name: "Upload assets artifact"
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-assets
+          path: assets/*.tar.gz
+          retention-days: 1
+
   smoke-linux:
     name: "Smoke - Linux (${{ matrix.build }})"
     runs-on: ubuntu-latest
-    needs: [code-quality]
+    needs: [code-quality, prep-assets]
     if: github.event_name == 'pull_request_target'
     timeout-minutes: 60
     strategy:
@@ -1549,36 +1597,23 @@ jobs:
           git clone ${{ github.event.pull_request.base.repo.clone_url }} "$X265_DIR"
           echo "[OK] x265 cloned"
 
-      - name: "Download and extract assets"
+      - name: "Download assets artifact"
+        uses: actions/download-artifact@v8
+        with:
+          name: smoke-assets
+          path: assets
+
+      - name: "Extract assets"
         run: |
-          REPO="${{ secrets.ASSETS_ORG_AND_REPO }}"
-          TAG="v4.2"
-          TOKEN="${{ secrets.ASSETS_TOKEN }}"
-          download_asset() {
-            local filename=$1
-            local dest=$2
-            echo "=== Downloading $filename ==="
-            ASSET_ID=$(curl -fsSL \
-              -H "Authorization: token $TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/$REPO/releases/tags/$TAG" \
-              | python3 -c "import sys, json; data = json.load(sys.stdin); asset = next((a for a in data['assets'] if a['name'] == '$filename'), None); print(asset['id'] if asset else '')")
-            if [ -z "$ASSET_ID" ]; then
-              echo "Asset '$filename' not found in release $TAG"
-              exit 1
-            fi
-            curl -fsSL \
-              -H "Authorization: token $TOKEN" \
-              -H "Accept: application/octet-stream" \
-              "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID" \
-              | tar -xz -C "$dest"
-            echo "[OK] $filename extracted"
+          extract() {
+            tar -xz -C "$2" -f "assets/$1"
+            echo "[OK] $1 extracted"
           }
-          download_asset "videos.tar.gz"         "$TEST_SEQ_DIR"
-          download_asset "goldens-linux.tar.gz"  "$GOLDEN_DIR"
-          download_asset "decoders-linux.tar.gz" "$TEST_SEQ_DIR"
-          download_asset "conf.tar.gz"           "$SMOKE_DIR"
-          download_asset "smoke-tests.tar.gz"    "$SMOKE_DIR"
+          extract "videos.tar.gz"         "$TEST_SEQ_DIR"
+          extract "goldens-linux.tar.gz"  "$GOLDEN_DIR"
+          extract "decoders-linux.tar.gz" "$TEST_SEQ_DIR"
+          extract "conf.tar.gz"           "$SMOKE_DIR"
+          extract "smoke-tests.tar.gz"    "$SMOKE_DIR"
           chmod +x "$DECODER_PATH"
 
       - name: "Copy and configure conf.py into test-harness"
@@ -1637,7 +1672,7 @@ jobs:
   smoke-windows:
     name: "Smoke - Windows (${{ matrix.build }})"
     runs-on: windows-2022
-    needs: [code-quality]
+    needs: [code-quality, prep-assets]
     if: github.event_name == 'pull_request_target'
     timeout-minutes: 60
     defaults:
@@ -1682,37 +1717,24 @@ jobs:
           git clone ${{ github.event.pull_request.base.repo.clone_url }} "$X265_DIR"
           echo "[OK] x265 cloned"
 
-      - name: "Download and extract assets"
+      - name: "Download assets artifact"
+        uses: actions/download-artifact@v8
+        with:
+          name: smoke-assets
+          path: assets
+
+      - name: "Extract assets"
         run: |
-          REPO="${{ secrets.ASSETS_ORG_AND_REPO }}"
-          TAG="v4.2"
-          TOKEN="${{ secrets.ASSETS_TOKEN }}"
-          download_asset() {
-            local filename=$1
-            local dest=$2
-            dest=$(cygpath -u "$2")
-            echo "=== Downloading $filename ==="
-            ASSET_ID=$(curl -fsSL \
-              -H "Authorization: token $TOKEN" \
-              -H "Accept: application/vnd.github.v3+json" \
-              "https://api.github.com/repos/$REPO/releases/tags/$TAG" \
-              | python3 -c "import sys, json; data = json.load(sys.stdin); asset = next((a for a in data['assets'] if a['name'] == '$filename'), None); print(asset['id'] if asset else '')")
-            if [ -z "$ASSET_ID" ]; then
-              echo "Asset '$filename' not found in release $TAG"
-              exit 1
-            fi
-            curl -fsSL \
-              -H "Authorization: token $TOKEN" \
-              -H "Accept: application/octet-stream" \
-              "https://api.github.com/repos/$REPO/releases/assets/$ASSET_ID" \
-              | tar -xz -C "$dest"
-            echo "[OK] $filename extracted"
+          extract() {
+            local dest=$(cygpath -u "$2")
+            tar -xz -C "$dest" -f "assets/$1"
+            echo "[OK] $1 extracted"
           }
-          download_asset "videos.tar.gz"           "$TEST_SEQ_DIR"
-          download_asset "goldens-windows.tar.gz"  "$GOLDEN_DIR"
-          download_asset "decoders-windows.tar.gz" "$TEST_SEQ_DIR"
-          download_asset "conf.tar.gz"             "$SMOKE_DIR"
-          download_asset "smoke-tests.tar.gz"      "$SMOKE_DIR"
+          extract "videos.tar.gz"           "$TEST_SEQ_DIR"
+          extract "goldens-windows.tar.gz"  "$GOLDEN_DIR"
+          extract "decoders-windows.tar.gz" "$TEST_SEQ_DIR"
+          extract "conf.tar.gz"             "$SMOKE_DIR"
+          extract "smoke-tests.tar.gz"      "$SMOKE_DIR"
 
       - name: "Find vcvarsall.bat"
         run: |
