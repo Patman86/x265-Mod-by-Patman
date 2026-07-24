@@ -821,7 +821,7 @@ uint32_t LookaheadTLD::weightCostLuma(Lowres& fenc, Lowres& ref, WeightParam& wp
 
     if (wp.wtPresent)
     {
-        int offset = wp.inputOffset << (X265_DEPTH - 8);
+        int offset = wp.inputOffset * (1 << (X265_DEPTH - 8));
         int scale = wp.inputWeight;
         int denom = wp.log2WeightDenom;
         int round = denom ? 1 << (denom - 1) : 0;
@@ -936,7 +936,7 @@ void LookaheadTLD::weightsAnalyse(Lowres& fenc, Lowres& ref)
     COPY4_IF_LT(minscore, s, minscale, curScale, minoff, curOffset, found, 1);
 
     /* Use a smaller denominator if possible */
-    if (mindenom > 0 && !(minscale & 1))
+    if (mindenom > 0 && minscale && !(minscale & 1))
     {
         unsigned long idx;
         BSF(idx, minscale);
@@ -954,7 +954,7 @@ void LookaheadTLD::weightsAnalyse(Lowres& fenc, Lowres& ref)
         // set weighted delta cost
         fenc.weightedCostDelta[deltaIndex] = minscore / origscore;
 
-        int offset = wp.inputOffset << (X265_DEPTH - 8);
+        int offset = wp.inputOffset * (1 << (X265_DEPTH - 8));
         int scale = wp.inputWeight;
         int denom = wp.log2WeightDenom;
         int round = denom ? 1 << (denom - 1) : 0;
@@ -1068,6 +1068,7 @@ Lookahead::Lookahead(x265_param *param, ThreadPool* pool)
     m_fadeCount = 0;
     m_fadeStart = -1;
     m_origPicBuf = 0;
+    m_metld = NULL;
 
     /* Allow the strength to be adjusted via qcompress, since the two concepts
      * are very similar. */
@@ -2307,7 +2308,7 @@ void Lookahead::slicetypeDecide()
         {
             int leftOver = bframes + 1;
             int8_t gopId = m_gopId - 1;
-            int gopLen = x265_gop_ra_length[gopId];
+            int gopLen = (gopId >= 0) ? x265_gop_ra_length[gopId] : 0;
             int listReset = 0;
 
             m_outputLock.acquire();
@@ -4201,7 +4202,6 @@ void CostEstimateGroup::processTasks(int workerThreadID)
     if (workerThreadID < 0)
         id = pool ? pool->m_numWorkers : 0;
     LookaheadTLD& tld = m_lookahead.m_tld[id];
-    MotionEstimatorTLD& m_metld = m_lookahead.m_metld[id];
 
     m_lock.acquire();
     while (m_jobAcquired < m_jobTotal)
@@ -4217,6 +4217,7 @@ void CostEstimateGroup::processTasks(int workerThreadID)
             if (m_lookahead.m_param->bEnableTemporalFilter && curFrame && m_lookahead.isFilterThisframe(curFrame->m_mcstf->m_sliceTypeConfig, curFrame->m_lowres.sliceType))
             {
                 ProfileLookaheadTime(tld.mcstfBatchElapsedTime);
+                MotionEstimatorTLD& m_metld = m_lookahead.m_metld[id];
 
                 m_metld.m_bitDepth = curFrame->m_param->internalBitDepth;
                 TemporalFilterRefPicInfo* ref = &curFrame->m_mcstfRefList[e.p0];

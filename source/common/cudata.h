@@ -304,8 +304,8 @@ public:
     void     getNeighbourMV(uint32_t puIdx, uint32_t absPartIdx, InterNeighbourMV* neighbours) const;
     void     getIntraTUQtDepthRange(uint32_t tuDepthRange[2], uint32_t absPartIdx) const;
     void     getInterTUQtDepthRange(uint32_t tuDepthRange[2], uint32_t absPartIdx) const;
-    uint32_t getBestRefIdx(uint32_t subPartIdx) const { return ((m_interDir[subPartIdx] & 1) << m_refIdx[0][subPartIdx]) | 
-                                                              (((m_interDir[subPartIdx] >> 1) & 1) << (m_refIdx[1][subPartIdx] + 16)); }
+    uint32_t getBestRefIdx(uint32_t subPartIdx) const { return ((uint32_t)(m_interDir[subPartIdx] & 1) << (m_refIdx[0][subPartIdx] & 31)) |
+                                                              ((uint32_t)((m_interDir[subPartIdx] >> 1) & 1) << ((m_refIdx[1][subPartIdx] + 16) & 31)); }
     uint32_t getPUOffset(uint32_t puIdx, uint32_t absPartIdx) const { return (partAddrTable[(int)m_partSize[absPartIdx]][puIdx] << (m_slice->m_param->unitSizeDepth - m_cuDepth[absPartIdx]) * 2) >> 4; }
 
     uint32_t getNumPartInter(uint32_t absPartIdx) const              { return nbPartsTable[(int)m_partSize[absPartIdx]]; }

@@ -325,8 +325,8 @@ void Deblock::edgeFilterLuma(const CUData* cuQ, uint32_t absPartIdx, uint32_t de
 
     int32_t maskP = -1;
     int32_t maskQ = -1;
-    int32_t betaOffset = pps->deblockingFilterBetaOffsetDiv2 << 1;
-    int32_t tcOffset = pps->deblockingFilterTcOffsetDiv2 << 1;
+    int32_t betaOffset = pps->deblockingFilterBetaOffsetDiv2 * 2;
+    int32_t tcOffset = pps->deblockingFilterTcOffsetDiv2 * 2;
     bool bCheckNoFilter = pps->bTransquantBypassEnabled;
 
     if (dir == EDGE_VER)
@@ -422,7 +422,7 @@ void Deblock::edgeFilterChroma(const CUData* cuQ, uint32_t absPartIdx, uint32_t 
 
     int32_t maskP = -1;
     int32_t maskQ = -1;
-    int32_t tcOffset = pps->deblockingFilterTcOffsetDiv2 << 1;
+    int32_t tcOffset = pps->deblockingFilterTcOffsetDiv2 * 2;
 
     X265_CHECK(((dir == EDGE_VER)
                 ? ((g_zscanToPelX[absPartIdx] + edge * UNIT_SIZE) >> cuQ->m_hChromaShift)

@@ -342,8 +342,8 @@ void Predict::predInterChromaPixel(const PredictionUnit& pu, Yuv& dstYuv, const 
     intptr_t dstStride = dstYuv.m_csize;
     intptr_t refStride = refPic.m_strideC;
 
-    int mvx = mv.x << (1 - m_hChromaShift);
-    int mvy = mv.y << (1 - m_vChromaShift);
+    int mvx = (int32_t)((uint32_t)mv.x << (1 - m_hChromaShift));
+    int mvy = (int32_t)((uint32_t)mv.y << (1 - m_vChromaShift));
 
     intptr_t refOffset = (mvx >> 3) + (mvy >> 3) * refStride;
 
@@ -391,8 +391,8 @@ void Predict::predInterChromaShort(const PredictionUnit& pu, ShortYuv& dstSYuv, 
     intptr_t dstStride = dstSYuv.m_csize;
     intptr_t refStride = refPic.m_strideC;
 
-    int mvx = mv.x << (1 - m_hChromaShift);
-    int mvy = mv.y << (1 - m_vChromaShift);
+    int mvx = (int32_t)((uint32_t)mv.x << (1 - m_hChromaShift));
+    int mvy = (int32_t)((uint32_t)mv.y << (1 - m_vChromaShift));
 
     intptr_t refOffset = (mvx >> 3) + (mvy >> 3) * refStride;
 

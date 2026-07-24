@@ -658,7 +658,7 @@ static void dequant_scaling_c(const int16_t* quantCoef, const int32_t* deQuantCo
         for (int n = 0; n < num; n++)
         {
             coeffQ   = x265_clip3(-32768, 32767, quantCoef[n] * deQuantCoef[n]);
-            coef[n] = (int16_t)x265_clip3(-32768, 32767, coeffQ << (per - shift));
+            coef[n] = (int16_t)x265_clip3(-32768, 32767, coeffQ * (1 << (per - shift)));
         }
     }
 }

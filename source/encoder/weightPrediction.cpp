@@ -179,7 +179,7 @@ uint32_t weightCost(pixel *         fenc,
     if (w)
     {
         /* make a weighted copy of the reference plane */
-        int offset = w->inputOffset << (X265_DEPTH - 8);
+        int offset = w->inputOffset * (1 << (X265_DEPTH - 8));
         int weight = w->inputWeight;
         int denom = w->log2WeightDenom;
         int round = denom ? 1 << (denom - 1) : 0;
@@ -444,7 +444,7 @@ void weightAnalyse(Slice& slice, Frame& frame, x265_param& param)
             /* Use a smaller luma denominator if possible */
             if (!(plane || list))
             {
-                if (mindenom > 0 && !(minscale & 1))
+                if (mindenom > 0 && minscale && !(minscale & 1))
                 {
                     unsigned long idx;
                     BSF(idx, minscale);

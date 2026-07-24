@@ -400,7 +400,7 @@ void cpy2Dto1D_shl(int16_t* dst, const int16_t* src, intptr_t srcStride, int shi
     for (int i = 0; i < size; i++)
     {
         for (int j = 0; j < size; j++)
-            dst[j] = src[j] << shift;
+            dst[j] = (int16_t)((uint32_t)src[j] << shift);
 
         src += srcStride;
         dst += size;
@@ -435,7 +435,7 @@ void cpy1Dto2D_shl(int16_t* dst, const int16_t* src, intptr_t dstStride, int shi
     for (int i = 0; i < size; i++)
     {
         for (int j = 0; j < size; j++)
-            dst[j] = src[j] << shift;
+            dst[j] = (int16_t)((uint32_t)src[j] << shift);
 
         src += size;
         dst += dstStride;
@@ -629,8 +629,8 @@ static void ssim_4x4x2_core(const pixel* pix1, intptr_t stride1, const pixel* pi
         {
             for (int x = 0; x < 4; x++)
             {
-                int a = pix1[x + y * stride1];
-                int b = pix2[x + y * stride2];
+                uint32_t a = pix1[x + y * stride1];
+                uint32_t b = pix2[x + y * stride2];
                 s1 += a;
                 s2 += b;
                 ss += a * a;

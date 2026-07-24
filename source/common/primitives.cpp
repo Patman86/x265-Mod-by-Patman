@@ -86,28 +86,83 @@ void enableLowpassDCTPrimitives(EncoderPrimitives &p)
     p.cu[BLOCK_32x32].dct = p.cu[BLOCK_32x32].lowpass_dct;
 }
 
+#if HIGH_BIT_DEPTH
+namespace {
+/* At HIGH_BIT_DEPTH pixel and int16_t are the same-size 16-bit type, so the
+ * short primitives can serve the pixel variants. These trampolines reinterpret
+ * only the data pointers, avoiding the UB of casting the function pointers
+ * themselves (flagged by UBSan's -fsanitize=function). */
+
+#if !defined(X265_ARCH_ARM64) && !defined(X265_ARCH_RISCV64)
+template<int i>
+sse_t aliasSsePP(const pixel* a, intptr_t strideA, const pixel* b, intptr_t strideB)
+{
+    return primitives.cu[i].sse_ss(reinterpret_cast<const int16_t*>(a), strideA,
+                                   reinterpret_cast<const int16_t*>(b), strideB);
+}
+#endif
+
+template<int i>
+void aliasLumaCopyPS(int16_t* dst, intptr_t dstStride, const pixel* src, intptr_t srcStride)
+{   primitives.pu[i].copy_pp(reinterpret_cast<pixel*>(dst), dstStride, src, srcStride); }
+
+template<int i>
+void aliasLumaCopySP(pixel* dst, intptr_t dstStride, const int16_t* src, intptr_t srcStride)
+{   primitives.pu[i].copy_pp(dst, dstStride, reinterpret_cast<const pixel*>(src), srcStride); }
+
+template<int i>
+void aliasLumaCopySS(int16_t* dst, intptr_t dstStride, const int16_t* src, intptr_t srcStride)
+{   primitives.pu[i].copy_pp(reinterpret_cast<pixel*>(dst), dstStride, reinterpret_cast<const pixel*>(src), srcStride); }
+
+template<int csp, int i>
+void aliasChromaCopyPS(int16_t* dst, intptr_t dstStride, const pixel* src, intptr_t srcStride)
+{   primitives.chroma[csp].pu[i].copy_pp(reinterpret_cast<pixel*>(dst), dstStride, src, srcStride); }
+
+template<int csp, int i>
+void aliasChromaCopySP(pixel* dst, intptr_t dstStride, const int16_t* src, intptr_t srcStride)
+{   primitives.chroma[csp].pu[i].copy_pp(dst, dstStride, reinterpret_cast<const pixel*>(src), srcStride); }
+
+template<int csp, int i>
+void aliasChromaCopySS(int16_t* dst, intptr_t dstStride, const int16_t* src, intptr_t srcStride)
+{   primitives.chroma[csp].pu[i].copy_pp(reinterpret_cast<pixel*>(dst), dstStride, reinterpret_cast<const pixel*>(src), srcStride); }
+
+template<int i>
+struct AliasFiller
+{
+    static void fill(EncoderPrimitives& p)
+    {
+#if !defined(X265_ARCH_ARM64) && !defined(X265_ARCH_RISCV64)
+        p.cu[i].sse_pp = aliasSsePP<i>;
+#endif
+        p.cu[i].copy_ps = aliasLumaCopyPS<i>;
+        p.cu[i].copy_sp = aliasLumaCopySP<i>;
+        p.cu[i].copy_ss = aliasLumaCopySS<i>;
+
+        p.chroma[X265_CSP_I420].cu[i].copy_ps = aliasChromaCopyPS<X265_CSP_I420, i>;
+        p.chroma[X265_CSP_I420].cu[i].copy_sp = aliasChromaCopySP<X265_CSP_I420, i>;
+        p.chroma[X265_CSP_I420].cu[i].copy_ss = aliasChromaCopySS<X265_CSP_I420, i>;
+
+        p.chroma[X265_CSP_I422].cu[i].copy_ps = aliasChromaCopyPS<X265_CSP_I422, i>;
+        p.chroma[X265_CSP_I422].cu[i].copy_sp = aliasChromaCopySP<X265_CSP_I422, i>;
+        p.chroma[X265_CSP_I422].cu[i].copy_ss = aliasChromaCopySS<X265_CSP_I422, i>;
+
+        AliasFiller<i + 1>::fill(p);
+    }
+};
+
+template<>
+struct AliasFiller<NUM_CU_SIZES>
+{
+    static void fill(EncoderPrimitives&) {}
+};
+} // namespace
+#endif
+
 void setupAliasPrimitives(EncoderPrimitives &p)
 {
 #if HIGH_BIT_DEPTH
     /* at HIGH_BIT_DEPTH, pixel == short so we can alias many primitives */
-    for (int i = 0; i < NUM_CU_SIZES; i++)
-    {
-#if !defined(X265_ARCH_ARM64) && !defined(X265_ARCH_RISCV64)
-        p.cu[i].sse_pp = (pixel_sse_t)p.cu[i].sse_ss;
-#endif
-
-        p.cu[i].copy_ps = (copy_ps_t)p.pu[i].copy_pp;
-        p.cu[i].copy_sp = (copy_sp_t)p.pu[i].copy_pp;
-        p.cu[i].copy_ss = (copy_ss_t)p.pu[i].copy_pp;
-
-        p.chroma[X265_CSP_I420].cu[i].copy_ps = (copy_ps_t)p.chroma[X265_CSP_I420].pu[i].copy_pp;
-        p.chroma[X265_CSP_I420].cu[i].copy_sp = (copy_sp_t)p.chroma[X265_CSP_I420].pu[i].copy_pp;
-        p.chroma[X265_CSP_I420].cu[i].copy_ss = (copy_ss_t)p.chroma[X265_CSP_I420].pu[i].copy_pp;
-
-        p.chroma[X265_CSP_I422].cu[i].copy_ps = (copy_ps_t)p.chroma[X265_CSP_I422].pu[i].copy_pp;
-        p.chroma[X265_CSP_I422].cu[i].copy_sp = (copy_sp_t)p.chroma[X265_CSP_I422].pu[i].copy_pp;
-        p.chroma[X265_CSP_I422].cu[i].copy_ss = (copy_ss_t)p.chroma[X265_CSP_I422].pu[i].copy_pp;
-    }
+    AliasFiller<0>::fill(p);
 #endif
 
     /* alias chroma 4:4:4 from luma primitives (all but chroma filters) */
