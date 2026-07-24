@@ -239,6 +239,11 @@ int main(int argc, char *argv[])
         memset(&vecprim, 0, sizeof(vecprim));
         setupIntrinsicPrimitives(vecprim, testArch[i].flag);
         setupAliasPrimitives(vecprim);
+        /* At HIGH_BIT_DEPTH the aliased primitives (sse_pp, copy_ps/sp/ss, ...)
+         * are trampolines that dispatch through the global primitive table, so
+         * it must point at the primitives currently under test before the
+         * harnesses run - otherwise the aliases jump through NULL slots. */
+        memcpy(&primitives, &vecprim, sizeof(EncoderPrimitives));
         for (size_t h = 0; h < sizeof(harness) / sizeof(TestHarness*); h++)
         {
             if (testname && strncmp(testname, harness[h]->getName(), strlen(testname)))

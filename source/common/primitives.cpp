@@ -131,20 +131,36 @@ struct AliasFiller
 {
     static void fill(EncoderPrimitives& p)
     {
+        /* Only install an alias when the underlying short primitive it forwards
+         * to actually exists. The trampolines dispatch through the base entry,
+         * so aliasing a missing base would produce a non-NULL pointer that jumps
+         * through a NULL slot when invoked. Mirroring the base's presence keeps
+         * the original "NULL base => NULL alias" behaviour that callers (and the
+         * testbench's "if (opt.foo)" guards) rely on. */
 #if !defined(X265_ARCH_ARM64) && !defined(X265_ARCH_RISCV64)
-        p.cu[i].sse_pp = aliasSsePP<i>;
+        if (p.cu[i].sse_ss)
+            p.cu[i].sse_pp = aliasSsePP<i>;
 #endif
-        p.cu[i].copy_ps = aliasLumaCopyPS<i>;
-        p.cu[i].copy_sp = aliasLumaCopySP<i>;
-        p.cu[i].copy_ss = aliasLumaCopySS<i>;
+        if (p.pu[i].copy_pp)
+        {
+            p.cu[i].copy_ps = aliasLumaCopyPS<i>;
+            p.cu[i].copy_sp = aliasLumaCopySP<i>;
+            p.cu[i].copy_ss = aliasLumaCopySS<i>;
+        }
 
-        p.chroma[X265_CSP_I420].cu[i].copy_ps = aliasChromaCopyPS<X265_CSP_I420, i>;
-        p.chroma[X265_CSP_I420].cu[i].copy_sp = aliasChromaCopySP<X265_CSP_I420, i>;
-        p.chroma[X265_CSP_I420].cu[i].copy_ss = aliasChromaCopySS<X265_CSP_I420, i>;
+        if (p.chroma[X265_CSP_I420].pu[i].copy_pp)
+        {
+            p.chroma[X265_CSP_I420].cu[i].copy_ps = aliasChromaCopyPS<X265_CSP_I420, i>;
+            p.chroma[X265_CSP_I420].cu[i].copy_sp = aliasChromaCopySP<X265_CSP_I420, i>;
+            p.chroma[X265_CSP_I420].cu[i].copy_ss = aliasChromaCopySS<X265_CSP_I420, i>;
+        }
 
-        p.chroma[X265_CSP_I422].cu[i].copy_ps = aliasChromaCopyPS<X265_CSP_I422, i>;
-        p.chroma[X265_CSP_I422].cu[i].copy_sp = aliasChromaCopySP<X265_CSP_I422, i>;
-        p.chroma[X265_CSP_I422].cu[i].copy_ss = aliasChromaCopySS<X265_CSP_I422, i>;
+        if (p.chroma[X265_CSP_I422].pu[i].copy_pp)
+        {
+            p.chroma[X265_CSP_I422].cu[i].copy_ps = aliasChromaCopyPS<X265_CSP_I422, i>;
+            p.chroma[X265_CSP_I422].cu[i].copy_sp = aliasChromaCopySP<X265_CSP_I422, i>;
+            p.chroma[X265_CSP_I422].cu[i].copy_ss = aliasChromaCopySS<X265_CSP_I422, i>;
+        }
 
         AliasFiller<i + 1>::fill(p);
     }
