@@ -28,6 +28,15 @@
 
 using namespace X265_NS;
 
+/* At HIGH_BIT_DEPTH some cu[] slots are aliases: setupAliasPrimitives() installs
+ * the same trampoline in both tables, so ref == opt and the check can never fail.
+ * Skip those; the copy_pp / sse_ss they forward to is checked directly below. */
+#if HIGH_BIT_DEPTH
+#define TESTABLE(ref, opt) ((opt) && (ref) != (opt))
+#else
+#define TESTABLE(ref, opt) (opt)
+#endif
+
 PixelHarness::PixelHarness()
 {
     /* [0] --- Random values
@@ -2458,7 +2467,7 @@ bool PixelHarness::testPU(int part, const EncoderPrimitives& ref, const EncoderP
 
     if (part < NUM_CU_SIZES)
     {
-        if (opt.cu[part].sse_pp)
+        if (TESTABLE(ref.cu[part].sse_pp, opt.cu[part].sse_pp))
         {
             if (!check_pixel_sse(ref.cu[part].sse_pp, opt.cu[part].sse_pp))
             {
@@ -2503,7 +2512,7 @@ bool PixelHarness::testPU(int part, const EncoderPrimitives& ref, const EncoderP
             }
         }
 
-        if (opt.cu[part].copy_ss)
+        if (TESTABLE(ref.cu[part].copy_ss, opt.cu[part].copy_ss))
         {
             if (!check_copy_ss(ref.cu[part].copy_ss, opt.cu[part].copy_ss))
             {
@@ -2512,7 +2521,7 @@ bool PixelHarness::testPU(int part, const EncoderPrimitives& ref, const EncoderP
             }
         }
 
-        if (opt.cu[part].copy_sp)
+        if (TESTABLE(ref.cu[part].copy_sp, opt.cu[part].copy_sp))
         {
             if (!check_copy_sp(ref.cu[part].copy_sp, opt.cu[part].copy_sp))
             {
@@ -2521,7 +2530,7 @@ bool PixelHarness::testPU(int part, const EncoderPrimitives& ref, const EncoderP
             }
         }
 
-        if (opt.cu[part].copy_ps)
+        if (TESTABLE(ref.cu[part].copy_ps, opt.cu[part].copy_ps))
         {
             if (!check_copy_ps(ref.cu[part].copy_ps, opt.cu[part].copy_ps))
             {
@@ -2567,7 +2576,7 @@ bool PixelHarness::testPU(int part, const EncoderPrimitives& ref, const EncoderP
         }
         if (part < NUM_CU_SIZES)
         {
-            if (opt.chroma[i].cu[part].sse_pp)
+            if (TESTABLE(ref.chroma[i].cu[part].sse_pp, opt.chroma[i].cu[part].sse_pp))
             {
                 if (!check_pixel_sse(ref.chroma[i].cu[part].sse_pp, opt.chroma[i].cu[part].sse_pp))
                 {
@@ -2599,7 +2608,7 @@ bool PixelHarness::testPU(int part, const EncoderPrimitives& ref, const EncoderP
                     return false;
                 }
             }
-            if (opt.chroma[i].cu[part].copy_sp)
+            if (TESTABLE(ref.chroma[i].cu[part].copy_sp, opt.chroma[i].cu[part].copy_sp))
             {
                 if (!check_copy_sp(ref.chroma[i].cu[part].copy_sp, opt.chroma[i].cu[part].copy_sp))
                 {
@@ -2607,7 +2616,7 @@ bool PixelHarness::testPU(int part, const EncoderPrimitives& ref, const EncoderP
                     return false;
                 }
             }
-            if (opt.chroma[i].cu[part].copy_ps)
+            if (TESTABLE(ref.chroma[i].cu[part].copy_ps, opt.chroma[i].cu[part].copy_ps))
             {
                 if (!check_copy_ps(ref.chroma[i].cu[part].copy_ps, opt.chroma[i].cu[part].copy_ps))
                 {
@@ -2615,7 +2624,7 @@ bool PixelHarness::testPU(int part, const EncoderPrimitives& ref, const EncoderP
                     return false;
                 }
             }
-            if (opt.chroma[i].cu[part].copy_ss)
+            if (TESTABLE(ref.chroma[i].cu[part].copy_ss, opt.chroma[i].cu[part].copy_ss))
             {
                 if (!check_copy_ss(ref.chroma[i].cu[part].copy_ss, opt.chroma[i].cu[part].copy_ss))
                 {
