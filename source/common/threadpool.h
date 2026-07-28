@@ -82,7 +82,7 @@ public:
 
     // Will awaken one idle thread, preferring a thread which most recently
     // performed work for this provider.
-    void tryWakeOne();
+    bool tryWakeOne();
 };
 
 class ThreadPool
@@ -112,7 +112,7 @@ public:
     int  tryAcquireSleepingThread(sleepbitmap_t firstTryBitmap, sleepbitmap_t secondTryBitmap);
     int  tryBondPeers(int maxPeers, sleepbitmap_t peerBitmap, BondedTaskGroup& master);
 
-    static ThreadPool* allocThreadPools(x265_param* p, int& numPools, bool isThreadsReserved);
+    static ThreadPool* allocThreadPools(x265_param* p, int& numPools, int& numTmePools, bool isThreadsReserved);
     static int  getCpuCount();
     static int  getNumaNodeCount();
     static int  getFrameThreadsCount(x265_param* p, int cpuCount);

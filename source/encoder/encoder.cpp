@@ -142,6 +142,7 @@ Encoder::Encoder()
     m_param = NULL;
     m_latestParam = NULL;
     m_threadPool = NULL;
+    m_numTmePools = 0;
     m_analysisFileIn = NULL;
     m_analysisFileOut = NULL;
     m_filmGrainIn = NULL;
@@ -271,7 +272,7 @@ void Encoder::create()
 
     m_numPools = 0;
     if (allowPools)
-        m_threadPool = ThreadPool::allocThreadPools(p, m_numPools, 0);
+        m_threadPool = ThreadPool::allocThreadPools(p, m_numPools, m_numTmePools, 0);
     else
     {
         if (!p->frameNumThreads)
@@ -308,11 +309,11 @@ void Encoder::create()
     if (p->bEnableWavefront)
         len += snprintf(buf + len, sizeof(buf) - len, "wpp(%d rows)", rows);
     if (p->bDistributeModeAnalysis)
-        len += snprintf(buf + len,  sizeof(buf) - len, "%spmode", len ? "+" : "");
+        len += snprintf(buf + len,  sizeof(buf) - len, "%spmode", len ? " + " : "");
     if (p->bDistributeMotionEstimation)
-        len += snprintf(buf + len, sizeof(buf) - len, "%spme ", len ? "+" : "");
+        len += snprintf(buf + len, sizeof(buf) - len, "%spme", len ? " + " : "");
     if (p->bThreadedME)
-        len += snprintf(buf + len, sizeof(buf) - len, "%sthreaded-me", len ? "+": "");
+        len += snprintf(buf + len, sizeof(buf) - len, "%sthreaded-me(%d workers)", len ? " + ": "", p->tmeNumThreads);
     if (!len)
         strcpy(buf, "none");
 
@@ -334,19 +335,20 @@ void Encoder::create()
         // First threadpool belongs to ThreadedME, if the feature is enabled
         if (p->bThreadedME)
         {
-            m_threadedME->m_pool = &m_threadPool[0];
-            m_threadedME->m_jpId = 0;
-
-            m_threadPool[0].m_numProviders = 1;
-            m_threadPool[0].m_jpTable[m_threadedME->m_jpId] = m_threadedME;
+            if (!m_threadedME->bindPools(m_threadPool, m_numTmePools))
+            {
+                x265_log(p, X265_LOG_ERROR, "Failed to bind ThreadedME worker pools\n");
+                m_aborted = true;
+                return;
+            }
         }
 
-        int numFrameThreadPools = (!m_param->bThreadedME) ? m_numPools : m_numPools - 1;
+        int numFrameThreadPools = m_numPools - m_numTmePools;
 
         for (int i = 0; i < m_param->frameNumThreads; i++)
         {
             // Since first pool belongs to ThreadedME
-            int pool = static_cast<int>(p->bThreadedME) + i % numFrameThreadPools;
+            int pool = m_numTmePools + i % numFrameThreadPools;
             m_frameEncoder[i]->m_pool = &m_threadPool[pool];
             m_frameEncoder[i]->m_jpId = m_threadPool[pool].m_numProviders++;
             m_threadPool[pool].m_jpTable[m_frameEncoder[i]->m_jpId] = m_frameEncoder[i];
@@ -375,24 +377,34 @@ void Encoder::create()
         m_scalingList.setDefaultScalingList();
     else if (m_scalingList.parseScalingList(m_param->scalingLists))
         m_aborted = true;
-    int pools = m_numPools;
+
+    /* Register the Lookahead job provider only after the FrameEncoders have
+     * claimed their job-provider ids. When lookahead shares a physical pool
+     * with frame encoders (the default --lookahead-threads 0 case), a
+     * FrameEncoder must own jpId 0 on that pool: the jpId-0 provider is the one
+     * that allocates and distributes the pool's ThreadLocalData, and it must be
+     * a FrameEncoder. Registering lookahead first would give it jpId 0, leaving
+     * every FrameEncoder on that pool with a NULL m_tld and crashing at encode. */
+    int lookaheadPools = m_numPools;
     ThreadPool* lookAheadThreadPool = 0;
     if (m_param->lookaheadThreads > 0)
     {
-        lookAheadThreadPool = ThreadPool::allocThreadPools(p, pools, 1);
+        int lookaheadTmePools = 0;
+        lookAheadThreadPool = ThreadPool::allocThreadPools(p, lookaheadPools, lookaheadTmePools, 1);
     }
     else
-        lookAheadThreadPool = (!m_param->bThreadedME) ? m_threadPool : &m_threadPool[1];
+        lookAheadThreadPool = m_threadPool ? &m_threadPool[m_numTmePools] : NULL;
     m_lookahead = new Lookahead(m_param, lookAheadThreadPool);
-    if (pools)
+    m_lookahead->m_numPools = lookaheadPools;
+    if (lookaheadPools)
     {
         m_lookahead->m_jpId = lookAheadThreadPool[0].m_numProviders++;
         lookAheadThreadPool[0].m_jpTable[m_lookahead->m_jpId] = m_lookahead;
     }
     if (m_param->lookaheadThreads > 0)
-        for (int i = 0; i < pools; i++)
+        for (int i = 0; i < lookaheadPools; i++)
             lookAheadThreadPool[i].start();
-    m_lookahead->m_numPools = pools;
+
     m_dpb = new DPB(m_param);
 
     if (p->bThreadedME)
@@ -6556,4 +6568,3 @@ fail:
     }
     return false;
 }
-

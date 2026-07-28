@@ -32,10 +32,40 @@
 namespace X265_NS {
 int g_puStartIdx[2 * MAX_CU_SIZE + 1][NUM_PART_SIZES] = {{0}};
 
+TmeProxyProvider::TmeProxyProvider(ThreadedME& master, ThreadPool* pool, int workerOffset)
+    : m_master(master)
+    , m_workerOffset(workerOffset)
+{
+    m_pool = pool;
+    m_jpId = 0;
+}
+
+void TmeProxyProvider::findJob(int workerThreadId)
+{
+    m_master.findJob(m_workerOffset + workerThreadId, *this);
+}
+
+bool ThreadedME::bindPools(ThreadPool* pools, int numPools)
+{
+    int workerOffset = 0;
+    for (int i = 0; i < numPools; i++)
+    {
+        TmeProxyProvider* provider = new TmeProxyProvider(*this, &pools[i], workerOffset);
+        if (!provider)
+            return false;
+
+        m_poolProxies.push_back(provider);
+        pools[i].m_numProviders = 1;
+        pools[i].m_jpTable[0] = provider;
+        workerOffset += pools[i].m_numWorkers;
+    }
+    m_tldCount = workerOffset;
+    return !m_poolProxies.empty();
+}
+
 bool ThreadedME::create()
 {
     m_active = true;
-    m_tldCount = m_pool->m_numWorkers;
     m_tld = new ThreadLocalData[m_tldCount];
     for (int i = 0; i < m_tldCount; i++)
     {
@@ -159,26 +189,41 @@ void ThreadedME::threadMain()
     }
 }
 
-void ThreadedME::findJob(int workerThreadId)
+void ThreadedME::tryWakeOne()
+{
+    int providerCount = static_cast<int>(m_poolProxies.size());
+    for (int i = 0; i < providerCount; i++)
+    {
+        int provider = (m_nextProvider + i) % providerCount;
+        if (m_poolProxies[provider]->tryWakeOne())
+        {
+            m_nextProvider = (provider + 1) % providerCount;
+            return;
+        }
+    }
+    m_nextProvider = (m_nextProvider + 1) % providerCount;
+}
+
+void ThreadedME::findJob(int workerThreadId, TmeProxyProvider& provider)
 {
     m_taskQueueLock.acquire();
     if (m_taskQueue.empty())
     {
+        provider.m_helpWanted = false;
         m_taskQueueLock.release();
-        m_helpWanted = true;
         return;
     }
 
     int64_t stime = x265_mdate();
 
 #ifdef DETAILED_CU_STATS
-    ScopedElapsedTime tmeTime(m_tld[workerThreadId].analysis.m_stats[m_jpId].tmeTime);
-    m_tld[workerThreadId].analysis.m_stats[m_jpId].countTmeTasks++;
+    ScopedElapsedTime tmeTime(m_tld[workerThreadId].analysis.m_stats[0].tmeTime);
+    m_tld[workerThreadId].analysis.m_stats[0].countTmeTasks++;
 #endif
 
     CTUTask task = m_taskQueue.top();
     m_taskQueue.pop();
-    m_helpWanted = !m_taskQueue.empty();
+    provider.m_helpWanted = !m_taskQueue.empty();
     m_taskQueueLock.release();
 
     int numCols = (m_param->sourceWidth + m_param->maxCUSize - 1) / m_param->maxCUSize;
@@ -225,16 +270,21 @@ void ThreadedME::stopJobs()
 
 void ThreadedME::destroy()
 {
-    for (int i = 0; i < m_tldCount; i++)
-        m_tld[i].destroy();
+    if (m_tld)
+        for (int i = 0; i < m_tldCount; i++)
+            m_tld[i].destroy();
     delete[] m_tld;
+    m_tld = NULL;
+    for (size_t i = 0; i < m_poolProxies.size(); i++)
+        delete m_poolProxies[i];
+    m_poolProxies.clear();
 }
 
 void ThreadedME::collectStats()
 {
 #ifdef DETAILED_CU_STATS
     for (int i = 0; i < m_tldCount; i++)
-        m_cuStats.accumulate(m_tld[i].analysis.m_stats[m_jpId], *m_param);
+        m_cuStats.accumulate(m_tld[i].analysis.m_stats[0], *m_param);
 #endif
 }
 

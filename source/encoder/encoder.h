@@ -192,6 +192,7 @@ public:
     int                m_outputCount;
     int                m_bframeDelay;
     int                m_numPools;
+    int                m_numTmePools;
     int                m_curEncoder;
 
     // weighted prediction

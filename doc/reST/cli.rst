@@ -306,10 +306,10 @@ Performance Options
 	64-bit machines, or 16 for 32-bit machines. If the total number of threads
 	in the system doesn't obey this constraint, we may spawn fewer threads
 	than cores which has been empirically shown to be better for performance. 
-	However, when :option:`--threaded-me` is enabled, this behavior is 
-	overridden and a single thread pool larger than 64 threads may be
-	created. ThreadedME is a singleton job provider, and multiple frame
-	encoders may push work to it concurrently.
+	When :option:`--threaded-me` is enabled, small final pools are retained
+	so its calculated thread allocation is not truncated. ThreadedME remains
+	a singleton scheduler, but uses proxy job providers when its workers span
+	multiple physical pools. No physical pool exceeds the bitmap thread limit.
 
 	If the five pool features: :option:`--wpp`, :option:`--pmode(deprecated)`,
 	:option:`--pme(deprecated)`, :option:`--lookahead-slices` and :option:`--threaded-me`
@@ -320,14 +320,13 @@ Performance Options
 
 	When :option:`--threaded-me` is enabled, x265 estimates the number of
 	threads to assign to ThreadedME based on motion estimation workload and
-	spawns a dedicated threadpool (threadpool 0) for it. This pool may span
-	multiple NUMA nodes when the ThreadedME allocation target requires it. The remaining
-	threads are then used to create the other pools, which are assigned to
-	frame encoders and lookahead.
+	assigns one or more leading physical thread pools to it. These pools may
+	span multiple NUMA nodes when the ThreadedME allocation target requires
+	it. The remaining pools are assigned to frame encoders and lookahead.
 
-	Frame encoders are distributed between the available thread pools,
-	and the encoder will never generate more thread pools than
-	:option:`--frame-threads`.  The pools are used for WPP and for
+	Frame encoders are distributed between the available frame pools,
+	and the encoder will never generate more frame pools than
+	:option:`--frame-threads`. The pools are used for WPP and for
 	distributed analysis and motion search.
 
 	On Windows, the native APIs offer sufficient functionality to

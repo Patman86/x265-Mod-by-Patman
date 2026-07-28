@@ -2352,6 +2352,10 @@ typedef struct x265_param
     /* Number of rows upto which ThreadedME processes tasks ahead of WPP */
     int      tmeNumBufferRows;
 
+    /* Number of worker threads assigned to the ThreadedME thread pools.
+     * Not configurable by the user. */
+    int      tmeNumThreads;
+
     /*SBRC*/
     int      bEnableSBRC;
 

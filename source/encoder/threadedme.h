@@ -45,6 +45,17 @@ extern int g_puStartIdx[2 * MAX_CU_SIZE + 1][NUM_PART_SIZES];
 class Encoder;
 class Analysis;
 class FrameEncoder;
+class ThreadedME;
+
+class TmeProxyProvider : public JobProvider
+{
+public:
+    ThreadedME& m_master;
+    int         m_workerOffset;
+
+    TmeProxyProvider(ThreadedME& master, ThreadPool* pool, int workerOffset);
+    void findJob(int workerThreadId);
+};
 
 struct PUBlock {
     uint32_t width;
@@ -154,10 +165,9 @@ struct CompareCTUTask {
  * @brief Threaded motion-estimation module that schedules CTU blocks across worker threads.
  *
  * Owns per-worker analysis state (ThreadLocalData), manages the CTU task queues,
- * and exposes a JobProvider interface for the thread pool to execute MVP
- * derivation and ME searches in parallel.
+ * and coordinates proxy job providers across one or more physical pools.
  */
-class ThreadedME: public JobProvider, public Thread
+class ThreadedME: public Thread
 {
 public:
     x265_param*             m_param;
@@ -172,6 +182,8 @@ public:
 
     ThreadLocalData*        m_tld;
     int                     m_tldCount;
+    std::vector<TmeProxyProvider*> m_poolProxies;
+    int                     m_nextProvider;
 
 #ifdef DETAILED_CU_STATS
     CUStats                 m_cuStats;
@@ -180,10 +192,20 @@ public:
     /**
      * @brief Construct the ThreadedME manager; call create() before use.
      */
-    ThreadedME(x265_param* param, Encoder& enc): m_param(param), m_enc(enc) {};
+    ThreadedME(x265_param* param, Encoder& enc)
+        : m_param(param)
+        , m_enc(enc)
+        , m_enqueueSeq(0)
+        , m_tld(NULL)
+        , m_tldCount(0)
+        , m_nextProvider(0)
+    {};
+
+    /** Register one proxy provider for every physical ThreadedME pool. */
+    bool bindPools(ThreadPool* pools, int numPools);
     
     /**
-     * @brief Creates threadpool, thread local data and registers itself as a job provider
+     * @brief Creates thread local data for all registered physical pools
      */
     bool create();
 
@@ -218,7 +240,10 @@ public:
      *
      * Called by worker threads via JobProvider; processes an entire CTU block.
      */
-    void findJob(int workerThreadId);
+    void findJob(int workerThreadId, TmeProxyProvider& provider);
+
+    /** Wake a worker from any ThreadedME physical pool. */
+    void tryWakeOne();
 
     /**
      * @brief Stops worker threads
