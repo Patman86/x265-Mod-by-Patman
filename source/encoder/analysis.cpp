@@ -4381,7 +4381,10 @@ int Analysis::calculateQpforCuSize(const CUData& ctu, const CUGeom& cuGeom, int3
                     cnt++;
                 }
             }
-            dQpOffset /= cnt;
+            if (cnt)
+            {
+                dQpOffset /= cnt;
+            }
             qp += dQpOffset;
             if (complexCheck)
             {

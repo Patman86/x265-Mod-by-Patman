@@ -53,9 +53,10 @@ struct QpParam
             rem = qpScaled % 6;
             per = qpScaled / 6;
             qp  = qpScaled;
-            lambda2 = (int64_t)(x265_lambda2_tab[qp - QP_BD_OFFSET] * 256. + 0.5);
-            lambda  = (int32_t)(x265_lambda_tab[qp - QP_BD_OFFSET] * 256. + 0.5);
-            X265_CHECK((x265_lambda_tab[qp - QP_BD_OFFSET] * 256. + 0.5) < (double)MAX_INT, "x265_lambda_tab[] value too large\n");
+            int lambdaIdx = x265_clip3(QP_MIN, QP_MAX_MAX, qp - QP_BD_OFFSET);
+            lambda2 = (int64_t)(x265_lambda2_tab[lambdaIdx] * 256. + 0.5);
+            lambda  = (int32_t)(x265_lambda_tab[lambdaIdx] * 256. + 0.5);
+            X265_CHECK((x265_lambda_tab[lambdaIdx] * 256. + 0.5) < (double)MAX_INT, "x265_lambda_tab[] value too large\n");
         }
     }
 };

@@ -67,6 +67,10 @@ PicYuv::PicYuv()
     m_strideC = 0;
     m_hChromaShift = 0;
     m_vChromaShift = 0;
+    m_lumaMarginX = 0;
+    m_lumaMarginY = 0;
+    m_chromaMarginX = 0;
+    m_chromaMarginY = 0;
 }
 
 bool PicYuv::create(x265_param* param, bool picAlloc, pixel *pixelbuf)

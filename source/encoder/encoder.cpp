@@ -2261,9 +2261,9 @@ int Encoder::encode(const x265_picture* pic_in, x265_picture* pic_out)
 
         /* pop a single frame from decided list, then provide to frame encoder
          * curEncoder is guaranteed to be idle at this point */
-        if (!pass)
+        if (!pass && (!m_param->chunkEnd || (m_encodedFrameNum < m_param->chunkEnd)))
             frameEnc[0] = m_lookahead->getDecidedPicture();
-        if (frameEnc[0] && !pass && (!m_param->chunkEnd || (m_encodedFrameNum < m_param->chunkEnd)))
+        if (frameEnc[0] && !pass)
         {
 
 #if ENABLE_ALPHA || ENABLE_MULTIVIEW
