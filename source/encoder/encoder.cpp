@@ -302,23 +302,6 @@ void Encoder::create()
         p->bThreadedME = 0;
     }
 
-    x265_log(p, X265_LOG_INFO, "Slices                              : %d\n", p->maxSlices);
-
-    char buf[128];
-    int len = 0;
-    if (p->bEnableWavefront)
-        len += snprintf(buf + len, sizeof(buf) - len, "wpp(%d rows)", rows);
-    if (p->bDistributeModeAnalysis)
-        len += snprintf(buf + len,  sizeof(buf) - len, "%spmode", len ? " + " : "");
-    if (p->bDistributeMotionEstimation)
-        len += snprintf(buf + len, sizeof(buf) - len, "%spme", len ? " + " : "");
-    if (p->bThreadedME)
-        len += snprintf(buf + len, sizeof(buf) - len, "%sthreaded-me(%d workers)", len ? " + ": "", p->tmeNumThreads);
-    if (!len)
-        strcpy(buf, "none");
-
-    x265_log(p, X265_LOG_INFO, "frame threads / pool features       : %d / %s\n", p->frameNumThreads, buf);
-
     for (int i = 0; i < m_param->frameNumThreads; i++)
     {
         m_frameEncoder[i] = new FrameEncoder;
@@ -378,13 +361,6 @@ void Encoder::create()
     else if (m_scalingList.parseScalingList(m_param->scalingLists))
         m_aborted = true;
 
-    /* Register the Lookahead job provider only after the FrameEncoders have
-     * claimed their job-provider ids. When lookahead shares a physical pool
-     * with frame encoders (the default --lookahead-threads 0 case), a
-     * FrameEncoder must own jpId 0 on that pool: the jpId-0 provider is the one
-     * that allocates and distributes the pool's ThreadLocalData, and it must be
-     * a FrameEncoder. Registering lookahead first would give it jpId 0, leaving
-     * every FrameEncoder on that pool with a NULL m_tld and crashing at encode. */
     int lookaheadPools = m_numPools;
     ThreadPool* lookAheadThreadPool = 0;
     if (m_param->lookaheadThreads > 0)
@@ -404,6 +380,21 @@ void Encoder::create()
     if (m_param->lookaheadThreads > 0)
         for (int i = 0; i < lookaheadPools; i++)
             lookAheadThreadPool[i].start();
+
+    char buf[128];
+    int len = 0;
+    if (p->bEnableWavefront)
+        len += snprintf(buf + len, sizeof(buf) - len, "wpp(%d rows)", rows);
+    if (p->bDistributeModeAnalysis)
+        len += snprintf(buf + len,  sizeof(buf) - len, "%spmode", len ? " + " : "");
+    if (p->bDistributeMotionEstimation)
+        len += snprintf(buf + len, sizeof(buf) - len, "%spme", len ? " + " : "");
+    if (p->bThreadedME)
+        len += snprintf(buf + len, sizeof(buf) - len, "%sthreaded-me(%d workers)", len ? " + ": "", p->tmeNumThreads);
+    if (!len)
+        strcpy(buf, "none");
+
+    x265_log(p, X265_LOG_INFO, "frame threads / pool features       : %d / %s\n", p->frameNumThreads, buf);
 
     m_dpb = new DPB(m_param);
 

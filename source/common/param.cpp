@@ -2137,6 +2137,8 @@ void x265_print_params(x265_param* param)
     if (param->logLevel < X265_LOG_INFO)
         return;
 
+    x265_log(param, X265_LOG_INFO, "Slices                              : %d\n", param->maxSlices);
+
     if (param->interlaceMode)
         x265_log(param, X265_LOG_INFO, "Interlaced field inputs             : %s\n", x265_interlace_names[param->interlaceMode]);
 
