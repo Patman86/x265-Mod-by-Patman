@@ -3029,9 +3029,9 @@ Screen Content Coding (SCC) Options
 Foveated Encoding Options
 =========================
 
-    Foveated encoding is a smart video compression technique that saves network bandwidth by matching how human eyes see detail.
-	It delivers high image quality right where you look and lower quality in your side vision. It speeds up video streaming and decoding
-	for virtual reality and cloud gaming.
+	Foveated encoding is a smart video compression technique that saves network bandwidth by matching how human eyes see detail.
+	It delivers high image quality right where you look and lower quality in your side vision. It speeds up video streaming and
+	decoding for virtual reality and cloud gaming.
 
 .. option:: --fovea-gaze <x,y>
 
