@@ -2,6 +2,55 @@
 Release Notes
 *************
 
+Version 4.3
+===========
+
+Release date - 31st July 2026
+
+New feature
+-----------
+1. LoongArch64 architecture support
+2. Foveated encoding - spatially varies quality around a gaze point, spending fewer bits in the viewer's periphery.
+3. Selective (noise-based) MCSTF filtering avoiding unnecessary filtering cost/quality impact on low-noise content.
+
+Enhancements to existing features
+----------------------------------
+1. MCSTF : Reworked Multi-threaded motion estimation and bilateral filtering, HME decoupled from the b-adapt flow, lowres planes generated with HM-equivalent averaging, TestBench harness support and profiling stats.
+2. Visual Studio 2026 (vc18) build scripts.
+3. Migrated continuous integration from Bitbucket Pipelines to GitHub Actions, with code-quality checks and smoke tests on pull requests.
+
+API changes
+-----------
+1. Foveated encoding command-line options: :option:`--fovea-gaze`, :option:`--fovea-delta`, :option:`--fovea-sigma`, and :option:`--fovea-gaze-file`.
+2. MCSTF command-line options: :option:`--selective-mcstf` and :option:`--mcstf-ref-range`.
+3. Removed the MCSTF param-only options: temporalFilterStrength and searchRangeForLayers. Callers referencing the removed fields must be updated.
+
+Optimizations
+-------------
+1. LoongArch64 SIMD optimizations across the loopfilter, ipfilter, DCT, motion compensation, block copy, pixel processing and intra-prediction modules.
+2. AArch64 SIMD optimizations: improved Neon and SVE DCT16/DCT32, stride-aware DCT, new SVE2 implementations of psyCost, sa8d and satd, and faster Neon sa8d, satd and psyCost (including 12-bit sa8d).
+3. AVX2 implementations for the MCSTF kernels resulted in speed up of 2x when combined with multithreading.
+4. Threaded Motion Estimation: Early exit diamond search
+
+Bug fixes
+---------
+1. Resolve ASAN/UBSAN reported out-of-bounds accesses and undefined behavior.
+2. Fix TestBench segfault at high bit depth caused by alias trampolines.
+3. Resolve TSAN data races in weight-analysis chroma extension, rate-control row stats, threaded-ME, and shared encoder state.
+4. Fix MCSTF segfault and fix threaded-me crashes and multi-pool subscription issue
+5. Fix scenecut not being active when :option:`--bframes` is 0.
+6. Fix incorrect thread-pool size and regression in :option:`--pools` behaviour
+7. Fix bitstream error when VUI timing info is disabled.
+8. Fix i686 build failure (non-PC-relative PLT references) and PowerPC64 build with Clang.
+9. Fix AArch64 filter-prim-sve test failures.
+10. CPU feature detection fixes for OpenBSD/FreeBSD (elf_aux_info) and PowerPC.
+11. Silence Clang -Wnontrivial-memcall and -Wundef warnings; assorted build-warning cleanups.
+
+Known issues
+------------
+1. Performance regression observed with the threaded-me feature on high-frequency systems and higher resolutions (4k).
+2. Inconsistent hash mismatch with abr-ladder feature
+
 Version 4.2
 ===========
 
