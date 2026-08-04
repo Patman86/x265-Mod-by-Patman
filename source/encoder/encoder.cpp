@@ -128,6 +128,9 @@ Encoder::Encoder()
     m_reconfigureRc = false;
     m_encodedFrameNum = 0;
     m_pocLast = -1;
+    m_firstPts = 0;
+    m_bframeDelayTime = 0;
+    m_prevReorderedPts[0] = m_prevReorderedPts[1] = 0;
     m_curEncoder = 0;
     m_numLumaWPFrames = 0;
     m_numChromaWPFrames = 0;
