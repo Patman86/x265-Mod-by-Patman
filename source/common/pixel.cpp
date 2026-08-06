@@ -400,7 +400,7 @@ void cpy2Dto1D_shl(int16_t* dst, const int16_t* src, intptr_t srcStride, int shi
     for (int i = 0; i < size; i++)
     {
         for (int j = 0; j < size; j++)
-            dst[j] = src[j] << shift;
+            dst[j] = (int16_t)((uint32_t)src[j] << shift);
 
         src += srcStride;
         dst += size;
@@ -435,7 +435,7 @@ void cpy1Dto2D_shl(int16_t* dst, const int16_t* src, intptr_t dstStride, int shi
     for (int i = 0; i < size; i++)
     {
         for (int j = 0; j < size; j++)
-            dst[j] = src[j] << shift;
+            dst[j] = (int16_t)((uint32_t)src[j] << shift);
 
         src += size;
         dst += dstStride;
@@ -619,23 +619,6 @@ void frame_init_lowres_core(const pixel* src0, pixel* dst0, pixel* dsth, pixel* 
     }
 }
 
-static
-void frame_subsample_luma(const pixel* src0, pixel* dst0, intptr_t src_stride, intptr_t dst_stride, int width, int height)
-{
-    for (int y = 0; y < height; y++, src0 += 2 * src_stride, dst0 += dst_stride)
-    {
-        const pixel *inRow = src0;
-        const pixel *inRowBelow = src0 + src_stride;
-        pixel *target = dst0;
-        for (int x = 0; x < width; x++)
-        {
-            target[x] = (((inRow[0] + inRowBelow[0] + 1) >> 1) + ((inRow[1] + inRowBelow[1] + 1) >> 1) + 1) >> 1;
-            inRow += 2;
-            inRowBelow += 2;
-        }
-    }
-}
-
 /* structural similarity metric */
 static void ssim_4x4x2_core(const pixel* pix1, intptr_t stride1, const pixel* pix2, intptr_t stride2, int sums[2][4])
 {
@@ -646,8 +629,8 @@ static void ssim_4x4x2_core(const pixel* pix1, intptr_t stride1, const pixel* pi
         {
             for (int x = 0; x < 4; x++)
             {
-                int a = pix1[x + y * stride1];
-                int b = pix2[x + y * stride2];
+                uint32_t a = pix1[x + y * stride1];
+                uint32_t b = pix2[x + y * stride2];
                 s1 += a;
                 s2 += b;
                 ss += a * a;
@@ -1030,6 +1013,31 @@ static pixel planeClipAndMax_c(pixel *src, intptr_t stride, int width, int heigh
 namespace X265_NS {
 // x265 private namespace
 
+/* Scalar lowres downscale for MCSTF path - HM-equivalent filter, no SIMD override */
+    void frameInitLowresCoreMCSTF(const pixel* src0, pixel* dst0, pixel* dsth, pixel* dstv, pixel* dstc,
+        intptr_t src_stride, intptr_t dst_stride, int width, int height)
+    {
+        for (int y = 0; y < height; y++)
+        {
+            const pixel* src1 = src0 + src_stride;
+            const pixel* src2 = src1 + src_stride;
+            for (int x = 0; x < width; x++)
+            {
+#define FILTER(a, b, c, d) ((a + b + c + d + 2) >> 2)
+                dst0[x] = FILTER(src0[2 * x], src1[2 * x], src0[2 * x + 1], src1[2 * x + 1]);
+                dsth[x] = FILTER(src0[2 * x + 1], src1[2 * x + 1], src0[2 * x + 2], src1[2 * x + 2]);
+                dstv[x] = FILTER(src1[2 * x], src2[2 * x], src1[2 * x + 1], src2[2 * x + 1]);
+                dstc[x] = FILTER(src1[2 * x + 1], src2[2 * x + 1], src1[2 * x + 2], src2[2 * x + 2]);
+#undef FILTER
+            }
+            src0 += src_stride * 2;
+            dst0 += dst_stride;
+            dsth += dst_stride;
+            dstv += dst_stride;
+            dstc += dst_stride;
+        }
+    }
+
 /* Extend the edges of a picture so that it may safely be used for motion
  * compensation. This function assumes the picture is stored in a buffer with
  * sufficient padding for the X and Y margins */
@@ -1364,7 +1372,5 @@ void setupPixelPrimitives_c(EncoderPrimitives &p)
     p.cu[BLOCK_16x16].normFact = normFact_c;
     p.cu[BLOCK_32x32].normFact = normFact_c;
     p.cu[BLOCK_64x64].normFact = normFact_c;
-    /* SubSample Luma*/
-    p.frameSubSampleLuma = frame_subsample_luma;
 }
 }

@@ -329,9 +329,9 @@ void MotionEstimate::setSourcePU(const Yuv& srcFencYuv, int _ctuAddr, int cuPart
     fref + (m1x) + (m1y) * stride, \
     fref + (m2x) + (m2y) * stride, \
     stride, costs); \
-    costs[0] += p_cost_mvx[(m0x) << 2]; /* no cost_mvy */\
-    costs[1] += p_cost_mvx[(m1x) << 2]; \
-    costs[2] += p_cost_mvx[(m2x) << 2]; \
+    costs[0] += p_cost_mvx[(m0x) * 4]; /* no cost_mvy */\
+    costs[1] += p_cost_mvx[(m1x) * 4]; \
+    costs[2] += p_cost_mvx[(m2x) * 4]; \
     COPY3_IF_LT(bcost, costs[0], bmv.x, m0x, bmv.y, m0y); \
     COPY3_IF_LT(bcost, costs[1], bmv.x, m1x, bmv.y, m1y); \
     COPY3_IF_LT(bcost, costs[2], bmv.x, m2x, bmv.y, m2y); \
@@ -1029,8 +1029,8 @@ int MotionEstimate::motionEstimate(ReferencePlanes *ref,
             COPY1_IF_LT(bcost, (costs[3] << 4) + 12);
             if (!(bcost & 15))
                 break;
-            bmv.x -= (bcost << 28) >> 30;
-            bmv.y -= (bcost << 30) >> 30;
+            bmv.x -= (int32_t)((uint32_t)bcost << 28) >> 30;
+            bmv.y -= (int32_t)((uint32_t)bcost << 30) >> 30;
             bcost &= ~15;
         }
         while (--i && bmv.checkRange(mvmin, mvmax));
@@ -1315,7 +1315,7 @@ me_hex2:
                 if (dir)
                 {
                     bmv.x = omv.x + i * (dir >> 4);
-                    bmv.y = omv.y + i * ((dir << 28) >> 28);
+                    bmv.y = omv.y + i * ((int32_t)((uint32_t)dir << 28) >> 28);
                 }
             }
         }
@@ -1807,8 +1807,8 @@ int MotionEstimate::subpelCompare(ReferencePlanes *ref, const MV& qmv, pixelcmp_
         int csp    = fencPUYuv.m_csp;
         int hshift = fencPUYuv.m_hChromaShift;
         int vshift = fencPUYuv.m_vChromaShift;
-        int mvx = qmv.x << (1 - hshift);
-        int mvy = qmv.y << (1 - vshift);
+        int mvx = (int32_t)((uint32_t)qmv.x << (1 - hshift));
+        int mvy = (int32_t)((uint32_t)qmv.y << (1 - vshift));
         intptr_t fencStrideC = fencPUYuv.m_csize;
 
         intptr_t refStrideC = ref->reconPic->m_strideC;

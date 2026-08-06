@@ -355,8 +355,7 @@ struct EncoderPrimitives
 
     downscale_t           frameInitLowres;
     downscale_t           frameInitLowerRes;
-    /* Sub Sample Luma */
-    downscaleluma_t        frameSubSampleLuma;
+
     cutree_propagate_cost propagateCost;
     cutree_fix8_unpack    fix8Unpack;
     cutree_fix8_pack      fix8Pack;

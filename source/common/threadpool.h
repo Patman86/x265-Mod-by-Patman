@@ -36,8 +36,16 @@ class BondedTaskGroup;
 
 #if X86_64 || X265_ARCH_ARM64
 typedef uint64_t sleepbitmap_t;
+#ifdef __GNUC__
+#define SLEEPBITMAP_LOAD(ptr) __sync_fetch_and_or(ptr, 0)
+#elif defined(_MSC_VER)
+/* LONG64 vs. uint64_t signedness mismatch is intentional: InterlockedOr64 only needs the bit pattern */
+#define SLEEPBITMAP_LOAD(ptr) InterlockedOr64(reinterpret_cast<volatile LONG64*>(ptr), 0)
+#endif
 #else
 typedef uint32_t sleepbitmap_t;
+/* use 32-bit primitives defined in threading.h */
+#define SLEEPBITMAP_LOAD(ptr) ATOMIC_OR(ptr, 0)
 #endif
 
 static const sleepbitmap_t ALL_POOL_THREADS = (sleepbitmap_t)-1;
@@ -53,18 +61,19 @@ public:
     ThreadPool*   m_pool;
     sleepbitmap_t m_ownerBitmap;
     int           m_jpId;
-    int           m_sliceType;
-    bool          m_helpWanted;
+    ThreadSafeInteger m_sliceType;
+    AtomicInt32   m_helpWanted;
     bool          m_isFrameEncoder; /* rather ugly hack, but nothing better presents itself */
 
     JobProvider()
         : m_pool(NULL)
         , m_ownerBitmap(0)
         , m_jpId(-1)
-        , m_sliceType(INVALID_SLICE_PRIORITY)
         , m_helpWanted(false)
         , m_isFrameEncoder(false)
-    {}
+    {
+        m_sliceType.set(INVALID_SLICE_PRIORITY);
+    }
 
     virtual ~JobProvider() {}
 
@@ -73,7 +82,7 @@ public:
 
     // Will awaken one idle thread, preferring a thread which most recently
     // performed work for this provider.
-    void tryWakeOne();
+    bool tryWakeOne();
 };
 
 class ThreadPool
@@ -87,7 +96,7 @@ public:
 #if defined(_WIN32_WINNT) && _WIN32_WINNT >= _WIN32_WINNT_WIN7 
     GROUP_AFFINITY m_groupAffinity;
 #endif
-    bool          m_isActive;
+    AtomicBool           m_isActive;
 
     JobProvider** m_jpTable;
     WorkerThread* m_workers;
@@ -103,7 +112,7 @@ public:
     int  tryAcquireSleepingThread(sleepbitmap_t firstTryBitmap, sleepbitmap_t secondTryBitmap);
     int  tryBondPeers(int maxPeers, sleepbitmap_t peerBitmap, BondedTaskGroup& master);
 
-    static ThreadPool* allocThreadPools(x265_param* p, int& numPools, bool isThreadsReserved);
+    static ThreadPool* allocThreadPools(x265_param* p, int& numPools, int& numTmePools, bool isThreadsReserved);
     static int  getCpuCount();
     static int  getNumaNodeCount();
     static int  getFrameThreadsCount(x265_param* p, int cpuCount);
@@ -141,7 +150,7 @@ public:
      * maxPeers worker threads will call your processTasks() method. */
     int tryBondPeers(JobProvider& jp, int maxPeers)
     {
-        int count = jp.m_pool->tryBondPeers(maxPeers, jp.m_ownerBitmap, *this);
+        int count = jp.m_pool->tryBondPeers(maxPeers, SLEEPBITMAP_LOAD(&jp.m_ownerBitmap), *this);
         m_bondedPeerCount += count;
         return count;
     }

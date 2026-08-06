@@ -306,10 +306,10 @@ Performance Options
 	64-bit machines, or 16 for 32-bit machines. If the total number of threads
 	in the system doesn't obey this constraint, we may spawn fewer threads
 	than cores which has been empirically shown to be better for performance. 
-	However, when :option:`--threaded-me` is enabled, this behavior is 
-	overridden and a single thread pool larger than 64 threads may be
-	created. ThreadedME is a singleton job provider, and multiple frame
-	encoders may push work to it concurrently.
+	When :option:`--threaded-me` is enabled, small final pools are retained
+	so its calculated thread allocation is not truncated. ThreadedME remains
+	a singleton scheduler, but uses proxy job providers when its workers span
+	multiple physical pools. No physical pool exceeds the bitmap thread limit.
 
 	If the five pool features: :option:`--wpp`, :option:`--pmode(deprecated)`,
 	:option:`--pme(deprecated)`, :option:`--lookahead-slices` and :option:`--threaded-me`
@@ -320,14 +320,13 @@ Performance Options
 
 	When :option:`--threaded-me` is enabled, x265 estimates the number of
 	threads to assign to ThreadedME based on motion estimation workload and
-	spawns a dedicated threadpool (threadpool 0) for it. This pool may span
-	multiple NUMA nodes when the ThreadedME allocation target requires it. The remaining
-	threads are then used to create the other pools, which are assigned to
-	frame encoders and lookahead.
+	assigns one or more leading physical thread pools to it. These pools may
+	span multiple NUMA nodes when the ThreadedME allocation target requires
+	it. The remaining pools are assigned to frame encoders and lookahead.
 
-	Frame encoders are distributed between the available thread pools,
-	and the encoder will never generate more thread pools than
-	:option:`--frame-threads`.  The pools are used for WPP and for
+	Frame encoders are distributed between the available frame pools,
+	and the encoder will never generate more frame pools than
+	:option:`--frame-threads`. The pools are used for WPP and for
 	distributed analysis and motion search.
 
 	On Windows, the native APIs offer sufficient functionality to
@@ -1358,15 +1357,33 @@ Temporal / motion search options
 
 	Motion-compensated spatio-temporal filtering (MCSTF) improves the compression
 	efficiency of videos that contain a high level of noise. It introduces a
-	temporal filter before encoding and this filter is applied only to the I- and P-frames.
+	temporal filter before encoding, and this filter is applied unconditionally
+	to every I- and P-frame regardless of how noisy the source content actually is.
 	It utilizes previously generated motion vectors across different video content
 	resolutions to find the best temporal correspondence for low-pass filtering. Here,
 	motion estimation is applied between the central picture and each future or past
 	picture, thereby generating multiple motion-compensated predictions, which are then
 	combined by using adaptive filtering to produce a final noise-reduced picture.
+	To filter frames selectively based on their estimated noise level instead, use
+	:option:`--selective-mcstf`.
 	Default: disabled
 
-	Note : MCSTF should be enabled only with frame threads 1
+.. option:: --mcstf-ref-range
+
+	Number of reference frames to consider on each side (past and future) of the
+	current frame during Motion-compensated spatio-temporal filtering. A higher value
+	includes more temporal neighbors for filtering, which can improve noise reduction
+	at the cost of increased memory usage and processing time. The valid range is 1 to 4.
+	Default: 2
+
+.. option:: --selective-mcstf, --no-selective-mcstf
+
+	Gate MCSTF with a per-GOP noise estimate: skip the filter for GOPs whose
+	starting I/IDR frame (or scenecut) is estimated as clean (low noise), and
+	apply it only where it helps. Implicitly enables :option:`--mcstf` if it
+	was not already turned on. When :option:`--csv-log-level` is 2 or higher,
+	adds a Frame Noise and IsMCSTFEnabled column to the per-frame CSV log.
+	Default: disabled
 
 Spatial/intra options
 =====================
@@ -3025,5 +3042,28 @@ Screen Content Coding (SCC) Options
 		Mode 2- Does a full and exhaustive search
 
 **CLI_ONLY**
+
+Foveated Encoding Options
+=========================
+
+	Foveated encoding is a smart video compression technique that saves network bandwidth by matching how human eyes see detail.
+	It delivers high image quality right where you look and lower quality in your side vision. It speeds up video streaming and
+	decoding for virtual reality and cloud gaming.
+
+.. option:: --fovea-gaze <x,y>
+
+	Static gaze fixation in pixels (e.g. 960,540 for center).
+
+.. option:: --fovea-delta <float>
+    
+	Max QP offset at periphery (0=disabled, range 5..40). Default 0.
+
+.. option:: --fovea-sigma <float>
+
+	Gaussian sigma in pixels (0=auto, 95px = 2.5 deg @ 60cm/24in). Default 0.
+
+.. option:: --fovea-gaze-file <path>
+
+	Per-frame gaze file (format: 'frame_num x y', one per line). Overrides --fovea-gaze.
 
 .. vim: noet

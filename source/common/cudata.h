@@ -27,6 +27,7 @@
 #include "common.h"
 #include "slice.h"
 #include "mv.h"
+#include "threading.h"
 
 #define NUM_TU_DEPTH 21
 
@@ -173,7 +174,7 @@ const uint32_t partAddrTable[8][4] =
 class CUData
 {
 public:
-
+    mutable SpinLock m_accessLock;
     cubcast_t s_partSet[NUM_FULL_DEPTH]; // pointer to broadcast set functions per absolute depth
     uint32_t  s_numPartInCUSize;
 
@@ -271,7 +272,11 @@ public:
     void     clearCbf()                            { m_partSet(m_cbf[0], 0); if (m_chromaFormat != X265_CSP_I400) { m_partSet(m_cbf[1], 0); m_partSet(m_cbf[2], 0);} }
 
     /* these functions all take depth as an absolute depth from CTU, it is used to calculate the number of parts to copy */
-    void     setQPSubParts(int8_t qp, uint32_t absPartIdx, uint32_t depth)                    { s_partSet[depth]((uint8_t*)m_qp + absPartIdx, (uint8_t)qp); }
+    void     setQPSubParts(int8_t qp, uint32_t absPartIdx, uint32_t depth)
+    {
+        ScopedSpinLock lock(m_accessLock);
+        s_partSet[depth](reinterpret_cast<uint8_t*>(m_qp) + absPartIdx, (uint8_t)qp);
+    }
     void     setTUDepthSubParts(uint8_t tuDepth, uint32_t absPartIdx, uint32_t depth)         { s_partSet[depth](m_tuDepth + absPartIdx, tuDepth); }
     void     setLumaIntraDirSubParts(uint8_t dir, uint32_t absPartIdx, uint32_t depth)        { s_partSet[depth](m_lumaIntraDir + absPartIdx, dir); }
     void     setChromIntraDirSubParts(uint8_t dir, uint32_t absPartIdx, uint32_t depth)       { s_partSet[depth](m_chromaIntraDir + absPartIdx, dir); }
@@ -299,8 +304,8 @@ public:
     void     getNeighbourMV(uint32_t puIdx, uint32_t absPartIdx, InterNeighbourMV* neighbours) const;
     void     getIntraTUQtDepthRange(uint32_t tuDepthRange[2], uint32_t absPartIdx) const;
     void     getInterTUQtDepthRange(uint32_t tuDepthRange[2], uint32_t absPartIdx) const;
-    uint32_t getBestRefIdx(uint32_t subPartIdx) const { return ((m_interDir[subPartIdx] & 1) << m_refIdx[0][subPartIdx]) | 
-                                                              (((m_interDir[subPartIdx] >> 1) & 1) << (m_refIdx[1][subPartIdx] + 16)); }
+    uint32_t getBestRefIdx(uint32_t subPartIdx) const { return ((uint32_t)(m_interDir[subPartIdx] & 1) << (m_refIdx[0][subPartIdx] & 31)) |
+                                                              ((uint32_t)((m_interDir[subPartIdx] >> 1) & 1) << ((m_refIdx[1][subPartIdx] + 16) & 31)); }
     uint32_t getPUOffset(uint32_t puIdx, uint32_t absPartIdx) const { return (partAddrTable[(int)m_partSize[absPartIdx]][puIdx] << (m_slice->m_param->unitSizeDepth - m_cuDepth[absPartIdx]) * 2) >> 4; }
 
     uint32_t getNumPartInter(uint32_t absPartIdx) const              { return nbPartsTable[(int)m_partSize[absPartIdx]]; }

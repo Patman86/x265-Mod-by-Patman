@@ -295,7 +295,7 @@ struct SPS
 
     SPS()
     {
-        memset(this, 0, sizeof(*this));
+        memset(static_cast<void*>(this), 0, sizeof(*this));
     }
 
     ~SPS()

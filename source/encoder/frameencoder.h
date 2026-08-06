@@ -42,6 +42,7 @@
 #include "nal.h"
 #include "temporalfilter.h"
 #include "threadedme.h"
+#include "threading.h"
 #include <queue>
 
 namespace X265_NS {
@@ -76,7 +77,7 @@ struct CTURow
 {
     Entropy           bufferedEntropy;  /* store CTU2 context for next row CTU0 */
     Entropy           rowGoOnCoder;     /* store context between CTUs, code bitstream if !SAO */
-    unsigned int      sliceId;          /* store current row slice id */
+    AtomicUInt32      sliceId;          /* store current row slice id */
 
     FrameStats        rowStats;
 
@@ -97,7 +98,7 @@ struct CTURow
     volatile bool     busy;
 
     /* count of completed CUs in this row */
-    volatile uint32_t completed;
+    AtomicUInt32 completed;
     volatile uint32_t avgQPComputed;
 
     volatile int      reEncode;
@@ -229,8 +230,8 @@ public:
     uint64_t                 m_accessUnitBits[MAX_LAYERS];
     uint32_t                 m_ssimCnt[MAX_LAYERS];
 
-    volatile int             m_activeWorkerCount;        // count of workers currently encoding or filtering CTUs
-    volatile int             m_totalActiveWorkerCount;   // sum of m_activeWorkerCount sampled at end of each CTU
+    AtomicInt32              m_activeWorkerCount;        // count of workers currently encoding or filtering CTUs
+    AtomicInt32              m_totalActiveWorkerCount;   // sum of m_activeWorkerCount sampled at end of each CTU
     volatile int             m_activeWorkerCountSamples; // count of times m_activeWorkerCount was sampled (think vbv restarts)
     volatile int             m_countRowBlocks;           // count of workers forced to abandon a row because of top dependency
     int64_t                  m_startCompressTime[MAX_LAYERS];        // timestamp when frame encoder is given a frame
@@ -238,11 +239,11 @@ public:
     int64_t                  m_allRowsAvailableTime[MAX_LAYERS];     // timestamp when all reference dependencies are resolved
     int64_t                  m_endCompressTime[MAX_LAYERS];          // timestamp after all CTUs are compressed
     int64_t                  m_endFrameTime[MAX_LAYERS];             // timestamp after RCEnd, NR updates, etc
-    int64_t                  m_stallStartTime[MAX_LAYERS];           // timestamp when worker count becomes 0
+    AtomicInt64              m_stallStartTime[MAX_LAYERS];           // timestamp when worker count becomes 0
     int64_t                  m_prevOutputTime[MAX_LAYERS];           // timestamp when prev frame was retrieved by API thread
     int64_t                  m_slicetypeWaitTime[MAX_LAYERS];        // total elapsed time waiting for decided frame
-    int64_t                  m_totalWorkerElapsedTime[MAX_LAYERS];   // total elapsed time spent by worker threads processing CTUs
-    int64_t                  m_totalNoWorkerTime[MAX_LAYERS];        // total elapsed time without any active worker threads
+    AtomicInt64              m_totalWorkerElapsedTime[MAX_LAYERS];   // total elapsed time spent by worker threads processing CTUs
+    AtomicInt64              m_totalNoWorkerTime[MAX_LAYERS];        // total elapsed time without any active worker threads
     int64_t                  m_totalThreadedMEWait[MAX_LAYERS];      // total time spent waiting by CTUs for ThreadedME
     int64_t                  m_totalThreadedMETime[MAX_LAYERS];      // total time spent processing by ThreadedME
 

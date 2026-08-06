@@ -208,3 +208,10 @@ CrowdRun_1920x1080_50_10bit_422.yuv,--preset medium --threaded-me --no-wpp --no-
 DucksAndLegs_1920x1080_60_10bit_444.yuv,--preset slow --threaded-me --temporal-layers 2 --no-psy-rd --qg-size 32
 old_town_cross_444_720p50.y4m,--preset faster --threaded-me --me sea --weightp --limit-modes
 big_buck_bunny_360p24.y4m,--preset medium --threaded-me --no-wpp --aq-mode 3 --aq-strength 1.5 --weightb
+
+#Selective MCSTF test
+crowd_run_1080p50.y4m, --bitrate 5000 --selective-mcstf --preset veryslow
+
+#Fovea tests
+nature_1920x1080_25.yuv,--crf 28 --fovea-gaze 960,540 --fovea-delta 20
+nature_1920x1080_25.yuv,--qp 28 --fovea-delta 20 --fovea-gaze-file gaze_nature.txt

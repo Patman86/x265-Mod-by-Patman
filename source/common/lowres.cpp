@@ -26,6 +26,12 @@
 #include "lowres.h"
 #include "mv.h"
 
+namespace X265_NS {
+    // forward declaration - defined in pixel.cpp, no SIMD override for MCSTF path
+    void frameInitLowresCoreMCSTF(const pixel* src0, pixel* dst0, pixel* dsth, pixel* dstv, pixel* dstc,
+        intptr_t src_stride, intptr_t dst_stride, int width, int height);
+}
+
 using namespace X265_NS;
 
 /*
@@ -194,11 +200,6 @@ bool Lowres::create(x265_param* param, PicYuv *origPic, uint32_t qgSize)
         }
     }
 
-    for (int i = 0; i < 4; i++)
-    {
-        CHECKED_MALLOC(lowresMcstfMvs[0][i], MV, cuCount);
-    }
-
     for (int i = 0; i < bframes + 2; i++)
     {
         CHECKED_MALLOC(lowresMvs[0][i], MV, cuCount);
@@ -290,10 +291,6 @@ void Lowres::destroy(x265_param* param)
         }
     }
 
-    for (int i = 0; i < 4; i++)
-    {
-        X265_FREE(lowresMcstfMvs[0][i]);
-    }
     X265_FREE(qpAqOffset);
     X265_FREE(invQscaleFactor);
     X265_FREE(qpCuTreeOffset);
@@ -349,11 +346,13 @@ void Lowres::destroy(x265_param* param)
     }
 }
 // (re) initialize lowres state
-void Lowres::init(PicYuv *origPic, int poc)
+void Lowres::init(PicYuv* origPic, int poc, bool bEnableTemporalFilter)
 {
     bLastMiniGopBFrame = false;
     bKeyframe = false; // Not a keyframe unless identified by lookahead
     bIsFadeEnd = false;
+    filterThisGOP = false;
+    noiseScore = -1;
     frameNum = poc;
     leadingBframes = 0;
     indB = 0;
@@ -373,11 +372,6 @@ void Lowres::init(PicYuv *origPic, int poc)
         lowresMvs[1][i][0].x = 0x7FFF;
     }
 
-    for (int i = 0; i < 4; i++)
-    {
-        lowresMcstfMvs[0][i][0].x = 0x7FFF;
-    }
-
     for (int i = 0; i < bframes + 2; i++)
         intraMbs[i] = 0;
     if (origPic->m_param->rc.vbvBufferSize)
@@ -385,9 +379,10 @@ void Lowres::init(PicYuv *origPic, int poc)
             plannedType[i] = X265_TYPE_AUTO;
 
     /* downscale and generate 4 hpel planes for lookahead */
-    primitives.frameInitLowres(origPic->m_picOrg[0],
-                               lowresPlane[0], lowresPlane[1], lowresPlane[2], lowresPlane[3],
-                               origPic->m_stride, lumaStride, width, lines);
+    if (bEnableTemporalFilter)
+        frameInitLowresCoreMCSTF(origPic->m_picOrg[0], lowresPlane[0], lowresPlane[1], lowresPlane[2], lowresPlane[3], origPic->m_stride, lumaStride, width, lines);
+    else
+        primitives.frameInitLowres(origPic->m_picOrg[0], lowresPlane[0], lowresPlane[1], lowresPlane[2], lowresPlane[3], origPic->m_stride, lumaStride, width, lines);
 
     /* extend hpel planes for motion search */
     extendPicBorder(lowresPlane[0], lumaStride, width, lines, origPic->m_lumaMarginX, origPic->m_lumaMarginY);
@@ -397,9 +392,11 @@ void Lowres::init(PicYuv *origPic, int poc)
     
     if (origPic->m_param->bEnableHME || origPic->m_param->bEnableTemporalFilter)
     {
-        primitives.frameInitLowerRes(lowresPlane[0],
-            lowerResPlane[0], lowerResPlane[1], lowerResPlane[2], lowerResPlane[3],
-            lumaStride, lumaStride/2, (width / 2), (lines / 2));
+        if (bEnableTemporalFilter)
+            frameInitLowresCoreMCSTF(lowresPlane[0], lowerResPlane[0], lowerResPlane[1], lowerResPlane[2], lowerResPlane[3], lumaStride, lumaStride / 2, (width / 2), (lines / 2));
+        else
+            primitives.frameInitLowerRes(lowresPlane[0], lowerResPlane[0], lowerResPlane[1], lowerResPlane[2], lowerResPlane[3], lumaStride, lumaStride / 2, (width / 2), (lines / 2));
+
         extendPicBorder(lowerResPlane[0], lumaStride/2, width/2, lines/2, origPic->m_lumaMarginX/2, origPic->m_lumaMarginY/2);
         extendPicBorder(lowerResPlane[1], lumaStride/2, width/2, lines/2, origPic->m_lumaMarginX/2, origPic->m_lumaMarginY/2);
         extendPicBorder(lowerResPlane[2], lumaStride/2, width/2, lines/2, origPic->m_lumaMarginX/2, origPic->m_lumaMarginY/2);

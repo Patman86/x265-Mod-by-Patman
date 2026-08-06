@@ -28,6 +28,7 @@
 #include "common.h"
 #include "picyuv.h"
 #include "mv.h"
+#include "threading.h"
 
 namespace X265_NS {
 // private namespace
@@ -51,7 +52,7 @@ struct ReferencePlanes
    /* Edge Plane in Lowres */
     pixel*   lowresEdgePlane;
 
-    bool     isWeighted;
+    AtomicBool     isWeighted;
     bool     isLowres;
     bool     isHMELowres;
 
@@ -179,6 +180,8 @@ struct Lowres : public ReferencePlanes
     bool   bKeyframe;
     bool   bLastMiniGopBFrame;
     bool   bIsFadeEnd;
+    bool    filterThisGOP;  // Set by lookahead noise gate: true = GOP start was noisy, apply MCSTF
+    int32_t noiseScore;     // Raw noise score from estimateNoise() at GOP start; -1 for non-GOP-start frames
 
     double ipCostRatio;
 
@@ -194,7 +197,6 @@ struct Lowres : public ReferencePlanes
     uint16_t* lowresCosts[X265_BFRAME_MAX + 2][X265_BFRAME_MAX + 2];
     int32_t*  lowresMvCosts[2][X265_BFRAME_MAX + 2];
     MV*       lowresMvs[2][X265_BFRAME_MAX + 2];
-    MV*       lowresMcstfMvs[2][4];
     uint32_t  maxBlocksInRow;
     uint32_t  maxBlocksInCol;
     uint32_t  maxBlocksInRowFullRes;
@@ -255,7 +257,7 @@ struct Lowres : public ReferencePlanes
 
     bool create(x265_param* param, PicYuv *origPic, uint32_t qgSize);
     void destroy(x265_param* param);
-    void init(PicYuv *origPic, int poc);
+    void init(PicYuv* origPic, int poc, bool bEnableTemporalFilter);
 };
 }
 

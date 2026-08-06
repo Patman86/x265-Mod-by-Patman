@@ -29,6 +29,7 @@
 #include "common.h"
 #include "sei.h"
 #include "ringmem.h"
+#include "threading.h"
 
 namespace X265_NS {
 // encoder namespace
@@ -90,7 +91,7 @@ struct RateControlEntry
     bool    vbvEndAdj;
     double  frameDuration;
     double  clippedDuration;
-    double  frameSizeEstimated; /* hold frameSize, updated from cu level vbv rc */
+    AtomicDouble frameSizeEstimated; /* hold frameSize, updated from cu level vbv rc */
     double  frameSizeMaximum;   /* max frame Size according to minCR restrictions and level of the video */
     int     sliceType;
     int     bframes;
@@ -121,6 +122,7 @@ struct RateControlEntry
     int      rpsIdx;
     RPS      rpsData;
     bool     isFadeEnd;
+    SpinLock m_rateControlEntryLock;
 };
 
 class RateControl
@@ -158,7 +160,7 @@ public:
     double m_bitrate;
     double m_rateFactorConstant;
     double m_bufferSize;
-    double m_bufferFillFinal;  /* real buffer as of the last finished frame */
+    AtomicDouble m_bufferFillFinal;  /* real buffer as of the last finished frame */
     double m_unclippedBufferFillFinal; /* real unclipped buffer as of the last finished frame used to log in CSV*/
     double m_bufferFill;       /* planned buffer, if all in-progress frames hit their bit budget */
     double m_bufferRate;       /* # of bits added to buffer_fill after each frame */
@@ -166,7 +168,7 @@ public:
     double m_rateFactorMaxIncrement; /* Don't allow RF above (CRF + this value). */
     double m_rateFactorMaxDecrement; /* don't allow RF below (this value). */
     double m_avgPFrameQp;
-    double m_bufferFillActual;
+    AtomicDouble m_bufferFillActual;
     double m_bufferExcess;
     double m_minBufferFill;
     double m_maxBufferFill;
@@ -183,7 +185,7 @@ public:
     int     m_framesDone;        /* # of frames passed through RateCotrol already */
     int64_t m_iBits;
     double  m_cplxrSum;          /* sum of bits*qscale/rceq */
-    double  m_wantedBitsWindow;  /* target bitrate * window */
+    AtomicDouble m_wantedBitsWindow;  /* target bitrate * window */
     double  m_accumPQp;          /* for determining I-frame quant */
     double  m_accumPNorm;
     double  m_lastQScaleFor[3];  /* last qscale for a specific pict type, used for max_diff & ipb factor stuff */
@@ -194,7 +196,7 @@ public:
     double  m_shortTermCplxCount;
     double  m_lastRceq;
     double  m_qCompress;
-    int64_t m_totalBits;        /* total bits used for already encoded frames (after ammortization) */
+    AtomicInt64 m_totalBits;        /* total bits used for already encoded frames (after ammortization) */
     int64_t m_encodedBits;      /* bits used for encoded frames (without ammortization) */
     int64_t m_encodedSegmentBits;      /* bits used for encoded frames in a segment*/
     double  m_movingSumComplexitySeg[3];
@@ -228,8 +230,9 @@ public:
      * rceUpdate 12
      * rceEnd    11 */
     ThreadSafeInteger m_startEndOrder;
-    int     m_finalFrameCount;   /* set when encoder begins flushing */
+    ThreadSafeInteger m_finalFrameCount;   /* set when encoder begins flushing */
     bool    m_bTerminated;       /* set true when encoder is closing */
+    SpinLock m_rateControlLock;
 
     /* hrd stuff */
     SEIBufferingPeriod m_bufPeriodSEI;

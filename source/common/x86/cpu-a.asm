@@ -177,7 +177,7 @@ cglobal safe_intel_cpu_indicator_init
 %if WIN64
     lea rax, [intel_cpu_indicator_init]
     call rax
-%elif FORMAT_ELF
+%elif UNIX64 && FORMAT_ELF
     call [rel intel_cpu_indicator_init wrt ..plt]
 %else
     call intel_cpu_indicator_init

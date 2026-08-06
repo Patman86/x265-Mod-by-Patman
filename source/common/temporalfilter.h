@@ -30,6 +30,8 @@
 #include "piclist.h"
 #include "yuv.h"
 #include "motion.h"
+#include "threadpool.h"
+#include <float.h>
 
 const int s_interpolationFilter[16][8] =
 {
@@ -58,8 +60,39 @@ const double s_refStrengths[3][4] =
   {1.13, 0.97, 0.81, 0.57},  // m_range
   {0.30, 0.30, 0.30, 0.30}   // otherwise
 };
+#define MCSTF_MAX_REFS 16
 
 namespace X265_NS {
+
+    /* MCSTF runtime SIMD dispatch
+     * Function-pointer table for MCSTF SIMD kernels. Defaults are scalar
+     * implementations defined in temporalfilter.cpp; setupIntrinsicMCSTF_avx2
+     * (in common/vec/temporalfilter-avx2.cpp) overrides them with AVX2 variants,
+     * called from setupIntrinsicPrimitives() when the runtime CPU supports it.*/
+
+    struct MCSTFPrimitives
+    {
+        int (*motionErrorLumaFrac)(const pixel* origOrigin, intptr_t origStride, const pixel* buffOrigin, intptr_t buffStride, int x, int y,
+            int dx, int dy, int bs, int besterror, int bitDepth);
+
+        void (*applyMotion)(const pixel* pSrcImage, int srcStride, pixel* pDstImage, int dstStride, int width, int height, int blockSizeX,
+            int blockSizeY, uint32_t mvsStride, const MV* mvs, int csx, int csy, int blockRow, int rowSize, int vShift);
+
+        void (*computeBlockStats)(const pixel* srcPel, intptr_t srcStride, const pixel* refPel, intptr_t refStride, int blkSize, int* outVariance, int* outDiffsum);
+
+        void (*bilateralFilter)(const pixel* srcBlk, intptr_t srcStride, int numRefs, const pixel* const* refBlks, const intptr_t* refStrides,
+            const double* vww, const double* vsw, double bdw, double maxSample, int blkSize, pixel* dstBlk, intptr_t dstStride);
+    };
+
+    extern MCSTFPrimitives mcstfPrim;
+
+    void setupMCSTFPrimitives_scalar(MCSTFPrimitives& p);
+#if X265_ARCH_X86
+    /* defined in common/vec/temporalfilter-avx2.cpp; exposed here so the test
+     * bench can exercise it directly without going through the global mcstfPrim */
+    void setupIntrinsicMCSTF_avx2(MCSTFPrimitives& p);
+#endif
+
     class OrigPicBuffer
     {
     public:
@@ -85,34 +118,26 @@ namespace X265_NS {
             me.init(X265_CSP_I400);
             me.setQP(X265_LOOKAHEAD_QP);
             predPUYuv.create(FENC_STRIDE, X265_CSP_I400);
-            m_useSADinME = 1;
             m_motionVectorFactor = 16;
+            m_searchRange = 3;
+            m_blockSize = 16;
         }
 
         Yuv  predPUYuv;
-        int m_useSADinME;
         int m_motionVectorFactor;
         int32_t  m_bitDepth;
+        int m_searchRange;
+        int m_blockSize;
 
         void init(const x265_param* param);
 
-        void motionEstimationLuma(MotionEstimatorTLD& m_tld, MV* mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, pixel* buf, int bs, int sRange,
-            MV* previous = 0, uint32_t prevmvStride = 0, int factor = 1);
+        void motionEstimationLuma(MV* mvs, uint32_t mvStride, pixel* src, int stride, int height, int width, pixel* buf, int row, const int rowSize,
+            const MV* previous = 0, uint32_t prevmvStride = 0, int factor = 1);
 
-        void motionEstimationLumaDoubleRes(MotionEstimatorTLD& m_tld, MV* mvs, uint32_t mvStride, PicYuv* orig, PicYuv* buffer, int blockSize,
-            MV* previous, uint32_t prevMvStride, int factor, int* minError);
+        void motionEstimationLumaDoubleRes(MV* mvs, uint32_t mvStride, PicYuv* orig, PicYuv* buffer,
+            const MV* previous, uint32_t prevMvStride, int factor, int* minError, int row, const int rowSize);
 
-        int motionErrorLumaSSD(MotionEstimatorTLD& m_tld, pixel* src,
-            int stride,
-            pixel* buf,
-            int x,
-            int y,
-            int dx,
-            int dy,
-            int bs,
-            int besterror = 8 * 8 * 1024 * 1024);
-
-        int motionErrorLumaSAD(MotionEstimatorTLD& m_tld, pixel* src,
+        int motionErrorLumaSSD(pixel* src,
             int stride,
             pixel* buf,
             int x,
@@ -185,15 +210,84 @@ namespace X265_NS {
         uint8_t m_sliceTypeConfig;
 
         MotionEstimatorTLD* m_metld;
+        double m_overallStrength;
 
         int createRefPicInfo(TemporalFilterRefPicInfo* refFrame, x265_param* param);
 
-        void bilateralFilter(Frame* frame, TemporalFilterRefPicInfo* mctfRefList, double overallStrength);
+        void bilateralFilter(Frame*                    frame,
+                            TemporalFilterRefPicInfo* mcstfRefList,
+                            ThreadPool*               pool);
+
+        void bilateralFilterCore(Frame*                    frame,
+                                TemporalFilterRefPicInfo* mcstfRefList,
+                                int                       numRef,
+                                int                       blockRow,
+                                int                       blockSize);
 
         void destroyRefPicInfo(TemporalFilterRefPicInfo* curFrame);
 
-        void applyMotion(MV *mvs, uint32_t mvsStride, PicYuv *input, PicYuv *output);
+        void applyMotion(MV *mvs, uint32_t mvsStride, PicYuv *input, PicYuv *output, const int blockRow = 0, const int rowSize = 0);
 
+    };
+
+    class BilateralFilterGroup : public BondedTaskGroup
+    {
+    public:
+        TemporalFilter& m_filter;
+        ThreadPool*     m_pool;
+
+        struct FilterJob
+        {
+            Frame*                    frame;
+            TemporalFilterRefPicInfo* mcstfRefList;
+            int                       numRef;
+            int                       blockRow;
+            int                       rowSize;
+        };
+
+        static const int MAX_FILTER_JOBS = 512;
+        FilterJob m_jobs[MAX_FILTER_JOBS];
+
+        BilateralFilterGroup(TemporalFilter& f, ThreadPool* pool)
+            : m_filter(f), m_pool(pool), m_jobs() {}
+
+        void add(Frame* frame, TemporalFilterRefPicInfo* mcstfRefList,
+                int numRef, int blockRow, int rowSize)
+        {
+            X265_CHECK(m_jobTotal < MAX_FILTER_JOBS,
+                    "BilateralFilterGroup overflow\n");
+            FilterJob& j    = m_jobs[m_jobTotal++];
+            j.frame         = frame;
+            j.mcstfRefList   = mcstfRefList;
+            j.numRef        = numRef;
+            j.blockRow      = blockRow;
+            j.rowSize       = rowSize;
+        }
+
+        void finishBatch()
+        {
+            if (m_pool)
+                tryBondPeers(*m_pool, m_jobTotal);
+            processTasks(-1);
+            waitForExit();
+            m_jobTotal = m_jobAcquired = 0;
+        }
+
+        void processTasks(int /*workerThreadID*/)
+        {
+            m_lock.acquire();
+            while (m_jobAcquired < m_jobTotal)
+            {
+                const int i = m_jobAcquired++;
+                m_lock.release();
+
+                const FilterJob& j = m_jobs[i];
+                m_filter.bilateralFilterCore(j.frame, j.mcstfRefList, j.numRef,
+                                            j.blockRow, j.rowSize);
+                m_lock.acquire();
+            }
+            m_lock.release();
+        }
     };
 }
 #endif

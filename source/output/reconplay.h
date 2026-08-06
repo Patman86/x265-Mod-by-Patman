@@ -50,12 +50,12 @@ protected:
 
     FILE*  outputPipe;     /* The output pipe for player */
     size_t frameSize;      /* size of one frame in pixels */
-    bool   threadActive;   /* worker thread is active */
+    AtomicBool   threadActive;   /* worker thread is active */
     int    width;          /* width of frame */
     int    height;         /* height of frame */
     int    colorSpace;     /* color space of frame */
 
-    int    poc[RECON_BUF_SIZE];
+    AtomicInt32    poc[RECON_BUF_SIZE];
     pixel* frameData[RECON_BUF_SIZE];
 
     /* Note that the class uses read and write counters to signal that reads and

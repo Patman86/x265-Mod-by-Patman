@@ -462,7 +462,8 @@ void CUData::initLosslessCU(const CUData& cu, const CUGeom& cuGeom)
     m_cuAboveRight = cu.m_cuAboveRight;
     m_absIdxInCTU  = cuGeom.absPartIdx;
     m_numPartitions = cuGeom.numPartitions;
-    memcpy(m_qp, cu.m_qp, BytesPerPartition * m_numPartitions);
+    uint32_t bytesPerPartition = (m_chromaFormat == X265_CSP_I400 ? BytesPerPartition - 4 : BytesPerPartition);
+    memcpy(m_qp, cu.m_qp, bytesPerPartition * m_numPartitions);
     memcpy(m_mv[0],  cu.m_mv[0],  m_numPartitions * sizeof(MV));
     memcpy(m_mv[1],  cu.m_mv[1],  m_numPartitions * sizeof(MV));
     memcpy(m_mvd[0], cu.m_mvd[0], m_numPartitions * sizeof(MV));

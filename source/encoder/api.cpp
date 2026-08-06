@@ -1418,6 +1418,8 @@ FILE* x265_csvlog_open(const x265_param* param)
                         else if (param->rc.rateControlMode == X265_RC_CQP)
                             fprintf(csvfp, ", Target QP");
                     }
+                    if (param->bSelectiveMCSTF)
+                        fprintf(csvfp, ", Frame Noise, IsMCSTFEnabled");
                 }
                 fprintf(csvfp, "\n");
             }
@@ -1556,6 +1558,13 @@ void x265_csvlog_frame(const x265_param* param, const x265_picture* pic)
                 fprintf(param->csvfpt, ", %f", frameStats->currTrCRF);
             else if (param->rc.rateControlMode == X265_RC_CQP)
                 fprintf(param->csvfpt, ", %d", frameStats->currTrQP);
+        }
+        if (param->bSelectiveMCSTF)
+        {
+            if (frameStats->frameNoise >= 0)
+                fprintf(param->csvfpt, ", %d, %d", frameStats->frameNoise, frameStats->isMCSTFEnabled);
+            else
+                fprintf(param->csvfpt, ", -, %d", frameStats->isMCSTFEnabled);
         }
     }
     fprintf(param->csvfpt, "\n");

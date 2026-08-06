@@ -15,9 +15,10 @@ namespace
 
 static inline int8x8_t sign_diff_neon(const uint8x8_t in0, const uint8x8_t in1)
 {
-    int16x8_t in = vreinterpretq_s16_u16(vsubl_u8(in0, in1));
+    uint8x8_t lt = vclt_u8(in0, in1);
+    uint8x8_t gt = vcgt_u8(in0, in1);
 
-    return vmovn_s16(vmaxq_s16(vminq_s16(in, vdupq_n_s16(1)), vdupq_n_s16(-1)));
+    return vreinterpret_s8_u8(vsub_u8(lt, gt));
 }
 
 static void calSign_neon(int8_t *dst, const pixel *src1, const pixel *src2, const int endX)

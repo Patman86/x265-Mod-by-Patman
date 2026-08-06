@@ -936,7 +936,6 @@ void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask)
         // mc
         p.frameInitLowres    = PFX(frame_init_lowres_core_lsx);
         p.frameInitLowerRes  = PFX(frame_init_lowres_core_lsx);
-        p.frameSubSampleLuma = PFX(frame_subsample_luma_lsx);
 
         p.fix8Unpack = PFX(cutree_fix8_unpack_lsx);
         p.fix8Pack   = PFX(cutree_fix8_pack_lsx);
@@ -1333,7 +1332,6 @@ void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask)
         // mc
         p.frameInitLowres    = PFX(frame_init_lowres_core_lasx);
         p.frameInitLowerRes  = PFX(frame_init_lowres_core_lasx);
-        p.frameSubSampleLuma = PFX(frame_subsample_luma_lasx);
 
         p.fix8Unpack = PFX(cutree_fix8_unpack_lasx);
         p.fix8Pack   = PFX(cutree_fix8_pack_lasx);

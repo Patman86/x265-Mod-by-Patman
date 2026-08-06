@@ -65,8 +65,11 @@ void WaveFront::setLayerId(int layer)
 
 void WaveFront::clearEnabledRowMask()
 {
-    memset((void*)m_externalDependencyBitmap, 0, sizeof(uint32_t) * m_numWords);
-    memset((void*)m_internalDependencyBitmap, 0, sizeof(uint32_t) * m_numWords);
+    for (int i = 0; i < m_numWords; i++)
+    {
+        ATOMIC_AND(&m_externalDependencyBitmap[i], 0);
+        ATOMIC_AND(&m_internalDependencyBitmap[i], 0);
+    }
 }
 
 void WaveFront::enqueueRow(int row)
@@ -83,7 +86,8 @@ void WaveFront::enableRow(int row)
 
 void WaveFront::enableAllRows()
 {
-    memset((void*)m_externalDependencyBitmap, ~0, sizeof(uint32_t) * m_numWords);
+    for (int i = 0; i < m_numWords; i++)
+        ATOMIC_OR(&m_externalDependencyBitmap[i], 0xFFFFFFFF);
 }
 
 bool WaveFront::dequeueRow(int row)
@@ -99,7 +103,7 @@ void WaveFront::findJob(int threadId)
     /* Loop over each word until all available rows are finished */
     for (int w = 0; w < m_numWords; w++)
     {
-        uint32_t oldval = m_internalDependencyBitmap[w] & m_externalDependencyBitmap[w];
+        uint32_t oldval = ATOMIC_OR(&m_internalDependencyBitmap[w], 0) & ATOMIC_OR(&m_externalDependencyBitmap[w], 0);
         while (oldval)
         {
             BSF(id, oldval);
@@ -113,7 +117,7 @@ void WaveFront::findJob(int threadId)
                 return; /* check for a higher priority task */
             }
 
-            oldval = m_internalDependencyBitmap[w] & m_externalDependencyBitmap[w];
+            oldval = ATOMIC_OR(&m_internalDependencyBitmap[w], 0) & ATOMIC_OR(&m_externalDependencyBitmap[w], 0);
         }
     }
 

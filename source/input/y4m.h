@@ -59,7 +59,7 @@ protected:
 
     bool alphaAvailable;
 
-    bool threadActive;
+    AtomicBool threadActive;
 
     ThreadSafeInteger readCount;
 

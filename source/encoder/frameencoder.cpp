@@ -283,7 +283,7 @@ bool FrameEncoder::startCompressFrame(Frame* curFrame[MAX_LAYERS])
         curFrame[layer]->m_encData->m_jobProvider = this;
         curFrame[layer]->m_encData->m_slice->m_mref = m_mref;
     }
-    m_sliceType = curFrame[0]->m_lowres.sliceType;
+    m_sliceType.set(curFrame[0]->m_lowres.sliceType);
 
     if (!m_cuGeoms)
     {
@@ -660,10 +660,10 @@ void FrameEncoder::compressFrame(int layer)
             }
         }
     }
-    if (m_param->bEnableTemporalFilter)
+    if (m_param->bEnableTemporalFilter && m_top->isFilterThisframe(m_frame[layer]->m_mcstf->m_sliceTypeConfig, m_frame[layer]->m_lowres.sliceType) && m_frame[layer]->m_lowres.filterThisGOP)
     {
         m_frame[layer]->m_mcstf->m_QP = qp;
-        m_frame[layer]->m_mcstf->bilateralFilter(m_frame[layer], m_frame[layer]->m_mcstfRefList, m_param->temporalFilterStrength);
+        m_frame[layer]->m_mcstf->bilateralFilter(m_frame[layer], m_frame[layer]->m_mcstfRefList, m_pool);
     }
 
     if (m_nr)
@@ -1489,8 +1489,8 @@ void FrameEncoder::encodeSlice(uint32_t sliceAddr, int layer)
 void FrameEncoder::processRow(int row, int threadId, int layer)
 {
     int64_t startTime = x265_mdate();
-    if (ATOMIC_INC(&m_activeWorkerCount) == 1 && m_stallStartTime[layer])
-        m_totalNoWorkerTime[layer] += x265_mdate() - m_stallStartTime[layer];
+    if (++m_activeWorkerCount == 1 && m_stallStartTime[layer])
+        m_totalNoWorkerTime[layer].add(x265_mdate() - m_stallStartTime[layer]);
 
     const uint32_t realRow = m_idx_to_row[row >> 1];
     const uint32_t typeNum = m_idx_to_row[row & 1];
@@ -1508,10 +1508,10 @@ void FrameEncoder::processRow(int row, int threadId, int layer)
             enqueueRowFilter(m_row_to_idx[realRow + 1]);
     }
 
-    if (ATOMIC_DEC(&m_activeWorkerCount) == 0)
+    if (--m_activeWorkerCount == 0)
         m_stallStartTime[layer] = x265_mdate();
 
-    m_totalWorkerElapsedTime[layer] += x265_mdate() - startTime; // not thread safe, but good enough
+    m_totalWorkerElapsedTime[layer].add(x265_mdate() - startTime);
 }
 
 // Called by worker threads
@@ -1732,7 +1732,7 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
             collectDynDataRow(*ctu, &curRow.rowStats);
 
         // take a sample of the current active worker count
-        ATOMIC_ADD(&m_totalActiveWorkerCount, m_activeWorkerCount);
+        m_totalActiveWorkerCount.fetchAdd(m_activeWorkerCount);
         ATOMIC_INC(&m_activeWorkerCountSamples);
 
         /* advance top-level row coder to include the context of this CTU.
@@ -1842,9 +1842,9 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
             FrameData::RCStatCU& cuStat = curEncData.m_cuStat[cuAddr];    
             if ((m_param->bEnableWavefront && ((cuAddr == m_sliceBaseRow[sliceId] * numCols) || !m_param->rc.bEnableConstVbv)) || !m_param->bEnableWavefront)
             {
-                curEncData.m_rowStat[row].rowSatd += cuStat.vbvCost;
-                curEncData.m_rowStat[row].rowIntraSatd += cuStat.intraVbvCost;
-                curEncData.m_rowStat[row].encodedBits += cuStat.totalBits;
+                curEncData.m_rowStat[row].rowSatd.fetchAdd(cuStat.vbvCost);
+                curEncData.m_rowStat[row].rowIntraSatd.fetchAdd(cuStat.intraVbvCost);
+                curEncData.m_rowStat[row].encodedBits.fetchAdd(cuStat.totalBits);
                 curEncData.m_rowStat[row].sumQpRc += cuStat.baseQp;
                 curEncData.m_rowStat[row].numEncodedCUs = cuAddr;
             }
@@ -1890,9 +1890,9 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
                     {
                         for (uint32_t c = startCuAddr; c <= EndCuAddr && c <= numCols * (r + 1) - 1; c++)
                         {
-                            curEncData.m_rowStat[r].rowSatd += curEncData.m_cuStat[c].vbvCost;
-                            curEncData.m_rowStat[r].rowIntraSatd += curEncData.m_cuStat[c].intraVbvCost;
-                            curEncData.m_rowStat[r].encodedBits += curEncData.m_cuStat[c].totalBits;
+                            curEncData.m_rowStat[r].rowSatd.fetchAdd(curEncData.m_cuStat[c].vbvCost);
+                            curEncData.m_rowStat[r].rowIntraSatd.fetchAdd(curEncData.m_cuStat[c].intraVbvCost);
+                            curEncData.m_rowStat[r].encodedBits.fetchAdd(curEncData.m_cuStat[c].totalBits);
                             curEncData.m_rowStat[r].sumQpRc += curEncData.m_cuStat[c].baseQp;
                             curEncData.m_rowStat[r].numEncodedCUs = c;
                         }
@@ -1907,7 +1907,6 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
                 qpBase = x265_clip3((double)m_param->rc.qpMin, (double)m_param->rc.qpMax, qpBase);
                 curEncData.m_rowStat[row].rowQp = qpBase;
                 curEncData.m_rowStat[row].rowQpScale = x265_qp2qScale(qpBase);
-
                 if (curRow.reEncode < 0)
                 {
                     x265_log(m_param, X265_LOG_DEBUG, "POC %d row %d - encode restart required for VBV, to %.2f from %.2f\n",
@@ -2005,9 +2004,9 @@ void FrameEncoder::processRowEncoder(int intRow, ThreadLocalData& tld, int layer
             {
                 for (uint32_t c = curEncData.m_rowStat[r].numEncodedCUs + 1; c < numCols * (r + 1); c++)
                 {
-                    curEncData.m_rowStat[r].rowSatd += curEncData.m_cuStat[c].vbvCost;
-                    curEncData.m_rowStat[r].rowIntraSatd += curEncData.m_cuStat[c].intraVbvCost;
-                    curEncData.m_rowStat[r].encodedBits += curEncData.m_cuStat[c].totalBits;
+                    curEncData.m_rowStat[r].rowSatd.fetchAdd(curEncData.m_cuStat[c].vbvCost);
+                    curEncData.m_rowStat[r].rowIntraSatd.fetchAdd(curEncData.m_cuStat[c].intraVbvCost);
+                    curEncData.m_rowStat[r].encodedBits.fetchAdd(curEncData.m_cuStat[c].totalBits);
                     curEncData.m_rowStat[r].sumQpRc += curEncData.m_cuStat[c].baseQp;
                     curEncData.m_rowStat[r].numEncodedCUs = c;
                 }

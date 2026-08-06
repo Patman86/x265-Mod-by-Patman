@@ -56,14 +56,8 @@ public:
 
     MV& operator >>=(int i)                    { x >>= i; y >>= i; return *this; }
 
-#if USING_FTRAPV
-    /* avoid signed left-shifts when -ftrapv is enabled */
-    MV& operator <<=(int i)                    { x *= (1 << i); y *= (1 << i); return *this; }
-    MV operator <<(int i) const                { return MV(x * (1 << i), y * (1 << i)); }
-#else
-    MV& operator <<=(int i)                    { x <<= i; y <<= i; return *this; }
-    MV operator <<(int i) const                { return MV(x << i, y << i); }
-#endif
+    MV& operator <<=(int i)                    { x = (int32_t)((uint32_t)x << i); y = (int32_t)((uint32_t)y << i); return *this; }
+    MV operator <<(int i) const                { return MV((int32_t)((uint32_t)x << i), (int32_t)((uint32_t)y << i)); }
 
     MV operator >>(int i) const                { return MV(x >> i, y >> i); }
 

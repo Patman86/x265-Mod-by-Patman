@@ -63,6 +63,9 @@ class Lookahead;
 
 #define NUM64x64INPIC(w,h)                  ((w*h)>> (MAX_LOG2_CU_SIZE<<1))
 
+#define MOTION_ESTIMATION_LEVELS            4
+#define PARALLEL_ME_ROWSIZE                 16
+
 #if HIGH_BIT_DEPTH
 #define EDGE_THRESHOLD 1023.0
 #else
@@ -81,10 +84,9 @@ struct LookaheadTLD
     int             paddedLines;
 
 #if DETAILED_CU_STATS
-    int64_t         batchElapsedTime;
+    int64_t         framecostBatchElapsedTime;
     int64_t         coopSliceElapsedTime;
-    uint64_t        countBatches;
-    uint64_t        countCoopSlices;
+    int64_t         mcstfBatchElapsedTime;
 #endif
 
     LookaheadTLD()
@@ -96,10 +98,9 @@ struct LookaheadTLD
         widthInCU = heightInCU = ncu = paddedLines = 0;
 
 #if DETAILED_CU_STATS
-        batchElapsedTime = 0;
+        framecostBatchElapsedTime = 0;
         coopSliceElapsedTime = 0;
-        countBatches = 0;
-        countCoopSlices = 0;
+        mcstfBatchElapsedTime = 0;
 #endif
     }
 
@@ -162,6 +163,9 @@ public:
     x265_param*   m_param;
     Lowres*       m_lastNonB;
     int*          m_scratch;         // temp buffer for cutree propagate
+    pixel*        m_noiseBlurBuf;    // persistent blur buffer for estimateNoise() fallback path
+    int32_t*      m_gradMagBuf;      // persistent gradient-magnitude buffer for estimateNoise()
+    bool          m_filterThisGOP;  // noise gate decision for the GOP currently being dispatched
 
     /* pre-lookahead */
     int           m_fullQueueSize;
@@ -185,6 +189,7 @@ public:
     bool          m_outputSignalRequired;
     bool          m_bBatchMotionSearch;
     bool          m_bBatchFrameCosts;
+    bool          m_bMcstfMotionSearch;
     bool          m_filled;
     bool          m_isSceneTransition;
     int           m_numPools;
@@ -210,9 +215,13 @@ public:
 #if DETAILED_CU_STATS
     int64_t       m_slicetypeDecideElapsedTime;
     int64_t       m_preLookaheadElapsedTime;
+    int64_t       m_framecostElapsedTime;
+    int64_t       m_temporalFilterElapsedTime;
     uint64_t      m_countSlicetypeDecide;
     uint64_t      m_countPreLookahead;
-    void          getWorkerStats(int64_t& batchElapsedTime, uint64_t& batchCount, int64_t& coopSliceElapsedTime, uint64_t& coopSliceCount);
+    uint64_t      m_countFramecosts;
+    uint64_t      m_countTemporalFilter;
+    void          getWorkerStats(int64_t& framecostBatchElapsedTime, int64_t& coopSliceElapsedTime, int64_t& mcstfBatchElapsedTime);
 #endif
 
     bool    create();
@@ -230,6 +239,7 @@ public:
     int     findSliceType(int poc);
     bool    generatemcstf(Frame * frame, PicList refPic, int poclast);
     bool    isFilterThisframe(uint8_t sliceTypeConfig, int curSliceType);
+    int32_t estimateNoise(Frame* curFrame);
 
 
 protected:
@@ -312,10 +322,14 @@ public:
     enum { MAX_BATCH_SIZE = 512 };
     struct Estimate
     {
-        int  p0, b, p1;
+        int    p0, b, p1;
+        int    blockRow;
+        int    MElevel;
+        Frame* frame;
     } m_estimates[MAX_BATCH_SIZE];
 
     void add(int p0, int p1, int b);
+    void addRow(int refIdx, int poc, int curPoc, int blockRow, int level, Frame* frame);
     void finishBatch();
 
 protected:
@@ -327,11 +341,9 @@ protected:
     int64_t estimateFrameCost(LookaheadTLD& tld, int p0, int p1, int b, bool intraPenalty);
     void    estimateCUCost(LookaheadTLD& tld, int cux, int cuy, int p0, int p1, int b, bool bDoSearch[2], bool lastRow, int slice, bool hme);
 
-    void    estimatelowresmotion(MotionEstimatorTLD& m_metld, Frame* curframe, int refId);
-
     CostEstimateGroup& operator=(const CostEstimateGroup&);
 };
 
-bool computeEdge(pixel* edgePic, pixel* refPic, pixel* edgeTheta, intptr_t stride, int height, int width, bool bcalcTheta, pixel whitePixel = EDGE_THRESHOLD);
+bool computeEdge(pixel* edgePic, const pixel* refPic, pixel* edgeTheta, intptr_t stride, int height, int width, bool bcalcTheta, pixel whitePixel = (pixel)EDGE_THRESHOLD, int32_t* gradMag = NULL);
 }
 #endif // ifndef X265_SLICETYPE_H

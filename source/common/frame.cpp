@@ -31,7 +31,6 @@ using namespace X265_NS;
 
 Frame::Frame()
 {
-    m_bChromaExtended = false;
     m_lowresInit = false;
     m_reconRowFlag = NULL;
     m_reconColCount = NULL;
@@ -254,7 +253,6 @@ bool Frame::allocEncodeData(x265_param *param, const SPS& sps)
 /* prepare to re-use a FrameData instance to encode a new picture */
 void Frame::reinit(const SPS& sps)
 {
-    m_bChromaExtended = false;
     for (int i = 0; i < !!m_param->bEnableSCC + 1; i++)
         m_reconPic[i] = m_encData->m_reconPic[i];
     m_encData->reinit(sps);

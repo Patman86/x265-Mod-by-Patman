@@ -1341,7 +1341,7 @@ uint32_t Quant::rdoQuant(const CUData& cu, int16_t* dstCoeff, TextType ttype, ui
 
                         const int64_t origDist = (((int64_t)d * d));
 
-#define DELTARDCOST(d0, d, deltabits) ((((int64_t)d * d - d0) << scaleBits) + ((lambda2 * (int64_t)(deltabits)) >> 8))
+#define DELTARDCOST(d0, d, deltabits) ((int64_t)((uint64_t)((int64_t)d * d - d0) << scaleBits) + ((lambda2 * (int64_t)(deltabits)) >> 8))
 
                         const uint32_t isOne = (absLevel == 1);
                         if (dstCoeff[blkPos])

@@ -80,8 +80,6 @@ void DPB::recycleUnreferenced()
 
         if (curFrame->m_valid && !curFrame->m_encData->m_bHasReferences && !curFrame->m_countRefEncoders && !isMCSTFReferenced)
         {
-            curFrame->m_bChromaExtended = false;
-
             if (curFrame->m_param->bEnableTemporalFilter)
                 *curFrame->m_isSubSampled = false;
 

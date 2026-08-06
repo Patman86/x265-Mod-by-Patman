@@ -281,7 +281,10 @@ as external row dependencies are resolved. The steps are:
 ThreadedME has higher threading demand because it must maintain a lead over WPP
 to minimize stalls. It computes MVs for CTUs across rows within a frame and
 across frames across frame encoders. It is therefore recommended primarily for
-many-core systems where threading resources can be balanced.
+many-core systems where threading resources can be balanced. Its scheduler is
+a singleton, but its configured worker allocation may be split across multiple
+physical pools through proxy job providers so that each pool remains within its
+worker-bitmap limit.
 
 SAO
 ===
