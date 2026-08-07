@@ -724,6 +724,14 @@ endfunc
     \f              v17.8h, v1.8h, v3.8h
 .endm
 
+.macro SAD_24 f
+    ld1             {v0.8h-v2.8h}, [x0], x1
+    ld1             {v3.8h-v5.8h}, [x2], x3
+    \f              v16.8h, v0.8h, v3.8h
+    \f              v17.8h, v1.8h, v4.8h
+    \f              v18.8h, v2.8h, v5.8h
+.endm
+
 .macro SAD_32 f
     ld1             {v0.8h-v3.8h}, [x0], x1
     ld1             {v4.8h-v7.8h}, [x2], x3
@@ -731,6 +739,44 @@ endfunc
     \f              v17.8h, v1.8h, v5.8h
     \f              v18.8h, v2.8h, v6.8h
     \f              v19.8h, v3.8h, v7.8h
+.endm
+
+.macro SAD_48 f
+    ld1             {v0.8h-v3.8h}, [x0]
+    ld1             {v4.8h-v7.8h}, [x2]
+    \f              v16.8h, v0.8h, v4.8h
+    \f              v17.8h, v1.8h, v5.8h
+    \f              v18.8h, v2.8h, v6.8h
+    \f              v19.8h, v3.8h, v7.8h
+
+    ldp             q0, q1, [x0, #64]
+    ldp             q4, q5, [x2, #64]
+    uaba            v16.8h, v0.8h, v4.8h
+    uaba            v17.8h, v1.8h, v5.8h
+
+    add             x0, x0, x1
+    add             x2, x2, x3
+.endm
+
+.macro SAD_64 f
+    ld1             {v0.8h-v3.8h}, [x0]
+    ld1             {v4.8h-v7.8h}, [x2]
+    \f              v16.8h, v0.8h, v4.8h
+    \f              v17.8h, v1.8h, v5.8h
+    \f              v18.8h, v2.8h, v6.8h
+    \f              v19.8h, v3.8h, v7.8h
+
+    ldp             q0, q1, [x0, #64]
+    ldp             q2, q3, [x0, #96]
+    ldp             q4, q5, [x2, #64]
+    ldp             q6, q7, [x2, #96]
+    uaba            v16.8h, v0.8h, v4.8h
+    uaba            v17.8h, v1.8h, v5.8h
+    uaba            v18.8h, v2.8h, v6.8h
+    uaba            v19.8h, v3.8h, v7.8h
+
+    add             x0, x0, x1
+    add             x2, x2, x3
 .endm
 
 .macro SAD_END_2_ACCUM
@@ -777,119 +823,44 @@ function PFX(pixel_sad_\w\()x\h\()_neon)
 endfunc
 .endm
 
-// SAD_<w>_WIDEN kernels widen into 32-bit accumulators.
-.macro SAD_16_WIDEN f
-    ld1             {v0.8h-v1.8h}, [x0], x1
-    ld1             {v2.8h-v3.8h}, [x2], x3
-    uabd            v18.8h, v0.8h, v2.8h
-    \f              v16.4s, v18.8h
-    uabd            v19.8h, v1.8h, v3.8h
-    \f              v17.4s, v19.8h
-.endm
-
-.macro SAD_24_WIDEN f
-    ld1             {v0.8h-v2.8h}, [x0], x1
-    ld1             {v3.8h-v5.8h}, [x2], x3
-    uabd            v19.8h, v0.8h, v3.8h
-    \f              v16.4s, v19.8h
-    uabd            v20.8h, v1.8h, v4.8h
-    \f              v17.4s, v20.8h
-    uabd            v21.8h, v2.8h, v5.8h
-    \f              v18.4s, v21.8h
-.endm
-
-.macro SAD_32_WIDEN f
-    ld1             {v0.8h-v3.8h}, [x0], x1
-    ld1             {v4.8h-v7.8h}, [x2], x3
-    uabd            v20.8h, v0.8h, v4.8h
-    \f              v16.4s, v20.8h
-    uabd            v21.8h, v1.8h, v5.8h
-    \f              v17.4s, v21.8h
-    uabd            v22.8h, v2.8h, v6.8h
-    \f              v18.4s, v22.8h
-    uabd            v23.8h, v3.8h, v7.8h
-    \f              v19.4s, v23.8h
-.endm
-
-.macro SAD_48_WIDEN f
-    ld1             {v0.8h-v3.8h}, [x0]
-    ld1             {v4.8h-v7.8h}, [x2]
-    uabd            v20.8h, v0.8h, v4.8h
-    \f              v16.4s, v20.8h
-    uabd            v21.8h, v1.8h, v5.8h
-    \f              v17.4s, v21.8h
-    uabd            v22.8h, v2.8h, v6.8h
-    \f              v18.4s, v22.8h
-    uabd            v23.8h, v3.8h, v7.8h
-    \f              v19.4s, v23.8h
-
-    ldp             q0, q1, [x0, #64]
-    ldp             q4, q5, [x2, #64]
-    uabd            v20.8h, v0.8h, v4.8h
-    uadalp          v16.4s, v20.8h
-    uabd            v21.8h, v1.8h, v5.8h
-    uadalp          v17.4s, v21.8h
-
-    add             x0, x0, x1
-    add             x2, x2, x3
-.endm
-
-.macro SAD_64_WIDEN f
-    ld1             {v0.8h-v3.8h}, [x0]
-    ld1             {v4.8h-v7.8h}, [x2]
-    uabd            v20.8h, v0.8h, v4.8h
-    \f              v16.4s, v20.8h
-    uabd            v21.8h, v1.8h, v5.8h
-    \f              v17.4s, v21.8h
-    uabd            v22.8h, v2.8h, v6.8h
-    \f              v18.4s, v22.8h
-    uabd            v23.8h, v3.8h, v7.8h
-    \f              v19.4s, v23.8h
-
-    ldp             q0, q1, [x0, #64]
-    ldp             q2, q3, [x0, #96]
-    ldp             q4, q5, [x2, #64]
-    ldp             q6, q7, [x2, #96]
-    uabd            v20.8h, v0.8h, v4.8h
-    uadalp          v16.4s, v20.8h
-    uabd            v21.8h, v1.8h, v5.8h
-    uadalp          v17.4s, v21.8h
-    uabd            v22.8h, v2.8h, v6.8h
-    uadalp          v18.4s, v22.8h
-    uabd            v23.8h, v3.8h, v7.8h
-    uadalp          v19.4s, v23.8h
-
-    add             x0, x0, x1
-    add             x2, x2, x3
-.endm
-
-
-.macro SAD_FUNC_LOOP_LARGE w, h
+// 'h_limit' is either the block height 'h', or the number of rows that can be processed
+// before 16-bit accumulators overflow - which ever is lower. Upon reaching this limit,
+// accumulate into 32-bit elements.
+// In the rare cases where h is not divisible by the 16-bit accumulator overflow limit
+// (e.g. h = 24, 48 below) use the greatest common divisor of h and the overflow limit.
+.macro SAD_FUNC_LOOP_LARGE w, h, h_limit
 function PFX(pixel_sad_\w\()x\h\()_neon)
     // Stride is given in terms of pixel channel size, so double to get number of bytes.
     add             x1, x1, x1
     add             x3, x3, x3
 
-    SAD_\w\()_WIDEN uaddlp
-    SAD_\w\()_WIDEN uadalp
-
-    mov             w9, #(\h - 2)/2
-.Loop_\w\()x\h:
-    sub             w9, w9, #1
-.rept 2
-    SAD_\w\()_WIDEN uadalp
+    movi            v20.4s, #0
+    mov             w9, #\h
+.Loop_\w\()x\h\()_\h_limit\()rows:
+    sub             w9, w9, #\h_limit
+    mov             w10, #(\h_limit - 4)
+    SAD_\w\() uabd
+    SAD_\w\() uaba
+    SAD_\w\() uaba
+    SAD_\w\() uaba
+.Loop_\w\()x\h\()_4rows:
+    sub             w10, w10, #4
+.rept 4
+    SAD_\w\() uaba
 .endr
-    cbnz            w9, .Loop_\w\()x\h
+    cbnz            w10,  .Loop_\w\()x\h\()_4rows
 
-    add             v16.4s, v16.4s, v17.4s
-.if \w != 16
-.if \w != 24
-    add             v18.4s, v18.4s, v19.4s
+    uadalp          v20.4s, v16.8h
+    uadalp          v20.4s, v17.8h
+.if \w > 16
+    uadalp          v20.4s, v18.8h
 .endif
-    add             v16.4s, v16.4s, v18.4s
+.if \w > 24
+    uadalp          v20.4s, v19.8h
 .endif
-    addv            s0, v16.4s
+    cbnz            w9, .Loop_\w\()x\h\()_\h_limit\()rows
 
+    addv            s0, v20.4s
     fmov            w0, s0
     ret
 endfunc
@@ -908,18 +879,41 @@ SAD_FUNC_LOOP  16, 8, END_2_ACCUM
 SAD_FUNC_LOOP  16, 12, END_2_ACCUM_WIDEN
 SAD_FUNC_LOOP  16, 16, END_2_ACCUM_WIDEN
 SAD_FUNC_LOOP  32, 8, END_4_ACCUM_WIDEN
-SAD_FUNC_LOOP_LARGE  16, 32
-SAD_FUNC_LOOP_LARGE  16, 64
-SAD_FUNC_LOOP_LARGE  24, 32
-SAD_FUNC_LOOP_LARGE  32, 16
-SAD_FUNC_LOOP_LARGE  32, 24
-SAD_FUNC_LOOP_LARGE  32, 32
-SAD_FUNC_LOOP_LARGE  32, 64
-SAD_FUNC_LOOP_LARGE  48, 64
-SAD_FUNC_LOOP_LARGE  64, 16
-SAD_FUNC_LOOP_LARGE  64, 32
-SAD_FUNC_LOOP_LARGE  64, 48
-SAD_FUNC_LOOP_LARGE  64, 64
+#if BIT_DEPTH == 10
+SAD_FUNC_LOOP  16, 32, END_2_ACCUM_WIDEN
+SAD_FUNC_LOOP  16, 64, END_2_ACCUM_WIDEN
+// Single accumulation into each 16-bit accumulator per row.
+// Overflow limit is 64 rows. (65535 / 1023 ~= 64)
+SAD_FUNC_LOOP_LARGE  24, 32, 32 // h_limit = min(32, 64)
+SAD_FUNC_LOOP_LARGE  32, 16, 16 // h_limit = min(16, 64)
+SAD_FUNC_LOOP_LARGE  32, 24, 24 // h_limit = min(24, 64)
+SAD_FUNC_LOOP_LARGE  32, 32, 32 // h_limit = min(32, 64)
+SAD_FUNC_LOOP_LARGE  32, 64, 64 // h_limit = min(64, 64)
+// Two accumulations into each 16-bit accumulator per row.
+// Overflow limit is 32 rows. (65535 / 1023 / 2 ~= 32)
+SAD_FUNC_LOOP_LARGE  48, 64, 32 // h_limit = min(64, 32)
+SAD_FUNC_LOOP_LARGE  64, 16, 16 // h_limit = min(16, 32)
+SAD_FUNC_LOOP_LARGE  64, 32, 32 // h_limit = min(32, 32)
+SAD_FUNC_LOOP_LARGE  64, 48, 16 // h_limit = gcd(48, 32)
+SAD_FUNC_LOOP_LARGE  64, 64, 32 // h_limit = min(64, 32)
+#else // BIT_DEPTH == 12
+// Single accumulation into each 16-bit accumulator per row.
+// Overflow limit is 16 rows. (65535 / 4095 ~= 16)
+SAD_FUNC_LOOP_LARGE  16, 32, 16 // h_limit = min(32, 16)
+SAD_FUNC_LOOP_LARGE  16, 64, 16 // h_limit = min(64, 16)
+SAD_FUNC_LOOP_LARGE  24, 32, 16 // h_limit = min(32, 16)
+SAD_FUNC_LOOP_LARGE  32, 16, 16 // h_limit = min(16, 16)
+SAD_FUNC_LOOP_LARGE  32, 24, 8  // h_limit = gcd(24, 16)
+SAD_FUNC_LOOP_LARGE  32, 32, 16 // h_limit = min(32, 16)
+SAD_FUNC_LOOP_LARGE  32, 64, 16 // h_limit = min(64, 16)
+// Two accumulations into each 16-bit accumulator per row.
+// Overflow limit is 8 rows. (65535 / 4095 / 2 ~= 8)
+SAD_FUNC_LOOP_LARGE  48, 64, 8 // h_limit = min(64, 8)
+SAD_FUNC_LOOP_LARGE  64, 16, 8 // h_limit = min(16, 8)
+SAD_FUNC_LOOP_LARGE  64, 32, 8 // h_limit = min(32, 8)
+SAD_FUNC_LOOP_LARGE  64, 48, 8 // h_limit = min(48, 8)
+SAD_FUNC_LOOP_LARGE  64, 64, 8 // h_limit = min(64, 8)
+#endif
 
 //void sad_x3(const pixel* pix1, const pixel* pix2, const pixel* pix3, const pixel* pix4, intptr_t frefstride, int32_t* res)
 //void sad_x4(const pixel* pix1, const pixel* pix2, const pixel* pix3, const pixel* pix4, const pixel* pix5, intptr_t frefstride, int32_t* res)
@@ -1065,6 +1059,28 @@ endfunc
 .endif
 .endm
 
+.macro SAD_xN_24 n f
+    ld1             {v0.8h-v2.8h}, [x0], x7
+    ld1             {v3.8h-v5.8h}, [x1], x5
+    \f              v16.8h, v0.8h, v3.8h
+    uaba            v16.8h, v1.8h, v4.8h
+    \f              v17.8h, v2.8h, v5.8h
+    ld1             {v24.8h-v26.8h}, [x2], x5
+    \f              v18.8h, v0.8h, v24.8h
+    uaba            v18.8h, v1.8h, v25.8h
+    \f              v19.8h, v2.8h, v26.8h
+    ld1             {v3.8h-v5.8h}, [x3], x5
+    \f              v20.8h, v0.8h, v3.8h
+    uaba            v20.8h, v1.8h, v4.8h
+    \f              v21.8h, v2.8h, v5.8h
+.if \n == 4
+    ld1             {v24.8h-v26.8h}, [x4], x5
+    \f              v22.8h, v0.8h, v24.8h
+    uaba            v22.8h, v1.8h, v25.8h
+    \f              v23.8h, v2.8h, v26.8h
+.endif
+.endm
+
 .macro SAD_xN_32 n f
     ld1             {v0.8h-v3.8h}, [x0], x7
     ld1             {v4.8h-v7.8h}, [x1], x5
@@ -1091,6 +1107,122 @@ endfunc
 .endif
 .endm
 
+.macro SAD_xN_48 n f
+    ld1             {v0.8h-v3.8h}, [x0]
+    ld1             {v4.8h-v7.8h}, [x1]
+    \f              v16.8h, v0.8h, v4.8h
+    uaba            v16.8h, v1.8h, v5.8h
+    \f              v17.8h, v2.8h, v6.8h
+    uaba            v17.8h, v3.8h, v7.8h
+    ldp             q24, q25, [x0, #64]
+    ldp             q26, q27, [x1, #64]
+    uaba            v16.8h, v24.8h, v26.8h
+    uaba            v17.8h, v25.8h, v27.8h
+
+    ld1             {v4.8h-v7.8h}, [x2]
+    \f              v18.8h, v0.8h, v4.8h
+    uaba            v18.8h, v1.8h, v5.8h
+    \f              v19.8h, v2.8h, v6.8h
+    uaba            v19.8h, v3.8h, v7.8h
+    ldp             q26, q27, [x2, #64]
+    uaba            v18.8h, v24.8h, v26.8h
+    uaba            v19.8h, v25.8h, v27.8h
+
+    ld1             {v4.8h-v7.8h}, [x3]
+    \f              v20.8h, v0.8h, v4.8h
+    uaba            v20.8h, v1.8h, v5.8h
+    \f              v21.8h, v2.8h, v6.8h
+    uaba            v21.8h, v3.8h, v7.8h
+    ldp             q26, q27, [x3, #64]
+    uaba            v20.8h, v24.8h, v26.8h
+    uaba            v21.8h, v25.8h, v27.8h
+
+    add             x0, x0, x7
+    add             x1, x1, x5
+    add             x2, x2, x5
+    add             x3, x3, x5
+
+.if \n == 4
+    ld1             {v4.8h-v7.8h}, [x4]
+    \f              v22.8h, v0.8h, v4.8h
+    uaba            v22.8h, v1.8h, v5.8h
+    \f              v23.8h, v2.8h, v6.8h
+    uaba            v23.8h, v3.8h, v7.8h
+    ldp             q26, q27, [x4, #64]
+    uaba            v22.8h, v24.8h, v26.8h
+    uaba            v23.8h, v25.8h, v27.8h
+
+    add             x4, x4, x5
+.endif
+.endm
+
+.macro SAD_xN_64 n f
+    ld1             {v0.8h-v3.8h}, [x0]
+    ldp             q4, q5, [x0, #64]
+    ldp             q6, q7, [x0, #96]
+    ld1             {v20.8h-v23.8h}, [x1]
+    \f              v16.8h, v0.8h, v20.8h
+    uaba            v16.8h, v1.8h, v21.8h
+    uaba            v16.8h, v2.8h, v22.8h
+    uaba            v16.8h, v3.8h, v23.8h
+
+    ldp             q24, q25, [x1, #64]
+    ldp             q26, q27, [x1, #96]
+    uaba            v16.8h, v4.8h, v24.8h
+    uaba            v16.8h, v5.8h, v25.8h
+    uaba            v16.8h, v6.8h, v26.8h
+    uaba            v16.8h, v7.8h, v27.8h
+
+    ld1             {v20.8h-v23.8h}, [x2]
+    \f              v17.8h, v0.8h, v20.8h
+    uaba            v17.8h, v1.8h, v21.8h
+    uaba            v17.8h, v2.8h, v22.8h
+    uaba            v17.8h, v3.8h, v23.8h
+
+    ldp             q24, q25, [x2, #64]
+    ldp             q26, q27, [x2, #96]
+    uaba            v17.8h, v4.8h, v24.8h
+    uaba            v17.8h, v5.8h, v25.8h
+    uaba            v17.8h, v6.8h, v26.8h
+    uaba            v17.8h, v7.8h, v27.8h
+
+    ld1             {v20.8h-v23.8h}, [x3]
+    \f              v18.8h, v0.8h, v20.8h
+    uaba            v18.8h, v1.8h, v21.8h
+    uaba            v18.8h, v2.8h, v22.8h
+    uaba            v18.8h, v3.8h, v23.8h
+
+    ldp             q24, q25, [x3, #64]
+    ldp             q26, q27, [x3, #96]
+    uaba            v18.8h, v4.8h, v24.8h
+    uaba            v18.8h, v5.8h, v25.8h
+    uaba            v18.8h, v6.8h, v26.8h
+    uaba            v18.8h, v7.8h, v27.8h
+
+    add             x0, x0, x7
+    add             x1, x1, x5
+    add             x2, x2, x5
+    add             x3, x3, x5
+
+.if \n == 4
+    ld1             {v20.8h-v23.8h}, [x4]
+    \f              v19.8h, v0.8h, v20.8h
+    uaba            v19.8h, v1.8h, v21.8h
+    uaba            v19.8h, v2.8h, v22.8h
+    uaba            v19.8h, v3.8h, v23.8h
+
+    ldp             q24, q25, [x4, #64]
+    ldp             q26, q27, [x4, #96]
+    uaba            v19.8h, v4.8h, v24.8h
+    uaba            v19.8h, v5.8h, v25.8h
+    uaba            v19.8h, v6.8h, v26.8h
+    uaba            v19.8h, v7.8h, v27.8h
+
+    add             x4, x4, x5
+.endif
+.endm
+
+
 .macro SAD_xN_FUNC_LOOP n, w, h end_type
 function PFX(sad_x\n\()_\w\()x\h\()_neon)
     // Make function arguments for n == 3 look like n == 4.
@@ -1106,10 +1238,10 @@ function PFX(sad_x\n\()_\w\()x\h\()_neon)
     SAD_xN_\w \n, uabd
 
     mov             w8, #\h - 1
-.Loop_x\n\()_\w\()x\h:
+.Loop_x\n\()_\w\()x\h\()_1row:
     sub             w8, w8, #1
     SAD_xN_\w \n, uaba
-    cbnz            w8, .Loop_x\n\()_\w\()x\h
+    cbnz            w8, .Loop_x\n\()_\w\()x\h\()_1row
 
     uaddlp          v16.4s, v16.8h
     uadalp          v16.4s, v17.8h
@@ -1138,237 +1270,10 @@ function PFX(sad_x\n\()_\w\()x\h\()_neon)
 endfunc
 .endm
 
-.macro SAD_xN_16_WIDEN n f
-    ld1             {v0.8h-v1.8h}, [x0], x7
-    ld1             {v2.8h-v3.8h}, [x1], x5
-    uabd            v22.8h, v0.8h, v2.8h
-    \f              v16.4s, v22.8h
-    uabd            v23.8h, v1.8h, v3.8h
-    \f              v17.4s, v23.8h
-    ld1             {v4.8h-v5.8h}, [x2], x5
-    uabd            v24.8h, v0.8h, v4.8h
-    \f              v18.4s, v24.8h
-    uabd            v25.8h, v1.8h, v5.8h
-    \f              v19.4s, v25.8h
-    ld1             {v6.8h-v7.8h}, [x3], x5
-    uabd            v26.8h, v0.8h, v6.8h
-    \f              v20.4s, v26.8h
-    uabd            v27.8h, v1.8h, v7.8h
-    \f              v21.4s, v27.8h
-.if \n == 4
-    ld1             {v2.8h-v3.8h}, [x4], x5
-    uabd            v28.8h, v0.8h, v2.8h
-    \f              v30.4s, v28.8h
-    uabd            v29.8h, v1.8h, v3.8h
-    \f              v31.4s, v29.8h
-.endif
-.endm
-
-.macro SAD_xN_24_WIDEN n f
-    ld1             {v0.8h-v2.8h}, [x0], x7
-    ld1             {v3.8h-v5.8h}, [x1], x5
-    uabd            v6.8h, v0.8h, v3.8h
-    uaba            v6.8h, v1.8h, v4.8h
-    \f              v16.4s, v6.8h
-    uabd            v7.8h, v2.8h, v5.8h
-    \f              v17.4s, v7.8h
-    ld1             {v27.8h-v29.8h}, [x2], x5
-    uabd            v22.8h, v0.8h, v27.8h
-    uaba            v22.8h, v1.8h, v28.8h
-    \f              v18.4s, v22.8h
-    uabd            v23.8h, v2.8h, v29.8h
-    \f              v19.4s, v23.8h
-    ld1             {v3.8h-v5.8h}, [x3], x5
-    uabd            v24.8h, v0.8h, v3.8h
-    uaba            v24.8h, v1.8h, v4.8h
-    \f              v20.4s, v24.8h
-    uabd            v25.8h, v2.8h, v5.8h
-    \f              v21.4s, v25.8h
-.if \n == 4
-    ld1             {v27.8h-v29.8h}, [x4], x5
-    uabd            v22.8h, v0.8h, v27.8h
-    uaba            v22.8h, v1.8h, v28.8h
-    \f              v30.4s, v22.8h
-    uabd            v23.8h, v2.8h, v29.8h
-    \f              v31.4s, v23.8h
-.endif
-.endm
-
-.macro SAD_xN_32_WIDEN n f
-    ld1             {v0.8h-v3.8h}, [x0], x7
-    ld1             {v4.8h-v7.8h}, [x1], x5
-    uabd            v22.8h, v0.8h, v4.8h
-    uaba            v22.8h, v1.8h, v5.8h
-    \f              v16.4s, v22.8h
-    uabd            v23.8h, v2.8h, v6.8h
-    uaba            v23.8h, v3.8h, v7.8h
-    \f              v17.4s, v23.8h
-
-    ld1             {v4.8h-v7.8h}, [x2], x5
-    uabd            v24.8h, v0.8h, v4.8h
-    uaba            v24.8h, v1.8h, v5.8h
-    \f              v18.4s, v24.8h
-    uabd            v25.8h, v2.8h, v6.8h
-    uaba            v25.8h, v3.8h, v7.8h
-    \f              v19.4s, v25.8h
-
-    ld1             {v4.8h-v7.8h}, [x3], x5
-    uabd            v26.8h, v0.8h, v4.8h
-    uaba            v26.8h, v1.8h, v5.8h
-    \f              v20.4s, v26.8h
-    uabd            v27.8h, v2.8h, v6.8h
-    uaba            v27.8h, v3.8h, v7.8h
-    \f              v21.4s, v27.8h
-
-.if \n == 4
-    ld1             {v4.8h-v7.8h}, [x4], x5
-    uabd            v22.8h, v0.8h, v4.8h
-    uaba            v22.8h, v1.8h, v5.8h
-    \f              v30.4s, v22.8h
-    uabd            v23.8h, v2.8h, v6.8h
-    uaba            v23.8h, v3.8h, v7.8h
-    \f              v31.4s, v23.8h
-.endif
-.endm
-
-.macro SAD_xN_48_WIDEN n f
-    ld1             {v0.8h-v3.8h}, [x0]
-    ld1             {v26.8h-v29.8h}, [x1]
-    uabd            v6.8h, v0.8h, v26.8h
-    uaba            v6.8h, v1.8h, v27.8h
-    \f              v16.4s, v6.8h
-    uabd            v7.8h, v2.8h, v28.8h
-    uaba            v7.8h, v3.8h, v29.8h
-    \f              v17.4s, v7.8h
-    ldp             q4, q5, [x0, #64]
-    ldp             q26, q27, [x1, #64]
-    uabd            v22.8h, v4.8h, v26.8h
-    uaba            v22.8h, v5.8h, v27.8h
-    uadalp          v16.4s, v22.8h
-
-    ld1             {v26.8h-v29.8h}, [x2]
-    uabd            v23.8h, v0.8h, v26.8h
-    uaba            v23.8h, v1.8h, v27.8h
-    \f              v18.4s, v23.8h
-    uabd            v24.8h, v2.8h, v28.8h
-    uaba            v24.8h, v3.8h, v29.8h
-    \f              v19.4s, v24.8h
-    ldp             q26, q27, [x2, #64]
-    uabd            v25.8h, v4.8h, v26.8h
-    uaba            v25.8h, v5.8h, v27.8h
-    uadalp          v18.4s, v25.8h
-
-    ld1             {v26.8h-v29.8h}, [x3]
-    uabd            v6.8h, v0.8h, v26.8h
-    uaba            v6.8h, v1.8h, v27.8h
-    \f              v20.4s, v6.8h
-    uabd            v7.8h, v2.8h, v28.8h
-    uaba            v7.8h, v3.8h, v29.8h
-    \f              v21.4s, v7.8h
-    ldp             q26, q27, [x3, #64]
-    uabd            v22.8h, v4.8h, v26.8h
-    uaba            v22.8h, v5.8h, v27.8h
-    uadalp          v20.4s, v22.8h
-
-    add             x0, x0, x7
-    add             x1, x1, x5
-    add             x2, x2, x5
-    add             x3, x3, x5
-
-.if \n == 4
-    ld1             {v26.8h-v29.8h}, [x4]
-    uabd            v6.8h, v0.8h, v26.8h
-    uaba            v6.8h, v1.8h, v27.8h
-    \f              v30.4s, v6.8h
-    uabd            v7.8h, v2.8h, v28.8h
-    uaba            v7.8h, v3.8h, v29.8h
-    \f              v31.4s, v7.8h
-    ldp             q26, q27, [x4, #64]
-    uabd            v22.8h, v4.8h, v26.8h
-    uaba            v22.8h, v5.8h, v27.8h
-    uadalp          v30.4s, v22.8h
-    add             x4, x4, x5
-.endif
-.endm
-
-.macro SAD_xN_64_WIDEN n f
-    ld1             {v0.8h-v3.8h}, [x0]
-    ld1             {v26.8h-v29.8h}, [x1]
-    uabd            v22.8h, v0.8h, v26.8h
-    uaba            v22.8h, v1.8h, v27.8h
-    \f              v16.4s, v22.8h
-    uabd            v23.8h, v2.8h, v28.8h
-    uaba            v23.8h, v3.8h, v29.8h
-    \f              v17.4s, v23.8h
-    ldp             q4, q5, [x0, #64]
-    ldp             q6, q7, [x0, #96]
-    ldp             q26, q27, [x1, #64]
-    ldp             q28, q29, [x1, #96]
-    uabd            v24.8h, v4.8h, v26.8h
-    uaba            v24.8h, v5.8h, v27.8h
-    uadalp          v16.4s, v24.8h
-    uabd            v25.8h, v6.8h, v28.8h
-    uaba            v25.8h, v7.8h, v29.8h
-    uadalp          v17.4s, v25.8h
-
-    ld1             {v26.8h-v29.8h}, [x2]
-    uabd            v22.8h, v0.8h, v26.8h
-    uaba            v22.8h, v1.8h, v27.8h
-    \f              v18.4s, v22.8h
-    uabd            v23.8h, v2.8h, v28.8h
-    uaba            v23.8h, v3.8h, v29.8h
-    \f              v19.4s, v23.8h
-    ldp             q26, q27, [x2, #64]
-    ldp             q28, q29, [x2, #96]
-    uabd            v24.8h, v4.8h, v26.8h
-    uaba            v24.8h, v5.8h, v27.8h
-    uadalp          v18.4s, v24.8h
-    uabd            v25.8h, v6.8h, v28.8h
-    uaba            v25.8h, v7.8h, v29.8h
-    uadalp          v19.4s, v25.8h
-
-    ld1             {v26.8h-v29.8h}, [x3]
-    uabd            v22.8h, v0.8h, v26.8h
-    uaba            v22.8h, v1.8h, v27.8h
-    \f              v20.4s, v22.8h
-    uabd            v23.8h, v2.8h, v28.8h
-    uaba            v23.8h, v3.8h, v29.8h
-    \f              v21.4s, v23.8h
-    ldp             q26, q27, [x3, #64]
-    ldp             q28, q29, [x3, #96]
-    uabd            v24.8h, v4.8h, v26.8h
-    uaba            v24.8h, v5.8h, v27.8h
-    uadalp          v20.4s, v24.8h
-    uabd            v25.8h, v6.8h, v28.8h
-    uaba            v25.8h, v7.8h, v29.8h
-    uadalp          v21.4s, v25.8h
-
-    add             x0, x0, x7
-    add             x1, x1, x5
-    add             x2, x2, x5
-    add             x3, x3, x5
-
-.if \n == 4
-    ld1             {v26.8h-v29.8h}, [x4]
-    uabd            v22.8h, v0.8h, v26.8h
-    uaba            v22.8h, v1.8h, v27.8h
-    \f              v30.4s, v22.8h
-    uabd            v23.8h, v2.8h, v28.8h
-    uaba            v23.8h, v3.8h, v29.8h
-    \f              v31.4s, v23.8h
-    ldp             q26, q27, [x4, #64]
-    ldp             q28, q29, [x4, #96]
-    uabd            v24.8h, v4.8h, v26.8h
-    uaba            v24.8h, v5.8h, v27.8h
-    uadalp          v30.4s, v24.8h
-    uabd            v25.8h, v6.8h, v28.8h
-    uaba            v25.8h, v7.8h, v29.8h
-    uadalp          v31.4s, v25.8h
-    add             x4, x4, x5
-.endif
-.endm
-
-.macro SAD_xN_FUNC_LOOP_LARGE n, w, h
+// 'h_limit' is either the block height 'h', or the number of rows that can be processed
+// before 16-bit accumulators overflow - which ever is lower. Upon reaching this limit,
+// accumulate into 32-bit elements.
+.macro SAD_xN_FUNC_LOOP_LARGE n, w, h, h_limit
 function PFX(sad_x\n\()_\w\()x\h\()_neon)
     // Make function arguments for n == 3 look like n == 4.
 .if \n == 3
@@ -1380,34 +1285,47 @@ function PFX(sad_x\n\()_\w\()x\h\()_neon)
     add             x5, x5, x5
     mov             x7, #(FENC_STRIDE << 1)
 
-    SAD_xN_\w\()_WIDEN \n, uaddlp
-    SAD_xN_\w\()_WIDEN \n, uadalp
-
-    mov             w8, #(\h - 2)/2
-.Loop_x\n\()_\w\()x\h:
-    sub             w8, w8, #1
-.rept 2
-    SAD_xN_\w\()_WIDEN \n, uadalp
-.endr
-    cbnz            w8, .Loop_x\n\()_\w\()x\h
-
-    add             v16.4s, v16.4s, v17.4s
-    add             v17.4s, v18.4s, v19.4s
-    add             v18.4s, v20.4s, v21.4s
-.if \n == 3
-    addp            v0.4s, v16.4s, v17.4s
-    addp            v1.4s, v18.4s, v18.4s
-    addp            v0.4s, v0.4s, v1.4s
-    str             d0, [x6]
-    add             x6, x6, #8
-    st1             {v0.s}[2], [x6]
-.else
-    add             v19.4s, v30.4s, v31.4s
-    addp            v16.4s, v16.4s, v17.4s
-    addp            v18.4s, v18.4s, v19.4s
-    addp            v16.4s, v16.4s, v18.4s
-    str             q16, [x6]
+    movi            v28.4s, #0
+    movi            v29.4s, #0
+    movi            v30.4s, #0
+.if \n == 4
+    movi            v31.4s, #0
 .endif
+    mov             w9, #(\h / \h_limit)
+
+.Loop_x\n\()_\w\()x\h\()_\h_limit\()rows:
+    sub             w9, w9, #1
+    SAD_xN_\w\() \n, uabd
+    mov             w10, #(\h_limit - 1)
+.Loop_x\n\()_\w\()x\h\()_1row:
+    sub             w10, w10, #1
+    SAD_xN_\w\() \n, uaba
+    cbnz            w10, .Loop_x\n\()_\w\()x\h\()_1row
+.if \w < 64
+    uadalp          v28.4s, v16.8h
+    uadalp          v28.4s, v17.8h
+    uadalp          v29.4s, v18.8h
+    uadalp          v29.4s, v19.8h
+    uadalp          v30.4s, v20.8h
+    uadalp          v30.4s, v21.8h
+.if \n == 4
+    uadalp          v31.4s, v22.8h
+    uadalp          v31.4s, v23.8h
+.endif
+.else
+    uadalp          v28.4s, v16.8h
+    uadalp          v29.4s, v17.8h
+    uadalp          v30.4s, v18.8h
+.if \n == 4
+    uadalp          v31.4s, v19.8h
+.endif
+.endif
+    cbnz            w9, .Loop_x\n\()_\w\()x\h\()_\h_limit\()rows
+
+    addp            v28.4s, v28.4s, v29.4s
+    addp            v30.4s, v30.4s, v31.4s
+    addp            v28.4s, v28.4s, v30.4s
+    str             q28, [x6]
 
     ret
 endfunc
@@ -1426,18 +1344,49 @@ SAD_xN_FUNC_LOOP  3, 16, 8
 SAD_xN_FUNC_LOOP  3, 16, 12
 SAD_xN_FUNC_LOOP  3, 16, 16
 SAD_xN_FUNC_LOOP  3, 32, 8
-SAD_xN_FUNC_LOOP_LARGE  3, 16, 32
-SAD_xN_FUNC_LOOP_LARGE  3, 16, 64
-SAD_xN_FUNC_LOOP_LARGE  3, 24, 32
-SAD_xN_FUNC_LOOP_LARGE  3, 32, 16
-SAD_xN_FUNC_LOOP_LARGE  3, 32, 24
-SAD_xN_FUNC_LOOP_LARGE  3, 32, 32
-SAD_xN_FUNC_LOOP_LARGE  3, 32, 64
-SAD_xN_FUNC_LOOP_LARGE  3, 48, 64
-SAD_xN_FUNC_LOOP_LARGE  3, 64, 16
-SAD_xN_FUNC_LOOP_LARGE  3, 64, 32
-SAD_xN_FUNC_LOOP_LARGE  3, 64, 48
-SAD_xN_FUNC_LOOP_LARGE  3, 64, 64
+#if BIT_DEPTH == 10
+// Single accumulation into each 16-bit accumulator per row.
+// Overflow limit is 64 rows. (65535 / 1023 ~= 64)
+SAD_xN_FUNC_LOOP_LARGE  3, 16, 32, 32 // h_limit = min(32, 64)
+SAD_xN_FUNC_LOOP_LARGE  3, 16, 64, 64 // h_limit = min(64, 64)
+// Two accumulations into each 16-bit accumulator per row.
+// Overflow limit is 32 rows. (65535 / 1023 / 2 ~= 32)
+SAD_xN_FUNC_LOOP_LARGE  3, 24, 32, 32 // h_limit = min(32, 32)
+SAD_xN_FUNC_LOOP_LARGE  3, 32, 16, 16 // h_limit = min(16, 32)
+SAD_xN_FUNC_LOOP_LARGE  3, 32, 24, 24 // h_limit = min(24, 32)
+SAD_xN_FUNC_LOOP_LARGE  3, 32, 32, 32 // h_limit = min(32, 32)
+SAD_xN_FUNC_LOOP_LARGE  3, 32, 64, 32 // h_limit = min(64, 32)
+// Three accumulations into each 16-bit accumulator per row.
+// Overflow limit is 16 rows. (65535 / 1023 / 3 ~= 21)
+SAD_xN_FUNC_LOOP_LARGE  3, 48, 64, 16 // h_limit = min(64, 16)
+// Eight accumulations into each 16-bit accumulator per row.
+// Overflow limit is 8 rows. (65535 / 1023 / 8 ~= 8)
+SAD_xN_FUNC_LOOP_LARGE  3, 64, 16, 8 // h_limit = min(16, 8)
+SAD_xN_FUNC_LOOP_LARGE  3, 64, 32, 8 // h_limit = min(32, 8)
+SAD_xN_FUNC_LOOP_LARGE  3, 64, 48, 8 // h_limit = min(48, 8)
+SAD_xN_FUNC_LOOP_LARGE  3, 64, 64, 8 // h_limit = min(64, 8)
+#else // BIT_DEPTH == 12
+// Single accumulation into each 16-bit accumulator per row.
+// Overflow limit is 16 rows. (65535 / 4095 ~= 16)
+SAD_xN_FUNC_LOOP_LARGE  3, 16, 32, 16 // h_limit = min(32, 16)
+SAD_xN_FUNC_LOOP_LARGE  3, 16, 64, 16 // h_limit = min(64, 16)
+// Two accumulations into each 16-bit accumulator per row.
+// Overflow limit is 8 rows. (65535 / 4095 / 2 ~= 8)
+SAD_xN_FUNC_LOOP_LARGE  3, 24, 32, 8 // h_limit = min(32, 8)
+SAD_xN_FUNC_LOOP_LARGE  3, 32, 16, 8 // h_limit = min(16, 8)
+SAD_xN_FUNC_LOOP_LARGE  3, 32, 24, 8 // h_limit = min(24, 8)
+SAD_xN_FUNC_LOOP_LARGE  3, 32, 32, 8 // h_limit = min(32, 8)
+SAD_xN_FUNC_LOOP_LARGE  3, 32, 64, 8 // h_limit = min(64, 8)
+// Three accumulations into each 16-bit accumulator per row.
+// Overflow limit is 4 rows. (65535 / 4095 / 3 ~= 5)
+SAD_xN_FUNC_LOOP_LARGE  3, 48, 64, 4 // h_limit = min(64, 4)
+// Eight accumulations into each 16-bit accumulator per row.
+// Overflow limit is 2 rows. (65535 / 4095 / 8 ~= 2)
+SAD_xN_FUNC_LOOP_LARGE  3, 64, 16, 2 // h_limit = min(16, 2)
+SAD_xN_FUNC_LOOP_LARGE  3, 64, 32, 2 // h_limit = min(32, 2)
+SAD_xN_FUNC_LOOP_LARGE  3, 64, 48, 2 // h_limit = min(48, 2)
+SAD_xN_FUNC_LOOP_LARGE  3, 64, 64, 2 // h_limit = min(64, 2)
+#endif
 
 SAD_xN_FUNC  4, 4, 4
 SAD_xN_FUNC  4, 4, 8
@@ -1452,17 +1401,40 @@ SAD_xN_FUNC_LOOP  4, 16, 8
 SAD_xN_FUNC_LOOP  4, 16, 12
 SAD_xN_FUNC_LOOP  4, 16, 16
 SAD_xN_FUNC_LOOP  4, 32, 8
-SAD_xN_FUNC_LOOP_LARGE  4, 16, 32
-SAD_xN_FUNC_LOOP_LARGE  4, 16, 64
-SAD_xN_FUNC_LOOP_LARGE  4, 24, 32
-SAD_xN_FUNC_LOOP_LARGE  4, 32, 16
-SAD_xN_FUNC_LOOP_LARGE  4, 32, 24
-SAD_xN_FUNC_LOOP_LARGE  4, 32, 32
-SAD_xN_FUNC_LOOP_LARGE  4, 32, 64
-SAD_xN_FUNC_LOOP_LARGE  4, 48, 64
-SAD_xN_FUNC_LOOP_LARGE  4, 64, 16
-SAD_xN_FUNC_LOOP_LARGE  4, 64, 32
-SAD_xN_FUNC_LOOP_LARGE  4, 64, 48
-SAD_xN_FUNC_LOOP_LARGE  4, 64, 64
+#if BIT_DEPTH == 10
+// 1 accumulation into each accumulator per row (overflow limit = 64).
+SAD_xN_FUNC_LOOP_LARGE  4, 16, 32, 32 // h_limit = min(32, 64)
+SAD_xN_FUNC_LOOP_LARGE  4, 16, 64, 64 // h_limit = min(64, 64)
+// 2 accumulations into each accumulator per row (overflow limit = 32).
+SAD_xN_FUNC_LOOP_LARGE  4, 24, 32, 32 // h_limit = min(32, 32)
+SAD_xN_FUNC_LOOP_LARGE  4, 32, 16, 16 // h_limit = min(16, 32)
+SAD_xN_FUNC_LOOP_LARGE  4, 32, 24, 24 // h_limit = min(24, 32)
+SAD_xN_FUNC_LOOP_LARGE  4, 32, 32, 32 // h_limit = min(32, 32)
+SAD_xN_FUNC_LOOP_LARGE  4, 32, 64, 32 // h_limit = min(64, 32)
+// 3 accumulations into each accumulator per row (overflow limit = 16).
+SAD_xN_FUNC_LOOP_LARGE  4, 48, 64, 16 // h_limit = min(64, 16)
+// 8 accumulations into each accumulator per row (overflow limit = 8).
+SAD_xN_FUNC_LOOP_LARGE  4, 64, 16, 8 // h_limit = min(16, 8)
+SAD_xN_FUNC_LOOP_LARGE  4, 64, 32, 8 // h_limit = min(32, 8)
+SAD_xN_FUNC_LOOP_LARGE  4, 64, 48, 8 // h_limit = min(48, 8)
+SAD_xN_FUNC_LOOP_LARGE  4, 64, 64, 8 // h_limit = min(64, 8)
+#else // BIT_DEPTH == 12
+// 1 accumulation into each accumulator per row (overflow limit = 16).
+SAD_xN_FUNC_LOOP_LARGE  4, 16, 32, 16 // h_limit = min(32, 16)
+SAD_xN_FUNC_LOOP_LARGE  4, 16, 64, 16 // h_limit = min(64, 16)
+// 2 accumulations into each accumulator per row (overflow limit = 8).
+SAD_xN_FUNC_LOOP_LARGE  4, 24, 32, 8 // h_limit = min(32, 8)
+SAD_xN_FUNC_LOOP_LARGE  4, 32, 16, 8 // h_limit = min(16, 8)
+SAD_xN_FUNC_LOOP_LARGE  4, 32, 24, 8 // h_limit = min(24, 8)
+SAD_xN_FUNC_LOOP_LARGE  4, 32, 32, 8 // h_limit = min(32, 8)
+SAD_xN_FUNC_LOOP_LARGE  4, 32, 64, 8 // h_limit = min(64, 8)
+// 3 accumulations into each accumulator per row (overflow limit = 4).
+SAD_xN_FUNC_LOOP_LARGE  4, 48, 64, 4 // h_limit = min(64, 4)
+// 8 accumulations into each accumulator per row (overflow limit = 2).
+SAD_xN_FUNC_LOOP_LARGE  4, 64, 16, 2 // h_limit = min(16, 2)
+SAD_xN_FUNC_LOOP_LARGE  4, 64, 32, 2 // h_limit = min(32, 2)
+SAD_xN_FUNC_LOOP_LARGE  4, 64, 48, 2 // h_limit = min(48, 2)
+SAD_xN_FUNC_LOOP_LARGE  4, 64, 64, 2 // h_limit = min(64, 2)
+#endif
 
 #endif // !HIGH_BIT_DEPTH
