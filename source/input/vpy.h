@@ -31,8 +31,7 @@
 #include <cstdlib>
 #include <cstring>
 
-#include <vapoursynth/VSScript4.h>
-#include <vapoursynth/VSHelper4.h>
+#include <vapoursynth/VapourSynth4.h>
 
 #include "input.h"
 

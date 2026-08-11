@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2012-2021 Fredrik Mellbin
+* Copyright (c) 2012-2026 Fredrik Mellbin
 *
 * This file is part of VapourSynth.
 *
@@ -26,7 +26,9 @@
 
 #define VS_MAKE_VERSION(major, minor) (((major) << 16) | (minor))
 #define VAPOURSYNTH_API_MAJOR 4
-#if defined(VS_USE_LATEST_API) || defined(VS_USE_API_41)
+#if defined(VS_USE_LATEST_API) || defined(VS_USE_API_42)
+#define VAPOURSYNTH_API_MINOR 2
+#elif defined(VS_USE_API_41)
 #define VAPOURSYNTH_API_MINOR 1
 #else
 #define VAPOURSYNTH_API_MINOR 0
@@ -133,9 +135,20 @@ typedef enum VSPresetVideoFormat {
     pfYUV422P14 = VS_MAKE_VIDEO_ID(cfYUV, stInteger, 14, 1, 0),
     pfYUV444P14 = VS_MAKE_VIDEO_ID(cfYUV, stInteger, 14, 0, 0),
 
+    pfYUV410P16 = VS_MAKE_VIDEO_ID(cfYUV, stInteger, 16, 2, 2),
+    pfYUV411P16 = VS_MAKE_VIDEO_ID(cfYUV, stInteger, 16, 2, 0),
+    pfYUV440P16 = VS_MAKE_VIDEO_ID(cfYUV, stInteger, 16, 0, 1),
+
     pfYUV420P16 = VS_MAKE_VIDEO_ID(cfYUV, stInteger, 16, 1, 1),
     pfYUV422P16 = VS_MAKE_VIDEO_ID(cfYUV, stInteger, 16, 1, 0),
     pfYUV444P16 = VS_MAKE_VIDEO_ID(cfYUV, stInteger, 16, 0, 0),
+
+    pfYUV410PH = VS_MAKE_VIDEO_ID(cfYUV, stFloat, 16, 2, 2),
+    pfYUV410PS = VS_MAKE_VIDEO_ID(cfYUV, stFloat, 32, 2, 2),
+    pfYUV411PH = VS_MAKE_VIDEO_ID(cfYUV, stFloat, 16, 2, 0),
+    pfYUV411PS = VS_MAKE_VIDEO_ID(cfYUV, stFloat, 32, 2, 0),
+    pfYUV440PH = VS_MAKE_VIDEO_ID(cfYUV, stFloat, 16, 0, 1),
+    pfYUV440PS = VS_MAKE_VIDEO_ID(cfYUV, stFloat, 32, 0, 1),
 
     pfYUV420PH = VS_MAKE_VIDEO_ID(cfYUV, stFloat, 16, 1, 1),
     pfYUV420PS = VS_MAKE_VIDEO_ID(cfYUV, stFloat, 32, 1, 1),
@@ -160,7 +173,7 @@ typedef enum VSPresetVideoFormat {
 
 typedef enum VSFilterMode {
     fmParallel = 0, /* completely parallel execution */
-    fmParallelRequests = 1, /* for filters that are serial in nature but can request one or more frames they need in advance */
+    fmParallelRequests = 1, /* for filters that are single-threaded in nature but can request one or more frames they need in advance */
     fmUnordered = 2, /* for filters that modify their internal state every request like source filters that read a file */
     fmFrameState = 3 /* DO NOT USE UNLESS ABSOLUTELY NECESSARY, for compatibility with external code that can only keep the processing state of a single frame at a time */
 } VSFilterMode;
@@ -252,6 +265,16 @@ typedef struct VSCoreInfo {
     int64_t usedFramebufferSize;
 } VSCoreInfo;
 
+typedef struct VSCoreInfo2 {
+    const char *versionString;
+    int coreVersion;
+    int apiVersion;
+    int creationFlags;
+    int numThreads;
+    int64_t maxFramebufferSize;
+    int64_t usedFramebufferSize;
+} VSCoreInfo2;
+
 typedef struct VSVideoInfo {
     VSVideoFormat format;
     int64_t fpsNum;
@@ -285,7 +308,8 @@ typedef enum VSMessageType {
 typedef enum VSCoreCreationFlags {
     ccfEnableGraphInspection = 1,
     ccfDisableAutoLoading = 2,
-    ccfDisableLibraryUnloading = 4
+    ccfDisableLibraryUnloading = 4,
+    ccfEnableFrameRefDebug = 8
 } VSCoreCreationFlags;
 
 typedef enum VSPluginConfigFlags {
@@ -465,7 +489,7 @@ struct VSAPI {
 
     /* Core and information */
     VSCore *(VS_CC *createCore)(int flags) VS_NOEXCEPT; /* flags uses the VSCoreCreationFlags enum */
-    void (VS_CC *freeCore)(VSCore *core) VS_NOEXCEPT; /* only call this function after all node, frame and function references belonging to the core have been freed */
+    void (VS_CC *freeCore)(VSCore *core) VS_NOEXCEPT; /* only call this function after all node, frame and function references belonging to the core have been freed, references that erroneously outlive the core must at least be released one at a time and not concurrently from multiple threads */
     int64_t (VS_CC *setMaxCacheSize)(int64_t bytes, VSCore *core) VS_NOEXCEPT; /* the total cache size at which vapoursynth more aggressively tries to reclaim memory, it is not a hard limit */
     int (VS_CC *setThreadCount)(int threads, VSCore *core) VS_NOEXCEPT; /* setting threads to 0 means automatic detection */
     void (VS_CC *getCoreInfo)(VSCore *core, VSCoreInfo *info) VS_NOEXCEPT;
@@ -473,7 +497,7 @@ struct VSAPI {
 
     /* Message handler */
     void (VS_CC *logMessage)(int msgType, const char *msg, VSCore *core) VS_NOEXCEPT;
-    VSLogHandle *(VS_CC *addLogHandler)(VSLogHandler handler, VSLogHandlerFree free, void *userData, VSCore *core) VS_NOEXCEPT; /* free and userData can be NULL, returns a handle that can be passed to removeLogHandler */
+    VSLogHandle *(VS_CC *addLogHandler)(VSLogHandler handler, VSLogHandlerFree free, void *userData, VSCore *core) VS_NOEXCEPT; /* free and userData can be NULL, returns a handle that can be passed to removeLogHandler, handlers must only pass the message on and return quickly, calling logMessage is allowed but no other api function and a handler must never add or remove log handlers or wait for frame requests to complete */
     int (VS_CC *removeLogHandler)(VSLogHandle *handle, VSCore *core) VS_NOEXCEPT; /* returns non-zero if successfully removed */
     
     /* Added in API 4.1, mostly graph and node inspection, PLEASE DON'T USE INSIDE FILTERS */
@@ -494,6 +518,10 @@ struct VSAPI {
     int64_t (VS_CC *getNodeProcessingTime)(VSNode *node, int reset) VS_NOEXCEPT; /* time spent processing frames in nanoseconds, reset sets the counter to 0 again */
     int64_t (VS_CC *getFreedNodeProcessingTime)(VSCore *core, int reset) VS_NOEXCEPT; /* time spent processing frames in nanoseconds in all destroyed nodes, reset sets the counter to 0 again */
 
+    /* Added in API 4.2 */
+#if VAPOURSYNTH_API_MINOR >= 2
+    void (VS_CC *getCoreInfo2)(VSCore *core, VSCoreInfo2 *info) VS_NOEXCEPT;
+
 #if defined(VS_GRAPH_API)
     /* !!! Experimental/expensive graph information, these function require both the major and minor version to match exactly when using them !!!
      * 
@@ -504,11 +532,319 @@ struct VSAPI {
      */
 
     const char *(VS_CC *getNodeCreationFunctionName)(VSNode *node, int level) VS_NOEXCEPT; /* level=0 returns the name of the function that created the filter, specifying a higher level will retrieve the function above that invoked it or NULL if a non-existent level is requested */
+    const char *(VS_CC *getNodeCreationPluginID)(VSNode *node, int level) VS_NOEXCEPT; /* level=0 returns the name of the function that created the filter, specifying a higher level will retrieve the function above that invoked it or NULL if a non-existent level is requested */
+    const char *(VS_CC *getNodeCreationPluginNS)(VSNode *node, int level) VS_NOEXCEPT; /* level=0 returns the name of the function that created the filter, specifying a higher level will retrieve the function above that invoked it or NULL if a non-existent level is requested */
     const VSMap *(VS_CC *getNodeCreationFunctionArguments)(VSNode *node, int level) VS_NOEXCEPT; /* level=0 returns a copy of the arguments passed to the function that created the filter, returns NULL if a non-existent level is requested */
+#endif
 #endif
 #endif
 };
 
 VS_API(const VSAPI *) getVapourSynthAPI(int version) VS_NOEXCEPT;
+
+#ifndef VSSCRIPT4_H
+#define VSSCRIPT4_H
+
+/* Note that the base version of the API is 4.1 due to that change happening very soon after the API4 release */
+#define VSSCRIPT_API_MAJOR 4
+#if defined(VSSCRIPT_USE_LATEST_API) || defined(VSSCRIPT_USE_API_43)
+#define VSSCRIPT_API_MINOR 3
+#elif defined(VSSCRIPT_USE_API_42)
+#define VSSCRIPT_API_MINOR 2
+#else
+#define VSSCRIPT_API_MINOR 1
+#endif
+#define VSSCRIPT_API_VERSION VS_MAKE_VERSION(VSSCRIPT_API_MAJOR, VSSCRIPT_API_MINOR)
+
+typedef struct VSScript VSScript;
+typedef struct VSSCRIPTAPI VSSCRIPTAPI;
+
+struct VSSCRIPTAPI {
+    /* Returns the highest supported VSSCRIPT_API_VERSION */
+    int (VS_CC *getAPIVersion)(void) VS_NOEXCEPT;
+
+    /* Convenience function for retrieving a VSAPI pointer without having to use the VapourSynth library. Always pass VAPOURSYNTH_API_VERSION */
+    const VSAPI *(VS_CC *getVSAPI)(int version) VS_NOEXCEPT;
+
+    /* 
+    * Providing a pre-created core is useful for setting core creation flags, log callbacks, preload specific plugins and many other things.
+    * You must create a VSScript object before evaluating a script. Always takes ownership of the core even on failure. Returns NULL on failure.
+    * Pass NULL to have a core automatically created with the default options.
+    */
+    VSScript *(VS_CC *createScript)(VSCore *core) VS_NOEXCEPT;
+
+    /* The core is valid as long as the environment exists, return NULL on error */
+    VSCore *(VS_CC *getCore)(VSScript *handle) VS_NOEXCEPT;
+
+    /*
+    * Evaluates a script passed in the buffer argument. The scriptFilename is only used for display purposes. in Python
+    * it means that the main module won't be unnamed in error messages.
+    * 
+    * Returns 0 on success.
+    * 
+    * Note that calling any function other than getError() and freeScript() on a VSScript object in the error state
+    * will result in undefined behavior.
+    */
+    int (VS_CC *evaluateBuffer)(VSScript *handle, const char *buffer, const char *scriptFilename) VS_NOEXCEPT;
+
+    /* Convenience version of the above function that loads the script from scriptFilename and passes as the buffer to evaluateBuffer */
+    int (VS_CC *evaluateFile)(VSScript *handle, const char *scriptFilename) VS_NOEXCEPT;
+
+    /* Returns NULL on success, otherwise an error message */
+    const char *(VS_CC *getError)(VSScript *handle) VS_NOEXCEPT;
+
+    /* Returns the script's reported exit code */
+    int (VS_CC *getExitCode)(VSScript *handle) VS_NOEXCEPT;
+
+    /* Fetches a variable of any VSMap storable type set in a script. It is stored in the key with the same name in dst. Returns 0 on success. */
+    int (VS_CC *getVariable)(VSScript *handle, const char *name, VSMap *dst) VS_NOEXCEPT;
+
+    /* Sets all keys in the provided VSMap as variables in the script. Returns 0 on success. */
+    int (VS_CC *setVariables)(VSScript *handle, const VSMap *vars) VS_NOEXCEPT;
+
+    /*
+    * The returned nodes must be freed using freeNode() before calling freeScript() since they may depend on data in the VSScript
+    * environment. Returns NULL if no node was set as output in the script. Index 0 is used by default in scripts and other
+    * values are rarely used.
+    */
+    VSNode *(VS_CC *getOutputNode)(VSScript *handle, int index) VS_NOEXCEPT;
+    VSNode *(VS_CC *getOutputAlphaNode)(VSScript *handle, int index) VS_NOEXCEPT;
+    int (VS_CC *getAltOutputMode)(VSScript *handle, int index) VS_NOEXCEPT;
+
+    void (VS_CC *freeScript)(VSScript *handle) VS_NOEXCEPT;
+
+    /*
+    * Set whether or not the working directory is temporarily changed to the same
+    * location as the script file when evaluateFile is called. Off by default.
+    */
+    void (VS_CC *evalSetWorkingDir)(VSScript *handle, int setCWD) VS_NOEXCEPT;
+
+#if VSSCRIPT_API_MINOR >= 2
+    /*
+    * Write a list of set output index values to dst but at most size values.
+    * Always returns the total number of available output index values.
+    */
+    int (VS_CC *getAvailableOutputNodes)(VSScript *handle, int size, int *dst) VS_NOEXCEPT;
+#endif
+};
+
+VS_API(const VSSCRIPTAPI *) getVSScriptAPI(int version) VS_NOEXCEPT;
+
+/*
+* Same as getVSScriptAPI() but will write a NULL terminated error message to errMsg. A size of 200 bytes should be enough for most error messages.
+* The message is always NULL terminated and truncated if it exceeds errSize and empty on success.
+* Returns NULL on failure.
+*/
+#if VSSCRIPT_API_MINOR >= 3
+VS_API(const char *) getVSScriptAPILastError() VS_NOEXCEPT;
+#endif
+
+#endif /* VSSCRIPT4_H */
+
+#ifndef VSHELPER4_H
+#define VSHELPER4_H
+
+#include <limits.h>
+#include <stdlib.h>
+#include <string.h>
+#include <assert.h>
+#include <math.h>
+#include <float.h>
+#ifdef _WIN32
+#include <malloc.h>
+#endif
+
+#define VSH_STD_PLUGIN_ID "com.vapoursynth.std"
+#define VSH_RESIZE_PLUGIN_ID "com.vapoursynth.resize"
+#define VSH_TEXT_PLUGIN_ID "com.vapoursynth.text"
+
+#ifdef __cplusplus
+namespace vsh {
+#define VSH4_MANGLE_FUNCTION_NAME(name) name
+#define VSH4_BOOLEAN_TYPE bool
+#else
+#define VSH4_MANGLE_FUNCTION_NAME(name) vsh_##name
+#define VSH4_BOOLEAN_TYPE int
+#endif
+
+/* Visual Studio doesn't recognize inline in c mode */
+#if defined(_MSC_VER) && !defined(__cplusplus)
+#define inline _inline
+#endif
+
+/* A kinda portable definition of the C99 restrict keyword (or its unofficial C++ equivalent) */
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L /* Available in C99 */
+#define VS_RESTRICT restrict
+#elif defined(__cplusplus) || defined(_MSC_VER) /* Almost all relevant C++ compilers support it so just assume it works */
+#define VS_RESTRICT __restrict
+#else /* Not supported */
+#define VS_RESTRICT
+#endif
+
+#ifdef _WIN32
+#define VSH_ALIGNED_MALLOC(pptr, size, alignment) do { *(pptr) = _aligned_malloc((size), (alignment)); } while (0)
+#define VSH_ALIGNED_FREE(ptr) do { _aligned_free((ptr)); } while (0)
+#else
+#define VSH_ALIGNED_MALLOC(pptr, size, alignment) do { if(posix_memalign((void**)(pptr), (alignment), (size))) *((void**)pptr) = NULL; } while (0)
+#define VSH_ALIGNED_FREE(ptr) do { free((ptr)); } while (0)
+#endif
+
+#define VSMAX(a,b) ((a) > (b) ? (a) : (b))
+#define VSMIN(a,b) ((a) > (b) ? (b) : (a))
+
+#ifdef __cplusplus 
+/* A nicer templated malloc for all the C++ users out there */
+#if __cplusplus >= 201103L || (defined(_MSC_VER) && _MSC_VER >= 1900)
+template<typename T = void>
+#else
+template<typename T>
+#endif
+static inline T *vsh_aligned_malloc(size_t size, size_t alignment) {
+#ifdef _WIN32
+    return (T *)_aligned_malloc(size, alignment);
+#else
+    void *tmp = NULL;
+    if (posix_memalign(&tmp, alignment, size))
+        tmp = 0;
+    return (T *)tmp;
+#endif
+}
+
+static inline void vsh_aligned_free(void *ptr) {
+    VSH_ALIGNED_FREE(ptr);
+}
+#endif /* __cplusplus */
+
+/* convenience function for checking if the format never changes between frames */
+static inline VSH4_BOOLEAN_TYPE VSH4_MANGLE_FUNCTION_NAME(isConstantVideoFormat)(const VSVideoInfo *vi) {
+    return vi->height > 0 && vi->width > 0 && vi->format.colorFamily != cfUndefined;
+}
+
+/* convenience function to check if two clips have the same format (unknown/changeable will be considered the same too) */
+static inline VSH4_BOOLEAN_TYPE VSH4_MANGLE_FUNCTION_NAME(isSameVideoFormat)(const VSVideoFormat *v1, const VSVideoFormat *v2) {
+    return v1->colorFamily == v2->colorFamily && v1->sampleType == v2->sampleType && v1->bitsPerSample == v2->bitsPerSample && v1->subSamplingW == v2->subSamplingW && v1->subSamplingH == v2->subSamplingH;
+}
+
+/* convenience function to check if a clip has the same format as a format id */
+static inline VSH4_BOOLEAN_TYPE VSH4_MANGLE_FUNCTION_NAME(isSameVideoPresetFormat)(unsigned presetFormat, const VSVideoFormat *v, VSCore *core, const VSAPI *vsapi) {
+    return vsapi->queryVideoFormatID(v->colorFamily, v->sampleType, v->bitsPerSample, v->subSamplingW, v->subSamplingH, core) == presetFormat;
+}
+
+/* convenience function to check for if two clips have the same format (but not framerate) while also including width and height (unknown/changeable will be considered the same too) */
+static inline VSH4_BOOLEAN_TYPE VSH4_MANGLE_FUNCTION_NAME(isSameVideoInfo)(const VSVideoInfo *v1, const VSVideoInfo *v2) {
+    return v1->height == v2->height && v1->width == v2->width && VSH4_MANGLE_FUNCTION_NAME(isSameVideoFormat)(&v1->format, &v2->format);
+}
+
+/* convenience function to check for if two clips have the same format while also including samplerate (unknown/changeable will be considered the same too) */
+static inline VSH4_BOOLEAN_TYPE VSH4_MANGLE_FUNCTION_NAME(isSameAudioFormat)(const VSAudioFormat *a1, const VSAudioFormat *a2) {
+    return a1->bitsPerSample == a2->bitsPerSample && a1->sampleType == a2->sampleType && a1->channelLayout == a2->channelLayout;
+}
+
+/* convenience function to check for if two clips have the same format while also including samplerate (unknown/changeable will be considered the same too) */
+static inline VSH4_BOOLEAN_TYPE VSH4_MANGLE_FUNCTION_NAME(isSameAudioInfo)(const VSAudioInfo *a1, const VSAudioInfo *a2) {
+    return a1->sampleRate == a2->sampleRate && VSH4_MANGLE_FUNCTION_NAME(isSameAudioFormat)(&a1->format, &a2->format);
+}
+
+/* multiplies and divides a rational number, such as a frame duration, in place and reduces the result */
+static inline void VSH4_MANGLE_FUNCTION_NAME(muldivRational)(int64_t *num, int64_t *den, int64_t mul, int64_t div) {
+    /* do nothing if the rational number is invalid */
+    if (!*den)
+        return;
+
+    /* nobody wants to accidentally divide by zero */
+    assert(div);
+
+    int64_t a, b;
+    *num *= mul;
+    *den *= div;
+    a = *num;
+    b = *den;
+    while (b != 0) {
+        int64_t t = a;
+        a = b;
+        b = t % b;
+    }
+    if (a < 0)
+        a = -a;
+    *num /= a;
+    *den /= a;
+}
+
+/* reduces a rational number */
+static inline void VSH4_MANGLE_FUNCTION_NAME(reduceRational)(int64_t *num, int64_t *den) {
+    VSH4_MANGLE_FUNCTION_NAME(muldivRational)(num, den, 1, 1);
+}
+
+/* add two rational numbers and reduces the result */
+static inline void VSH4_MANGLE_FUNCTION_NAME(addRational)(int64_t *num, int64_t *den, int64_t addnum, int64_t addden) {
+    /* do nothing if the rational number is invalid */
+    if (!*den)
+        return;
+
+    /* nobody wants to accidentally add an invalid rational number */
+    assert(addden);
+
+    if (*den == addden) {
+        *num += addnum;
+    } else {
+        int64_t temp = addden;
+        addnum *= *den;
+        addden *= *den;
+        *num *= temp;
+        *den *= temp;
+
+        *num += addnum;
+
+        VSH4_MANGLE_FUNCTION_NAME(reduceRational)(num, den);
+    }
+}
+
+/* converts an int64 to int with saturation, useful to silence warnings when reading int properties among other things */
+static inline int VSH4_MANGLE_FUNCTION_NAME(int64ToIntS)(int64_t i) {
+    if (i > INT_MAX)
+        return INT_MAX;
+    else if (i < INT_MIN)
+        return INT_MIN;
+    else return (int)i;
+}
+
+/* converts a double to float with saturation, useful to silence warnings when reading float properties among other things */
+static inline float VSH4_MANGLE_FUNCTION_NAME(doubleToFloatS)(double d) {
+    return (float)d;
+}
+
+static inline void VSH4_MANGLE_FUNCTION_NAME(bitblt)(void *dstp, ptrdiff_t dst_stride, const void *srcp, ptrdiff_t src_stride, size_t row_size, size_t height) {
+    if (height) {
+        if (src_stride == dst_stride && src_stride == (ptrdiff_t)row_size) {
+            memcpy(dstp, srcp, row_size * height);
+        } else {
+            const uint8_t *srcp8 = (const uint8_t *)srcp;
+            uint8_t *dstp8 = (uint8_t *)dstp;
+            size_t i;
+            for (i = 0; i < height; i++) {
+                memcpy(dstp8, srcp8, row_size);
+                srcp8 += src_stride;
+                dstp8 += dst_stride;
+            }
+        }
+    }
+}
+
+/* check if the frame dimensions are valid for a given format */
+/* returns non-zero for valid width and height */
+static inline VSH4_BOOLEAN_TYPE VSH4_MANGLE_FUNCTION_NAME(areValidDimensions)(const VSVideoFormat *fi, int width, int height) {
+    return !(width % (1 << fi->subSamplingW) || height % (1 << fi->subSamplingH));
+}
+
+/* Visual Studio doesn't recognize inline in c mode */
+#if defined(_MSC_VER) && !defined(__cplusplus)
+#undef inline
+#endif
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* VSHELPER4_H */
 
 #endif /* VAPOURSYNTH4_H */
