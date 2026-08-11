@@ -78,31 +78,367 @@
 //         Add enums AVS_AEP_INTERFACE_VERSION and AVS_AEP_INTERFACE_BUGFIX for direct interface version system property request types (avs_get_env_property)
 //         Bugfix 9.1: fix avs_prop_get_data
 // 2023:   Follow AviSynth+ V10 interface additions
-//         Add enum AVS_DEFAULT_PLANE (as 0) to plane constants
+//         Add enum AVS_DEFAULT_PLANE (as 0) to plane constants 
 //         prop_src argument now const in avs_new_video_frame_p and avs_new_video_frame_p_a (no change in use)
 //         Add pixel_type to struct AVS_VideoFrame
 //         Add avs_video_frame_get_pixel_type and avs_video_frame_amend_pixel_type for getting and setting AVS_VideoFrame pixel_type
 //         Additional AviSynth+ V10 interface additions:
 //         Add enum AVS_SPEAKER_xxx, AVS_IT_SPEAKER_xxx
-//         audio channel mask support avs_is_channel_mask_known, avs_set_channel_mask, avs_get_channel_mask
+//         Audio channel mask support API: avs_is_channel_mask_known, avs_set_channel_mask, avs_get_channel_mask
+
+// 2025    Follow AviSynth+ V11 interface additions (AVSValue new 64-bit types); 
+//         Setters are all accept AVS_Value by reference, like avs_set_to_clip did so far. (unlike avs_new_xxx inline helpers, which returns AVS_Value directly)
+//         - avs_val_defined = avs_defined
+//         - avs_val_is_xxx = avs_is_xxx (bool, clip, int, long_strict, string, float_strict, float, error, array)
+//         - avs_set_to_xxx ~avs_new_value_xxx (bool, clip, int, long, string, float, double, error, array)
+//         - avs_set_to_void = AVS_void constant direct assignment
+//         - avs_get_as_xxx = avs_as_xxx   (bool, clip, int, long, string, float, error, array)
+//         - avs_get_array_size = avs_array_size
+//         - avs_get_array_elt = avs_array_elt
+//         Including:
+//         Modified INLINE typecheck and getter helpers for 64-bit data type awareness:
+//         - avs_is_int, avs_is_float
+//         - avs_as_int, avs_as_float
+//         Strict type checkers
+//         - avs_val_is_long_strict, avs_val_is_floatf_strict
+//         New INLINE getter helpers for 64-bit data (prefer using API calls):
+//         - avs_as_long
+//         New optional plugin entry point: avisynth_c_plugin_init2
+//         - A C plugin signals to AviSynth that it is V11 interface (64-bit data) ready by implementing avisynth_c_plugin_init2 as well.
+//           avisynth_c_plugin_init2 has the same signature as avisynth_c_plugin_init and can
+//           simply call forward to the old avisynth_c_plugin_init entry point. Both entry points can be implemented; 
+//           AviSynth+ will first check avisynth_c_plugin_init2, then avisynth_c_plugin_init.
+//           Don't forget to add a new 
+//             avisynth_c_plugin_init2@4 = _avisynth_c_plugin_init2@4
+//           line to your existing .def file on Win32.
+//         Deprecated inline helper functions, which in turn would call API.
+//         - avs_get_pitch => avs_get_pitch_p(p, AVS_DEFAULT_PLANE)
+//           avs_get_row_size => avs_get_row_size_p(p, AVS_DEFAULT_PLANE)
+//           avs_get_height => avs_get_height_p(p, AVS_DEFAULT_PLANE)
+//           avs_get_read_ptr => avs_get_read_ptr_p(p, AVS_DEFAULT_PLANE)
+//           avs_get_write_ptr => vs_get_write_ptr_p(p, AVS_DEFAULT_PLANE)
+//           avs_release_frame => avs_release_video_frame
+//           avs_copy_frame => avs_copy_video_frame
+//         - Use #define AVSC_ALLOW_DEPRECATED if they still need for you, 
+//           but better fix your code: use the recommended replacements.
+//         Intentionally renamed AVS_VideoFrame internal fields, direct access was always prohibited, next API will remove the access.
+//         Add missing AVS_MT_xxxx mode constants to header like c++ header enum MtMode
+//         Add AVS_PROPDATATYPEHINT_xxx for AVSPropDataTypeHint
+//         New avs_prop_get_int_saturated and avs_prop_get_float_saturated
+//         New avs_prop_get_data_type_hint
+//         New avs_prop_set_data_h
+//         New avs_add_func_r: alternative avs_add_func which returns the result in a byref parameter
+//         New AVS_ApplyFuncR type
+// 20250415 V11.1 Fix AVS_Value 64 bit data member declaration for 64-bit non Intel (other than X86_X64) systems.
+// 20250601 V12 Global lock acquire and release: avs_acquire_global_lock, avs_release_global_lock
+// 20251127 V12 AVS_CACHE_INFORM_NUM_THREADS constant to inform the filter about the number of threads by avs_set_cache_hints
+//              Add const AVS_AEP_CACHESIZE_L2 for avs_get_env_property level 2 cache size query,
+// 20251202     Add avs_get_cpu_flags_ex returning full 64 bit flags, new AVX-512 group flags, ARM64 CPU flags.
+
+// Notes.
+// Choose either method:
+// By loading avisynth.dll/.so/.dylib dinamically, AviSynth versions with different API level can be supported.
+// - Use #define AVSC_NO_DECLSPEC for function pointer definitions only.
+// - Load the library dynamically and get the necessary API functions as needed.
+// - Earlier AviSynth versions may contain fewer API functions.
+//   By detecting the loaded AviSynth/interface version, it's the caller's responsibility 
+//   to call only those API functions which have valid function pointers and are documented to work.
+//   E.g., you should only use frame property-related functions when lib.avs_get_version(clip) >= 9.
+// For linking avisynth.lib/libavisynth directly to your module:
+// - Leave AVSC_NO_DECLSPEC undefined.
+// - Link the provided .lib to your module.
+// - Your plugin/software won't work with older AviSynth instances if it uses newer API functions.
+//   The plugin DLL won't load due to dependency issues. (On Windows: platform returned code 127)
+
 
 #ifndef __AVISYNTH_C__
 #define __AVISYNTH_C__
 
-#include "avs/config.h"
-#include "avs/capi.h"
-#include "avs/types.h"
+#ifndef AVS_CONFIG_H
+#define AVS_CONFIG_H
 
-#define AVS_FRAME_ALIGN FRAME_ALIGN
+// Undefine this to get cdecl calling convention
+#define AVSC_USE_STDCALL 1
+
+// NOTE TO PLUGIN AUTHORS:
+// Because FRAME_ALIGN can be substantially higher than the alignment
+// a plugin actually needs, plugins should not use FRAME_ALIGN to check for
+// alignment. They should always request the exact alignment value they need.
+// This is to make sure that plugins work over the widest range of AviSynth
+// builds possible.
+#define FRAME_ALIGN 64
+
+#if   defined(_M_AMD64) || defined(__x86_64)
+#   define X86_64
+#elif defined(_M_IX86) || defined(__i386__)
+#   define X86_32
+#elif defined(_M_ARM64) || defined(__aarch64__)
+// _M_ARM64: MSVC; __aarch64__: GCC and Clang
+#   define ARM64
+#elif defined(_M_ARM) || defined(__arm__)
+#   define ARM32
+#elif defined(__PPC64__)
+#   define PPC64
+#elif defined(_M_PPC) || defined(__PPC__) || defined(__POWERPC__)
+#   define PPC32
+#elif defined(__riscv)
+#   define RISCV
+#elif defined(__loongarch__)
+#   define LOONGARCH
+#elif defined(__sparc_v9__)
+#   define SPARC
+#elif defined(__mips__)
+#   define MIPS
+#elif defined(__s390x__)
+#   define S390X
+#else
+#   error Unsupported CPU architecture.
+#endif
+
+//            VC++  LLVM-Clang-cl   MinGW-Gnu
+// MSVC        x          x
+// MSVC_PURE   x
+// CLANG                  x
+// GCC                                  x
+
+#if defined(__clang__)
+// Check clang first. clang-cl also defines __MSC_VER
+// We set MSVC because they are mostly compatible
+#   define CLANG
+#if defined(_MSC_VER)
+#   define MSVC
+#endif
+#   define AVS_FORCEINLINE __attribute__((always_inline)) inline
+#elif defined(_MSC_VER)
+#   define MSVC
+#   define MSVC_PURE
+#   define AVS_FORCEINLINE __forceinline
+#elif defined(__GNUC__)
+#   define GCC
+#   define AVS_FORCEINLINE __attribute__((always_inline)) inline
+#elif defined(__INTEL_COMPILER) || defined(__INTEL_LLVM_COMPILER)
+// Intel C++ Compilers with MSVC command line interface will not appear here rather at _MSC_VER
+#   define AVS_FORCEINLINE inline
+#   undef __forceinline
+#   define __forceinline inline
+#else
+#   error Unsupported compiler.
+#   define AVS_FORCEINLINE inline
+#   undef __forceinline
+#   define __forceinline inline
+#endif
+
+#if defined(_WIN32)
+#   define AVS_WINDOWS
+#elif defined(__linux__)
+#   define AVS_LINUX
+#   define AVS_POSIX
+#elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__)
+#   define AVS_BSD
+#   define AVS_POSIX
+#elif defined(__APPLE__)
+#   define AVS_MACOS
+#   define AVS_POSIX
+#elif defined(__HAIKU__)
+#   define AVS_HAIKU
+#   define AVS_POSIX
+#else
+#   error Operating system unsupported.
+#endif
+
+#if defined(AVS_WINDOWS)
+#  if defined(X86_32) || defined(X86_64)
+#    define AVS_WINDOWS_X86
+#  elif defined(ARM64) || defined(ARM32)
+#    define AVS_WINDOWS_ARM
+#  endif
+#endif
+
+#if defined(MSVC) && !defined(AVS_WINDOWS_X86) && !(defined(AVS_WINDOWS_ARM) && defined(ARM64))
+#    error Unsupported combination of compiler, operating system, and machine architecture.
+#endif
+
+/* A kinda portable definition of the C99 restrict keyword (or its unofficial C++ equivalent) */
+#if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L /* Available in C99 */
+#define AVS_RESTRICT restrict
+#elif defined(__cplusplus) || defined(_MSC_VER) /* Almost all relevant C++ compilers support it so just assume it works */
+#define AVS_RESTRICT __restrict
+#else /* Not supported */
+#define AVS_RESTRICT
+#endif
+
+// useful warnings disabler macros for supported compilers
+
+#if defined(_MSC_VER)
+#define DISABLE_WARNING_PUSH           __pragma(warning( push ))
+#define DISABLE_WARNING_POP            __pragma(warning( pop ))
+#define DISABLE_WARNING(warningNumber) __pragma(warning( disable : warningNumber ))
+
+#define DISABLE_WARNING_UNREFERENCED_LOCAL_VARIABLE      DISABLE_WARNING(4101)
+#define DISABLE_WARNING_UNREFERENCED_FUNCTION            DISABLE_WARNING(4505)
+// other warnings you want to deactivate...
+
+#elif defined(__GNUC__) || defined(__clang__)
+#define DO_PRAGMA(X) _Pragma(#X)
+#define DISABLE_WARNING_PUSH           DO_PRAGMA(GCC diagnostic push)
+#define DISABLE_WARNING_POP            DO_PRAGMA(GCC diagnostic pop)
+#define DISABLE_WARNING(warningName)   DO_PRAGMA(GCC diagnostic ignored #warningName)
+
+#define DISABLE_WARNING_UNREFERENCED_LOCAL_VARIABLE      DISABLE_WARNING(-Wunused-variable)
+#define DISABLE_WARNING_UNREFERENCED_FUNCTION            DISABLE_WARNING(-Wunused-function)
+// other warnings you want to deactivate...
+
+#else
+#define DISABLE_WARNING_PUSH
+#define DISABLE_WARNING_POP
+#define DISABLE_WARNING_UNREFERENCED_LOCAL_VARIABLE
+#define DISABLE_WARNING_UNREFERENCED_FUNCTION
+// other warnings you want to deactivate...
+
+#endif
+
+#if defined(AVS_WINDOWS) && defined(_USING_V110_SDK71_)
+// Windows XP does not have proper initialization for
+// thread local variables.
+// Use workaround instead __declspec(thread)
+#define XP_TLS
+#endif
+
+#ifndef MSVC
+// GCC and Clang can be used on big endian systems, MSVC can't.
+#  if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+#    define AVS_ENDIANNESS "little"
+#  elif __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#    define AVS_ENDIANNESS "big"
+#  else
+#    define AVS_ENDIANNESS "middle"
+#  endif
+#else
+#define AVS_ENDIANNESS "little"
+#endif
+
+#endif //AVS_CONFIG_H
+
+#ifndef AVS_CAPI_H
+#define AVS_CAPI_H
+
+#ifdef AVS_POSIX
+// this is also defined in avs/posix.h
+#ifndef AVS_HAIKU
+#define __declspec(x)
+#endif
+#endif
+
+#ifdef __cplusplus
+#  define AVS_EXTERN_C extern "C"
+#else
+#  define AVS_EXTERN_C
+#endif
+
+#ifdef AVS_WINDOWS
+#ifdef BUILDING_AVSCORE
+#  if defined(GCC) && defined(X86_32)
+#    define AVSC_CC
+#  else // MSVC builds and 64-bit GCC
+#    ifndef AVSC_USE_STDCALL
+#      define AVSC_CC __cdecl
+#    else
+#      define AVSC_CC __stdcall
+#    endif
+#  endif
+#else // needed for programs that talk to AviSynth+
+#  ifndef AVSC_WIN32_GCC32 // see comment below
+#    ifndef AVSC_USE_STDCALL
+#      define AVSC_CC __cdecl
+#    else
+#      define AVSC_CC __stdcall
+#    endif
+#  else
+#    define AVSC_CC
+#  endif
+#endif
+#  else
+#    define AVSC_CC
+#endif
+
+// On 64-bit Windows, there's only one calling convention,
+// so there is no difference between MSVC and GCC. On 32-bit,
+// this isn't true. The convention that GCC needs to use to
+// even build AviSynth+ as 32-bit makes anything that uses
+// it incompatible with 32-bit MSVC builds of AviSynth+.
+// The AVSC_WIN32_GCC32 define is meant to provide a user
+// switchable way to make builds of FFmpeg to test 32-bit
+// GCC builds of AviSynth+ without having to screw around
+// with alternate headers, while still default to the usual
+// situation of using 32-bit MSVC builds of AviSynth+.
+
+// Hopefully, this situation will eventually be resolved
+// and a broadly compatible solution will arise so the
+// same 32-bit FFmpeg build can handle either MSVC or GCC
+// builds of AviSynth+.
+
+#define AVSC_INLINE static __inline
+
+#ifdef BUILDING_AVSCORE
+#ifdef AVS_WINDOWS
+#  ifndef AVS_STATIC_LIB
+#    define AVSC_EXPORT __declspec(dllexport)
+#  else
+#    define AVSC_EXPORT
+#  endif
+#  define AVSC_API(ret, name) AVS_EXTERN_C AVSC_EXPORT ret AVSC_CC name
+#else
+#  define AVSC_EXPORT AVS_EXTERN_C
+#  define AVSC_API(ret, name) AVS_EXTERN_C ret AVSC_CC name
+#endif
+#else
+#  define AVSC_EXPORT AVS_EXTERN_C __declspec(dllexport)
+#  ifndef AVS_STATIC_LIB
+#    define AVSC_IMPORT __declspec(dllimport)
+#  else
+#    define AVSC_IMPORT
+#  endif
+#  ifndef AVSC_NO_DECLSPEC
+#    define AVSC_API(ret, name) AVS_EXTERN_C AVSC_IMPORT ret AVSC_CC name
+#  else
+#    define AVSC_API(ret, name) typedef ret (AVSC_CC *name##_func)
+#  endif
+#endif
+
+#endif //AVS_CAPI_H
+
+#ifndef AVS_TYPES_H
+#define AVS_TYPES_H
+
+// Define all types necessary for interfacing with avisynth.dll
+#include <stdint.h>
+#include <stdbool.h>
+#ifdef __cplusplus
+  #include <cstddef>
+  #include <cstdarg>
+#else
+  #include <stddef.h>
+  #include <stdarg.h>
+#endif
+
+// Raster types used by VirtualDub & Avisynth
+typedef uint32_t Pixel32;
+typedef uint8_t  BYTE;
+
+// Audio Sample information
+typedef float SFLOAT;
+
+#endif //AVS_TYPES_H
+
 /////////////////////////////////////////////////////////////////////
 //
 // Constants
 //
 
-#ifndef __AVISYNTH_10_H__
+#ifndef __AVISYNTH_12_H__
 enum {
   AVISYNTH_INTERFACE_CLASSIC_VERSION = 6,
-  AVISYNTH_INTERFACE_VERSION = 10,
+  AVISYNTH_INTERFACE_VERSION = 12,
   AVISYNTHPLUS_INTERFACE_BUGFIX_VERSION = 0 // reset to zero whenever the normal interface version bumps
 };
 #endif
@@ -368,6 +704,7 @@ enum {  // SUBTYPES
 };
 
 enum {
+  AVS_CACHE_25_NOTHING_26_UNUSED = 0,
   // New 2.6 explicitly defined cache hints.
   AVS_CACHE_NOTHING = 10, // Do not cache video.
   AVS_CACHE_WINDOW = 11, // Hard protect up to X frames within a range of X from the current frame N.
@@ -445,6 +782,10 @@ enum {
   AVS_CACHE_IS_MTGUARD_REQ = 512,
   AVS_CACHE_IS_MTGUARD_ANS = 513,
 
+  // v12
+  AVS_CACHE_INFORM_NUM_THREADS = 514, // Allows a filter to receive the number of prefetch threads via set_cache_hints
+
+
   AVS_CACHE_AVSPLUS_CUDA_CONSTANTS = 600,
 
   AVS_CACHE_GET_DEV_TYPE = 601,          // Device types a filter can return
@@ -468,8 +809,10 @@ enum {
 
 // AVSGetPropErrors for avs_prop_get_...
 enum {
+  AVS_GETPROPERROR_SUCCESS = 0,
   AVS_GETPROPERROR_UNSET = 1,
   AVS_GETPROPERROR_TYPE = 2,
+  AVS_GETPROPERROR_ERROR = 3,
   AVS_GETPROPERROR_INDEX = 4
 };
 
@@ -477,8 +820,16 @@ enum {
 enum {
   AVS_PROPAPPENDMODE_REPLACE = 0,
   AVS_PROPAPPENDMODE_APPEND = 1,
-  AVS_PROPAPPENDMODE_TOUCH = 2
+  AVS_PROPAPPENDMODE_TOUCH = 2 // n/a
 };
+
+// AVSPropDataTypeHint, used with prop_set_data_h
+enum {
+  AVS_PROPDATATYPEHINT_UNKNOWN = -1, // dtUnknown = -1,
+  AVS_PROPDATATYPEHINT_BINARY = 0, // dtBinary = 0,
+  AVS_PROPDATATYPEHINT_UTF8 = 1 // dtUtf8 = 1
+};
+
 
 // AvsEnvProperty for avs_get_env_property
 enum {
@@ -491,6 +842,7 @@ enum {
   AVS_AEP_HOST_SYSTEM_ENDIANNESS = 7,
   AVS_AEP_INTERFACE_VERSION = 8,
   AVS_AEP_INTERFACE_BUGFIX = 9,
+  AVS_AEP_CACHESIZE_L2 = 10, // v12
 
   // Neo additionals
   AVS_AEP_NUM_DEVICES = 901,
@@ -506,6 +858,17 @@ enum {
   AVS_ALLOCTYPE_NORMAL_ALLOC = 1,
   AVS_ALLOCTYPE_POOLED_ALLOC = 2
 };
+
+// Multithreading behaviour. AVS_Clip avs_set_cache_hints can return them on AVS_CACHE_GET_MTMODE query
+enum {
+  AVS_MT_INVALID = 0,
+  AVS_MT_NICE_FILTER = 1,
+  AVS_MT_MULTI_INSTANCE = 2,
+  AVS_MT_SERIALIZED = 3,
+  AVS_MT_SPECIAL_MT = 4,
+  AVS_MT_MODE_COUNT = 5
+};
+
 
 #ifdef BUILDING_AVSCORE
 AVSValue create_c_video_filter(AVSValue args, void * user_data, IScriptEnvironment * e0);
@@ -541,7 +904,7 @@ typedef struct AVS_VideoInfo {
 
   // Image type properties
   // BFF, TFF, FIELDBASED. Also used for storing Channel Mask
-  // Manipulate it through the channelmask interface calls
+  // Manipulate it through the channelmask interface calls 
   int image_type;
 } AVS_VideoInfo;
 
@@ -592,6 +955,8 @@ AVSC_API(int, avs_bmp_size)(const AVS_VideoInfo * vi);
 AVSC_API(int, avs_is_color_space)(const AVS_VideoInfo * p, int c_space);
 
 // no API for these, inline helper functions
+
+// this is _not_ for frame properties
 AVSC_INLINE int avs_is_property(const AVS_VideoInfo * p, int property)
 {
   return ((p->image_type & property) == property);
@@ -742,6 +1107,11 @@ AVSC_API(unsigned int, avs_get_channel_mask)(const AVS_VideoInfo* p);
 // to be reused.  The instances are deleted when the corresponding AVS
 // file is closed.
 
+// DEPRECATION WARNING
+// Note: The V12 API will only define
+// typedef struct AVS_VideoFrame AVS_VideoFrame;
+// without including any internals of AVS_VideoFrame and AVS_VideoFrameBuffer.
+
 // AVS_VideoFrameBuffer is laid out identically to VideoFrameBuffer
 // DO NOT USE THIS STRUCTURE DIRECTLY
 typedef struct AVS_VideoFrameBuffer {
@@ -760,25 +1130,27 @@ typedef struct AVS_VideoFrameBuffer {
 
 // AVS_VideoFrame is laid out identically to VideoFrame
 // DO NOT USE THIS STRUCTURE DIRECTLY
+// In V11 header a leading '_' was added to member names intentionally.
+// Stop direct access and use avs_get_xxx API calls instead!
 typedef struct AVS_VideoFrame {
-  volatile long refcount;
-  AVS_VideoFrameBuffer * vfb;
-  int offset;
+  volatile long _refcount;
+  AVS_VideoFrameBuffer * _vfb;
+  int _offset;
   // DO NOT USE THEM DIRECTLY
   // Use avs_get_pitch_p, avs_get_row_size_p, avs_get_height_p
-  int pitch, row_size, height;
-  int offsetU, offsetV;
-  int pitchUV;  // U&V offsets are from top of picture.
-  int row_sizeUV, heightUV; // for Planar RGB offsetU, offsetV is for the 2nd and 3rd Plane.
+  int _pitch, _row_size, _height;
+  int _offsetU, _offsetV;
+  int _pitchUV;  // U&V offsets are from top of picture.
+  int _row_sizeUV, _heightUV; // for Planar RGB offsetU, offsetV is for the 2nd and 3rd Plane.
                             // for Planar RGB pitchUV and row_sizeUV = 0, because when no VideoInfo (MakeWriteable)
                             // the decision on existence of UV is checked by zero pitch
   // AVS+ extension, avisynth.h: class does not break plugins if appended here
-  int offsetA;
-  int pitchA, row_sizeA; // 4th alpha plane support, pitch and row_size is 0 is none
-  void* properties; // interface V8: frame properties
+  int _offsetA;
+  int _pitchA, _row_sizeA; // 4th alpha plane support, pitch and row_size is 0 is none
+  void* _properties; // interface V8: frame properties
   // DO NOT USE DIRECTLY
   // Use avs_video_frame_get_pixel_type (and avs_video_frame_amend_pixel_type in special cases)
-  int pixel_type; // Interface V10: an automatically maintained copy from AVS_VideoInfo
+  int _pixel_type; // Interface V10: an automatically maintained copy from AVS_VideoInfo
 } AVS_VideoFrame;
 
 // Access functions for AVS_VideoFrame
@@ -803,53 +1175,23 @@ AVSC_API(AVS_VideoFrame *, avs_copy_video_frame)(AVS_VideoFrame *);
 
 // V10
 AVSC_API(int, avs_video_frame_get_pixel_type)(const AVS_VideoFrame* p);
-// V10
+
 AVSC_API(void, avs_video_frame_amend_pixel_type)(AVS_VideoFrame* p, int new_pixel_type);
 
-// no API for these, inline helper functions
 #ifndef AVSC_NO_DECLSPEC
-// this inline function is calling an API function
-AVSC_INLINE int avs_get_pitch(const AVS_VideoFrame * p) {
-  return avs_get_pitch_p(p, 0);
-}
+#ifdef AVSC_ALLOW_DEPRECATED
+// Old inline helper functions which are named differently but eventually call API.
+// Deprecated. If possible, do not use them any more
+// Get data for plane AVS_DEFAULT_PLANE (Y or packed rgb):
+AVSC_INLINE int avs_get_pitch(const AVS_VideoFrame * p) { return avs_get_pitch_p(p, AVS_DEFAULT_PLANE); }
+AVSC_INLINE int avs_get_row_size(const AVS_VideoFrame * p) { return avs_get_row_size_p(p, AVS_DEFAULT_PLANE); }
+AVSC_INLINE int avs_get_height(const AVS_VideoFrame * p) { return avs_get_height_p(p, AVS_DEFAULT_PLANE); }
+AVSC_INLINE const BYTE* avs_get_read_ptr(const AVS_VideoFrame * p) { return avs_get_read_ptr_p(p, AVS_DEFAULT_PLANE); }
+AVSC_INLINE BYTE* avs_get_write_ptr(const AVS_VideoFrame * p) { return avs_get_write_ptr_p(p, AVS_DEFAULT_PLANE); }
+// named alternatively:
+AVSC_INLINE void avs_release_frame(AVS_VideoFrame* f) { avs_release_video_frame(f); }
+AVSC_INLINE AVS_VideoFrame* avs_copy_frame(AVS_VideoFrame* f) { return avs_copy_video_frame(f); }
 #endif
-
-#ifndef AVSC_NO_DECLSPEC
-// this inline function is calling an API function
-AVSC_INLINE int avs_get_row_size(const AVS_VideoFrame * p) {
-        return avs_get_row_size_p(p, 0); }
-#endif
-
-
-#ifndef AVSC_NO_DECLSPEC
-// this inline function is calling an API function
-AVSC_INLINE int avs_get_height(const AVS_VideoFrame * p) {
-  return avs_get_height_p(p, 0);
-}
-#endif
-
-#ifndef AVSC_NO_DECLSPEC
-// this inline function is calling an API function
-AVSC_INLINE const BYTE* avs_get_read_ptr(const AVS_VideoFrame * p) {
-        return avs_get_read_ptr_p(p, 0);}
-#endif
-
-#ifndef AVSC_NO_DECLSPEC
-// this inline function is calling an API function
-AVSC_INLINE BYTE* avs_get_write_ptr(const AVS_VideoFrame * p) {
-        return avs_get_write_ptr_p(p, 0);}
-#endif
-
-#ifndef AVSC_NO_DECLSPEC
-// this inline function is calling an API function
-AVSC_INLINE void avs_release_frame(AVS_VideoFrame * f)
-  {avs_release_video_frame(f);}
-#endif
-
-#ifndef AVSC_NO_DECLSPEC
-// this inline function is calling an API function
-AVSC_INLINE AVS_VideoFrame * avs_copy_frame(AVS_VideoFrame * f)
-  {return avs_copy_video_frame(f);}
 #endif
 
 // Interface V8: frame properties
@@ -875,8 +1217,8 @@ typedef struct AVS_Map {
 // AVS_Value is laid out identically to AVSValue
 typedef struct AVS_Value AVS_Value;
 struct AVS_Value {
-  short type;  // 'a'rray, 'c'lip, 'b'ool, 'i'nt, 'f'loat, 's'tring, 'v'oid, or 'l'ong, or fu'n'ction
-               // for some function e'rror
+  short type;  // 'a'rray, 'c'lip, 'b'ool, 'i'nt, 'f'loat, 'd'ouble, 's'tring, 'v'oid, or 'l'ong, or fu'n'ction
+               // for some function 'e'rror
   short array_size;
   union {
     void * clip; // do not use directly, use avs_take_clip
@@ -886,10 +1228,14 @@ struct AVS_Value {
     const char * string;
     const AVS_Value * array;
     void * function; // not supported on C interface
-#ifdef X86_64
+#if UINTPTR_MAX >= 0xffffffffffffffff
     // if ever, only x64 will support. It breaks struct size on 32 bit
     int64_t longlong; // 8 bytes
     double double_pt; // 8 bytes
+#else
+    // 32 bit support workaround, pointers dont't break struct size on 32 bit
+    int64_t *longlong_ptr;
+    double *double_pt_ptr;
 #endif
   } d;
 };
@@ -898,43 +1244,151 @@ struct AVS_Value {
 // Should also set to avs_void after the value is released
 // with avs_copy_value.  Consider it the equivalent of setting
 // a pointer to NULL
-static const AVS_Value avs_void = {'v'};
+static const AVS_Value avs_void = {'v', 0, {0}};
+// see also avs_set_to_void v11 API
 
+/*******************************
+* AVS_Value copy through API
+*******************************/
+// requires avs_release_value! Can deep copy dyn_arrays.
 AVSC_API(void, avs_copy_value)(AVS_Value * dest, AVS_Value src);
+
+/*******************************
+* AVS_Value release through API
+*******************************/
 AVSC_API(void, avs_release_value)(AVS_Value);
+
+/*************************************************
+* AVS_Value -> AVS_Clip get reference through API
+*************************************************/
+// requires avs_release_clip!
 AVSC_API(AVS_Clip *, avs_take_clip)(AVS_Value, AVS_ScriptEnvironment *);
-AVSC_API(void, avs_set_to_clip)(AVS_Value *, AVS_Clip *);
 
-
-// no API for these, inline helper functions
+/****************************************************************************
+* AVS_Value type testers avs_is_xxxx ("baked" inline code) - NOT through API
+****************************************************************************/
 AVSC_INLINE int avs_defined(AVS_Value v) { return v.type != 'v'; }
 AVSC_INLINE int avs_is_clip(AVS_Value v) { return v.type == 'c'; }
 AVSC_INLINE int avs_is_bool(AVS_Value v) { return v.type == 'b'; }
-AVSC_INLINE int avs_is_int(AVS_Value v) { return v.type == 'i'; }
-AVSC_INLINE int avs_is_float(AVS_Value v) { return v.type == 'f' || v.type == 'i'; }
+// v11: changed: for 32-bit 'int' or 64-bit 'long' as well
+AVSC_INLINE int avs_is_int(AVS_Value v) { return v.type == 'i' || v.type == 'l'; }
+// v11: new: for strict 64-bit 'long' content only
+AVSC_INLINE int avs_is_long_strict(AVS_Value v) { return v.type == 'l'; }
+// v11: changed: for 'double' and 'l'ong along with 'float' and 'int'
+AVSC_INLINE int avs_is_float(AVS_Value v) { return v.type == 'd' || v.type == 'f' || v.type == 'i' || v.type == 'l'; }
+// v11: new: for strict 64-bit 'long' content only
+AVSC_INLINE int avs_is_floatf_strict(AVS_Value v) { return v.type == 'f'; }
 AVSC_INLINE int avs_is_string(AVS_Value v) { return v.type == 's'; }
 AVSC_INLINE int avs_is_array(AVS_Value v) { return v.type == 'a'; }
 AVSC_INLINE int avs_is_error(AVS_Value v) { return v.type == 'e'; }
 
-AVSC_INLINE int avs_as_bool(AVS_Value v)
-        { return v.d.boolean; }
+/****************************************************************************
+* AVS_Value type testers avs_val_is_xxxx (API)
+****************************************************************************/
+AVSC_API(int, avs_val_defined)(AVS_Value v);
+AVSC_API(int, avs_val_is_clip)(AVS_Value v);
+AVSC_API(int, avs_val_is_bool)(AVS_Value v);
+// v11: changed: for 32-bit 'int' or 64-bit 'long' as well
+AVSC_API(int, avs_val_is_int)(AVS_Value v);
+// v11: new: for strict 64-bit 'long' content only
+AVSC_API(int, avs_val_is_long_strict)(AVS_Value v);
+// v11: changed: for 'double' and 'l'ong along with 'float' and 'int'
+AVSC_API(int, avs_val_is_float)(AVS_Value v);
+// v11: new: for strict 32-bit 'float' content only
+AVSC_API(int, avs_val_is_floatf_strict)(AVS_Value v);
+AVSC_API(int, avs_val_is_string)(AVS_Value v);
+AVSC_API(int, avs_val_is_array)(AVS_Value v);
+AVSC_API(int, avs_val_is_error)(AVS_Value v);
+
+/***********************************************************
+* AVS_Value getters ("baked" inline code) - NOT through API
+***********************************************************/
+AVSC_INLINE int avs_as_bool(AVS_Value v) { return v.d.boolean; }
+// v11: avs_as_int also valid for 64-bit 'l'ong, but it gets truncated
 AVSC_INLINE int avs_as_int(AVS_Value v)
-        { return v.d.integer; }
+{
+  // we'll return a casted int64_t as-is
+#if UINTPTR_MAX >= 0xffffffffffffffff
+  return v.type == 'l' ? (int)v.d.longlong : v.d.integer;
+#else
+  return v.type == 'l' ? (int)*v.d.longlong_ptr : v.d.integer;
+#endif
+}
+// v11: new, returns true 64 bit value, even for 32 bit content
+AVSC_INLINE int64_t avs_as_long(AVS_Value v)
+{
+#if UINTPTR_MAX >= 0xffffffffffffffff
+  return v.type == 'l' ? v.d.longlong : v.d.integer;
+#else
+  return v.type == 'l' ? *v.d.longlong_ptr : v.d.integer;
+#endif
+}
 AVSC_INLINE const char * avs_as_string(AVS_Value v)
         { return avs_is_error(v) || avs_is_string(v) ? v.d.string : 0; }
+
+// v11: Extended for 'double' and 'l'ong
 AVSC_INLINE double avs_as_float(AVS_Value v)
-        { return avs_is_int(v) ? v.d.integer : v.d.floating_pt; }
+{
+#if UINTPTR_MAX >= 0xffffffffffffffff
+  return v.type == 'i' ? v.d.integer : v.type=='l' ? v.d.longlong : v.type == 'd' ? v.d.double_pt : v.d.floating_pt;
+#else
+  return v.type == 'i' ? v.d.integer : v.type == 'l' ? *v.d.longlong_ptr : v.type == 'd' ? *v.d.double_pt_ptr : v.d.floating_pt;
+#endif
+}
 AVSC_INLINE const char * avs_as_error(AVS_Value v)
         { return avs_is_error(v) ? v.d.string : 0; }
 AVSC_INLINE const AVS_Value * avs_as_array(AVS_Value v)
         { return v.d.array; }
+
+/***********************************************************
+* AVS_Value getters - using API v11
+***********************************************************/
+// API versions of the above. The AVS_Value is passed by reference everywhere
+AVSC_API(int, avs_get_as_bool)(AVS_Value v);
+AVSC_API(AVS_Clip *, avs_get_as_clip)(AVS_Value v, AVS_ScriptEnvironment* env); // similar to avs_take_clip
+AVSC_API(int, avs_get_as_int)(AVS_Value v);
+AVSC_API(int64_t, avs_get_as_long)(AVS_Value v);
+AVSC_API(const char*, avs_get_as_string)(AVS_Value v);
+AVSC_API(double, avs_get_as_float)(AVS_Value v);
+AVSC_API(const char*, avs_get_as_error)(AVS_Value v);
+AVSC_API(const AVS_Value*, avs_get_as_array)(AVS_Value v);
+
+/***********************************************************
+* AVS_Value array access - using API v11
+***********************************************************/
+AVSC_API(AVS_Value, avs_get_array_elt)(AVS_Value v, int index);
+AVSC_API(int, avs_get_array_size)(AVS_Value v);
+
+/***********************************************************
+* AVS_Value array access - ("baked" inline code) - NOT through API
+***********************************************************/
 AVSC_INLINE int avs_array_size(AVS_Value v)
         { return avs_is_array(v) ? v.array_size : 1; }
 AVSC_INLINE AVS_Value avs_array_elt(AVS_Value v, int index)
         { return avs_is_array(v) ? v.d.array[index] : v; }
 
-// only use these functions on an AVS_Value that does not already have
+/*******************************
+* AVS_Value setters through API
+*******************************/
+AVSC_API(void, avs_set_to_clip)(AVS_Value*, AVS_Clip*);
+// v11 provides setter APIs for all types beyond 'clip'
+AVSC_API(void, avs_set_to_error)(AVS_Value*, const char* v0);
+AVSC_API(void, avs_set_to_bool)(AVS_Value*, int v0);
+AVSC_API(void, avs_set_to_int)(AVS_Value*, int v0);
+AVSC_API(void, avs_set_to_float)(AVS_Value*, float v0);
+AVSC_API(void, avs_set_to_string)(AVS_Value*, const char* v0);
+AVSC_API(void, avs_set_to_double)(AVS_Value*, double d); // requires avs_release_value, especially on 32 bit proc
+AVSC_API(void, avs_set_to_long)(AVS_Value*, int64_t l); // requires avs_release_value, especially on 32 bit proc
+AVSC_API(void, avs_set_to_array)(AVS_Value*, AVS_Value* src, int size); // requires avs_release_value, multi-nested deep copied arrays
+AVSC_API(void, avs_set_to_void)(AVS_Value*); // void
+/***********************************************************
+* AVS_Value setters ("baked" inline code) - NOT through API
+***********************************************************/
+// Each of these inline 'baked code' setters has API counterparts:
+// avs_set_to_error, avs_set_to_bool, avs_set_to_int, avs_set_to_string, avs_set_to_float.
+// Only use these functions on an AVS_Value that does not already have
 // an active value.  Remember, treat AVS_Value as a fat pointer.
+// These do not require avs_release_value
 AVSC_INLINE AVS_Value avs_new_value_bool(int v0)
         { AVS_Value v; v.type = 'b'; v.d.boolean = v0 == 0 ? 0 : 1; return v; }
 AVSC_INLINE AVS_Value avs_new_value_int(int v0)
@@ -945,14 +1399,23 @@ AVSC_INLINE AVS_Value avs_new_value_float(float v0)
         { AVS_Value v; v.type = 'f'; v.d.floating_pt = v0; return v;}
 AVSC_INLINE AVS_Value avs_new_value_error(const char * v0)
         { AVS_Value v; v.type = 'e'; v.d.string = v0; return v; }
-#ifndef AVSC_NO_DECLSPEC
-// this inline function is calling an API function
-AVSC_INLINE AVS_Value avs_new_value_clip(AVS_Clip * v0)
-        { AVS_Value v; avs_set_to_clip(&v, v0); return v; }
-#endif
 AVSC_INLINE AVS_Value avs_new_value_array(AVS_Value * v0, int size)
         { AVS_Value v; v.type = 'a'; v.d.array = v0; v.array_size = (short)size; return v; }
-// end of inline helper functions
+/***********************************************************
+* AVS_Value setters - inline wrappers using API
+***********************************************************/
+#ifndef AVSC_NO_DECLSPEC
+// Use avs_release_value / avs_copy_value
+AVSC_INLINE AVS_Value avs_new_value_clip(AVS_Clip* v0)
+        { AVS_Value v; avs_set_to_clip(&v, v0); return v; }
+#endif
+/***********************************************************
+* AVS_Value setters - inline wrappers using API v11
+* None of them. For Avisynth arrays, 64 bit long and double use API
+***********************************************************/
+// No avs_new_value_double => use avs_set_to_double API instead
+// No avs_new_value_long => use avs_set_to_long API instead
+// for arrays use avs_set_to_array API call for Avisynth deep smart arrays
 
 /////////////////////////////////////////////////////////////////////
 //
@@ -985,10 +1448,15 @@ AVSC_API(int, avs_set_cache_hints)(AVS_Clip *,
 typedef AVS_Value (AVSC_CC * AVS_ApplyFunc)
                         (AVS_ScriptEnvironment *, AVS_Value args, void * user_data);
 
+// v11 alternative of avs_add_function with return value by reference
+// This is the callback type used by avs_add_function_r
+typedef void(AVSC_CC* AVS_ApplyFuncR)
+(AVS_ScriptEnvironment*, AVS_Value* ret, AVS_Value args, void* user_data);
+
 typedef struct AVS_FilterInfo AVS_FilterInfo;
 struct AVS_FilterInfo
 {
-  // these members should not be modified outside of the AVS_ApplyFunc callback
+  // these members should not be modified outside of the AVS_ApplyFunc or AVS_ApplyFuncR callback
   AVS_Clip * child;
   AVS_VideoInfo vi;
   AVS_ScriptEnvironment * env;
@@ -1008,11 +1476,11 @@ struct AVS_FilterInfo
 };
 
 // Create a new filter
-// fi is set to point to the AVS_FilterInfo so that you can
+// 'fi' is set to point to the AVS_FilterInfo so that you can
 //   modify it once it is initialized.
-// store_child should generally be set to true.  If it is not
-//    set than ALL methods (the function pointers) must be defined
-// If it is set than you do not need to worry about freeing the child
+// 'store_child' should generally be set to true.  If it is not
+//   set then ALL methods (the function pointers) must be defined
+// If it is set then you do not need to worry about freeing the child
 //    clip.
 AVSC_API(AVS_Clip *, avs_new_c_filter)(AVS_ScriptEnvironment * e,
                                        AVS_FilterInfo * * fi,
@@ -1023,49 +1491,82 @@ AVSC_API(AVS_Clip *, avs_new_c_filter)(AVS_ScriptEnvironment * e,
 // AVS_ScriptEnvironment
 //
 
-// For GetCPUFlags.  These are backwards-compatible with those in VirtualDub.
+// For GetCPUFlags.
+
+// Intel/AMD x86/x86-64 flags
+
+// start with enum, until we reach 32-bit limit
 enum {
                                 /* slowest CPU to support extension */
-  AVS_CPU_FORCE        = 0x01,   // N/A
-  AVS_CPU_FPU          = 0x02,   // 386/486DX
-  AVS_CPU_MMX          = 0x04,   // P55C, K6, PII
-  AVS_CPU_INTEGER_SSE  = 0x08,   // PIII, Athlon
-  AVS_CPU_SSE          = 0x10,   // PIII, Athlon XP/MP
-  AVS_CPU_SSE2         = 0x20,   // PIV, Hammer
-  AVS_CPU_3DNOW        = 0x40,   // K6-2
-  AVS_CPU_3DNOW_EXT    = 0x80,   // Athlon
-  AVS_CPU_X86_64       = 0xA0,   // Hammer (note: equiv. to 3DNow + SSE2,
+  AVS_CPU_FORCE = 0x01,   // N/A
+  AVS_CPU_FPU = 0x02,   // 386/486DX
+  AVS_CPU_MMX = 0x04,   // P55C, K6, PII
+  AVS_CPU_INTEGER_SSE = 0x08,   // PIII, Athlon
+  AVS_CPU_SSE = 0x10,   // PIII, Athlon XP/MP
+  AVS_CPU_SSE2 = 0x20,   // PIV, Hammer
+  AVS_CPU_3DNOW = 0x40,   // K6-2
+  AVS_CPU_3DNOW_EXT = 0x80,   // Athlon
+  AVS_CPU_X86_64 = 0xA0,   // Hammer (note: equiv. to 3DNow + SSE2,
                                  // which only Hammer will have anyway)
-  AVS_CPUF_SSE3       = 0x100,   //  PIV+, K8 Venice
-  AVS_CPUF_SSSE3      = 0x200,   //  Core 2
-  AVS_CPUF_SSE4       = 0x400,   //  Penryn, Wolfdale, Yorkfield
-  AVS_CPUF_SSE4_1     = 0x400,
-  AVS_CPUF_AVX        = 0x800,   //  Sandy Bridge, Bulldozer
-  AVS_CPUF_SSE4_2    = 0x1000,   //  Nehalem
+  AVS_CPUF_SSE3 = 0x100,   //  PIV+, K8 Venice
+  AVS_CPUF_SSSE3 = 0x200,   //  Core 2
+  AVS_CPUF_SSE4 = 0x400,   //  Penryn, Wolfdale, Yorkfield
+  AVS_CPUF_SSE4_1 = 0x400,
+  AVS_CPUF_AVX = 0x800,   //  Sandy Bridge, Bulldozer
+  AVS_CPUF_SSE4_2 = 0x1000,   //  Nehalem
   // AVS+
-  AVS_CPUF_AVX2      = 0x2000,   //  Haswell
-  AVS_CPUF_FMA3      = 0x4000,
-  AVS_CPUF_F16C      = 0x8000,
-  AVS_CPUF_MOVBE     = 0x10000,   // Big Endian Move
-  AVS_CPUF_POPCNT    = 0x20000,
-  AVS_CPUF_AES       = 0x40000,
-  AVS_CPUF_FMA4      = 0x80000,
+  AVS_CPUF_AVX2 = 0x2000,   //  Haswell
+  AVS_CPUF_FMA3 = 0x4000,
+  AVS_CPUF_F16C = 0x8000,
+  AVS_CPUF_MOVBE = 0x10000,   // Big Endian Move
+  AVS_CPUF_POPCNT = 0x20000,
+  AVS_CPUF_AES = 0x40000,
+  AVS_CPUF_FMA4 = 0x80000,
 
-  AVS_CPUF_AVX512F    = 0x100000,  // AVX-512 Foundation.
-  AVS_CPUF_AVX512DQ   = 0x200000,  // AVX-512 DQ (Double/Quad granular) Instructions
-  AVS_CPUF_AVX512PF   = 0x400000,  // AVX-512 Prefetch
-  AVS_CPUF_AVX512ER   = 0x800000,  // AVX-512 Exponential and Reciprocal
-  AVS_CPUF_AVX512CD   = 0x1000000, // AVX-512 Conflict Detection
-  AVS_CPUF_AVX512BW   = 0x2000000, // AVX-512 BW (Byte/Word granular) Instructions
-  AVS_CPUF_AVX512VL   = 0x4000000, // AVX-512 VL (128/256 Vector Length) Extensions
-  AVS_CPUF_AVX512IFMA = 0x8000000, // AVX-512 IFMA integer 52 bit
-  AVS_CPUF_AVX512VBMI = 0x10000000 // AVX-512 VBMI
+  // AVX-512
+  AVS_CPUF_AVX512F = 0x100000,    // F Foundation.
+  AVS_CPUF_AVX512DQ = 0x200000,    // DQ (Double/Quad granular) Instructions
+  AVS_CPUF_AVX512PF = 0x400000,    // PF Prefetch
+  AVS_CPUF_AVX512ER = 0x800000,    // ER Exponential and Reciprocal
+  AVS_CPUF_AVX512CD = 0x1000000,   // CD Conflict Detection
+  AVS_CPUF_AVX512BW = 0x2000000,   // BW (Byte/Word granular) Instructions
+  AVS_CPUF_AVX512VL = 0x4000000,   // VL (128/256 Vector Length) Extensions
+  AVS_CPUF_AVX512IFMA = 0x8000000,   // IFMA integer 52 bit
+  AVS_CPUF_AVX512VBMI = 0x10000000,  // VBMI, byte/word shuffling, sign/zero extension, and general pixel manipulation
+  // Group feature flags for convenience: checking a single flag for "base" and "fast" AVX512 feature sets.
+  AVS_CPUF_AVX512_BASE = 0x20000000,  // F, CD, BW, DQ, VL all set.
+  AVS_CPUF_AVX512_FAST = 0x40000000,   // Base + VNNI, VBMI, VBMI2, BITALG, VPOPCNTDQ. Spec detection logic excludes older/throttling models that also have these features.
+  // Last 32-bit flag reserved for future use:
+  // AVS_CPUF_AVX10    = 0x80000000LL; // AVX10 as one flag, version query needed in distinct function.
+
+  // The enum must stop here to remain compatible with a 32-bit int/enum.
+};
+
+// features beyond the initial 32 bits(0xFFFFFFFF) must be defined as 64 - bit constants
+// and can be returned only by avs_get_cpu_flags_ex (which returns int64_t)
+
+// Intel/AMD x86/x86-64 flags (Continued from 32-bit limit)
+#define AVS_CPUF_AVX512VNNI             0x00100000000LL
+#define AVS_CPUF_AVX512VBMI2            0x00200000000LL
+#define AVS_CPUF_AVX512BITALG           0x00400000000LL
+#define AVS_CPUF_AVX512VPOPCNTDQ        0x00800000000LL
+#define AVS_CPUF_AVX512FP16             0x01000000000LL
+#define AVS_CPUF_AVX512BF16             0x02000000000LL
+
+// ARMv8-A flags
+enum {
+  AVS_CPUF_ARM_NEON = 0x01,
+  AVS_CPUF_ARM_DOTPROD = 0x02,
+  AVS_CPUF_ARM_SVE2 = 0x04,
+  AVS_CPUF_ARM_I8MM = 0x08,
+  AVS_CPUF_ARM_SVE2_1 = 0x10,
 };
 
 
 AVSC_API(const char *, avs_get_error)(AVS_ScriptEnvironment *); // return 0 if no error
 
 AVSC_API(int, avs_get_cpu_flags)(AVS_ScriptEnvironment *);
+AVSC_API(int64_t, avs_get_cpu_flags_ex)(AVS_ScriptEnvironment *); // V12
 AVSC_API(int, avs_check_version)(AVS_ScriptEnvironment *, int version);
 
 AVSC_API(char *, avs_save_string)(AVS_ScriptEnvironment *, const char* s, int length);
@@ -1073,9 +1574,15 @@ AVSC_API(char *, avs_sprintf)(AVS_ScriptEnvironment *, const char * fmt, ...);
 
 AVSC_API(char *, avs_vsprintf)(AVS_ScriptEnvironment *, const char * fmt, va_list val);
 
+// avs_add_function, the callback (apply) returns result as return value (AVS_Value)
 AVSC_API(int, avs_add_function)(AVS_ScriptEnvironment *,
                                 const char * name, const char * params,
                                 AVS_ApplyFunc apply, void * user_data);
+
+// v11 avs_add_function_r, the callback (apply) returns result in byref parameter (AVS_Value *)
+AVSC_API(int, avs_add_function_r)(AVS_ScriptEnvironment*,
+  const char* name, const char* params,
+  AVS_ApplyFuncR apply, void* user_data);
 
 AVSC_API(int, avs_function_exists)(AVS_ScriptEnvironment *, const char * name);
 
@@ -1135,15 +1642,30 @@ AVSC_API(int, avs_set_memory_max)(AVS_ScriptEnvironment *, int mem);
 
 AVSC_API(int, avs_set_working_dir)(AVS_ScriptEnvironment *, const char * newdir);
 
+// V12
+// Acquire a global named lock.
+// 'env' is the environment handle, 'name' is the lock identifier (e.g., "fftw").
+// Returns 1 on success, 0 on failure.
+AVSC_API(int, avs_acquire_global_lock)(AVS_ScriptEnvironment *, const char* name);
+// V12
+// Release a global named lock.
+// 'env' is the environment handle, 'name' is the lock identifier.
+AVSC_API(void, avs_release_global_lock)(AVS_ScriptEnvironment *, const char* name);
+
 // avisynth.dll exports this; it's a way to use it as a library, without
 // writing an AVS script or without going through AVIFile.
 AVSC_API(AVS_ScriptEnvironment *, avs_create_script_environment)(int version);
 
-// this symbol is the entry point for the plugin and must
-// be defined
+// This symbol serves as the entry point for the plugin (up to Avisynth 3.7.3, non-64-bit aware)
 AVSC_EXPORT
-const char * AVSC_CC avisynth_c_plugin_init(AVS_ScriptEnvironment* env);
+const char* AVSC_CC avisynth_c_plugin_init(AVS_ScriptEnvironment* env);
 
+// This symbol serves as the entry point for the 64-bit aware plugin. Since V11
+AVSC_EXPORT
+const char* AVSC_CC avisynth_c_plugin_init2(AVS_ScriptEnvironment* env);
+
+// Either one or both must be defined for a plugin
+// avisynth_c_plugin_init2 is checked before avisynth_c_plugin_init
 
 AVSC_API(void, avs_delete_script_environment)(AVS_ScriptEnvironment *);
 
@@ -1171,8 +1693,14 @@ AVSC_API(double, avs_prop_get_float)(AVS_ScriptEnvironment* p, const AVS_Map* ma
 // Note: avs_prop_get_data was fixed in interface V9.1
 AVSC_API(const char*, avs_prop_get_data)(AVS_ScriptEnvironment* p, const AVS_Map* map, const char* key, int index, int* error);
 AVSC_API(int, avs_prop_get_data_size)(AVS_ScriptEnvironment* p, const AVS_Map* map, const char* key, int index, int* error);
+// V11
+AVSC_API(int, avs_prop_get_data_type_hint)(AVS_ScriptEnvironment* p, const AVS_Map* map, const char* key, int index, int* error);
 AVSC_API(AVS_Clip*, avs_prop_get_clip)(AVS_ScriptEnvironment* p, const AVS_Map* map, const char* key, int index, int* error);
 AVSC_API(const AVS_VideoFrame*, avs_prop_get_frame)(AVS_ScriptEnvironment* p, const AVS_Map* map, const char* key, int index, int* error);
+// V11
+AVSC_API(int, avs_prop_get_int_saturated)(AVS_ScriptEnvironment* p, const AVS_Map* map, const char* key, int index, int* error);
+// V11
+AVSC_API(float, avs_prop_get_float_saturated)(AVS_ScriptEnvironment* p, const AVS_Map* map, const char* key, int index, int* error);
 
 AVSC_API(int, avs_prop_delete_key)(AVS_ScriptEnvironment* p, AVS_Map* map, const char* key);
 
@@ -1180,6 +1708,9 @@ AVSC_API(int, avs_prop_delete_key)(AVS_ScriptEnvironment* p, AVS_Map* map, const
 AVSC_API(int, avs_prop_set_int)(AVS_ScriptEnvironment* p, AVS_Map* map, const char* key, int64_t i, int append);
 AVSC_API(int, avs_prop_set_float)(AVS_ScriptEnvironment* p, AVS_Map* map, const char* key, double d, int append);
 AVSC_API(int, avs_prop_set_data)(AVS_ScriptEnvironment* p, AVS_Map* map, const char* key, const char* d, int length, int append);
+// v11
+// SEE AVS_PROPDATATYPEHINT_... enums
+AVSC_API(int, avs_prop_set_data_h)(AVS_ScriptEnvironment* p, AVS_Map* map, const char* key, const char* d, int length, int type, int append);
 AVSC_API(int, avs_prop_set_clip)(AVS_ScriptEnvironment* p, AVS_Map* map, const char* key, AVS_Clip* clip, int append);
 AVSC_API(int, avs_prop_set_frame)(AVS_ScriptEnvironment* p, AVS_Map* map, const char* key, const AVS_VideoFrame* frame, int append);
 
@@ -1221,6 +1752,11 @@ AVSC_API(double, avs_get_var_double)(AVS_ScriptEnvironment*, const char* name, d
 AVSC_API(const char*, avs_get_var_string)(AVS_ScriptEnvironment*, const char* name, const char* def);
 AVSC_API(int64_t, avs_get_var_long)(AVS_ScriptEnvironment*, const char* name, int64_t def);
 
+// This is an example of dynamically loading Avisynth function addresses
+// instead of statically linked library. (Windows API)
+// In general: define AVSC_NO_DECLSPEC for only API prototypes, then manually load and get
+// function addresses from avisynth.dll/libavisynth.so
+
 #if defined(AVS_WINDOWS)
 // The following stuff is only relevant for Windows DLL handling; Linux does it completely differently.
 #ifdef AVSC_NO_DECLSPEC
@@ -1239,6 +1775,7 @@ AVSC_API(int64_t, avs_get_var_long)(AVS_ScriptEnvironment*, const char* name, in
   FreeLibrary(HMODULE);
 */
 
+#ifndef EXTERNAL_AVS_C_API_LOADER // If external loader is NOT active, then define these helpers
 
 typedef struct AVS_Library AVS_Library;
 
@@ -1394,11 +1931,54 @@ struct AVS_Library {
   AVSC_DECLARE_FUNC(avs_video_frame_get_pixel_type);
   AVSC_DECLARE_FUNC(avs_video_frame_amend_pixel_type);
 
-  // V10
   AVSC_DECLARE_FUNC(avs_is_channel_mask_known);
   AVSC_DECLARE_FUNC(avs_set_channel_mask);
   AVSC_DECLARE_FUNC(avs_get_channel_mask);
 
+  // V11
+  // setters for all types (except clip, which have already existed)
+  AVSC_DECLARE_FUNC(avs_set_to_error);
+  AVSC_DECLARE_FUNC(avs_set_to_bool);
+  AVSC_DECLARE_FUNC(avs_set_to_int);
+  AVSC_DECLARE_FUNC(avs_set_to_string);
+  AVSC_DECLARE_FUNC(avs_set_to_float);
+  AVSC_DECLARE_FUNC(avs_set_to_long);
+  AVSC_DECLARE_FUNC(avs_set_to_double);
+  AVSC_DECLARE_FUNC(avs_set_to_array);
+  AVSC_DECLARE_FUNC(avs_set_to_void);
+  // getters for all basic types. note: avs_get_as_float returns double
+  AVSC_DECLARE_FUNC(avs_get_as_error);
+  AVSC_DECLARE_FUNC(avs_get_as_array);
+  AVSC_DECLARE_FUNC(avs_get_as_bool);
+  AVSC_DECLARE_FUNC(avs_get_as_clip);
+  AVSC_DECLARE_FUNC(avs_get_as_int);
+  AVSC_DECLARE_FUNC(avs_get_as_string);
+  AVSC_DECLARE_FUNC(avs_get_as_float);
+  AVSC_DECLARE_FUNC(avs_get_as_long);
+  AVSC_DECLARE_FUNC(avs_get_array_size);
+  AVSC_DECLARE_FUNC(avs_get_array_elt);
+  // frame props
+  AVSC_DECLARE_FUNC(avs_prop_get_int_saturated);
+  AVSC_DECLARE_FUNC(avs_prop_get_float_saturated);
+  AVSC_DECLARE_FUNC(avs_prop_get_data_type_hint);
+  AVSC_DECLARE_FUNC(avs_prop_set_data_h);
+  // alternative add_function returning data in byref AVS_Value
+  AVSC_DECLARE_FUNC(avs_add_function_r);
+  // API AVS_Value type checkers
+  AVSC_DECLARE_FUNC(avs_val_defined);
+  AVSC_DECLARE_FUNC(avs_val_is_clip);
+  AVSC_DECLARE_FUNC(avs_val_is_bool);
+  AVSC_DECLARE_FUNC(avs_val_is_int);
+  AVSC_DECLARE_FUNC(avs_val_is_long_strict);
+  AVSC_DECLARE_FUNC(avs_val_is_float);
+  AVSC_DECLARE_FUNC(avs_val_is_floatf_strict);
+  AVSC_DECLARE_FUNC(avs_val_is_string);
+  AVSC_DECLARE_FUNC(avs_val_is_array);
+  AVSC_DECLARE_FUNC(avs_val_is_error);
+  // V12
+  AVSC_DECLARE_FUNC(avs_acquire_global_lock);
+  AVSC_DECLARE_FUNC(avs_release_global_lock);
+  AVSC_DECLARE_FUNC(avs_get_cpu_flags_ex);
 };
 
 #undef AVSC_DECLARE_FUNC
@@ -1455,11 +2035,13 @@ AVSC_INLINE AVS_Library * avs_load_library() {
 
 #define __AVSC_STRINGIFY(x) #x
 #define AVSC_STRINGIFY(x) __AVSC_STRINGIFY(x)
-#define AVSC_LOAD_FUNC(name) {\
+#define AVSC_DO_LOAD_FUNC(name, allow_missing) {\
   library->name = (name##_func) GetProcAddress(library->handle, AVSC_STRINGIFY(name));\
-  if (library->name == NULL)\
+  if (!allow_missing && library->name == NULL)\
     goto fail;\
 }
+#define AVSC_LOAD_FUNC(name) AVSC_DO_LOAD_FUNC(name, 0)
+#define AVSC_LOAD_FUNC_OPT(name) AVSC_DO_LOAD_FUNC(name, 1)
 
 #ifdef AVS26_FALLBACK_SIMULATION
 // When an API function is not loadable, let's try a replacement
@@ -1522,8 +2104,6 @@ avs_bits_per_component    constant 8 (8 bits/component)
   AVSC_LOAD_FUNC(avs_new_c_filter);
   AVSC_LOAD_FUNC(avs_new_video_frame_a);
 
-
-
   AVSC_LOAD_FUNC(avs_release_clip);
   AVSC_LOAD_FUNC(avs_release_value);
   AVSC_LOAD_FUNC(avs_release_video_frame);
@@ -1578,81 +2158,126 @@ avs_bits_per_component    constant 8 (8 bits/component)
   AVSC_LOAD_FUNC_FALLBACK_SIMULATED(avs_bits_per_component, avs_bits_per_component_fallback);
 #else
   // Avisynth+ specific
-  AVSC_LOAD_FUNC(avs_is_rgb48);
-  AVSC_LOAD_FUNC(avs_is_rgb64);
-  AVSC_LOAD_FUNC(avs_is_444);
-  AVSC_LOAD_FUNC(avs_is_422);
-  AVSC_LOAD_FUNC(avs_is_420);
-  AVSC_LOAD_FUNC(avs_is_y);
-  AVSC_LOAD_FUNC(avs_is_yuva);
-  AVSC_LOAD_FUNC(avs_is_planar_rgb);
-  AVSC_LOAD_FUNC(avs_is_planar_rgba);
-  AVSC_LOAD_FUNC(avs_num_components);
-  AVSC_LOAD_FUNC(avs_component_size);
-  AVSC_LOAD_FUNC(avs_bits_per_component);
+  AVSC_LOAD_FUNC_OPT(avs_is_rgb48);
+  AVSC_LOAD_FUNC_OPT(avs_is_rgb64);
+  AVSC_LOAD_FUNC_OPT(avs_is_444);
+  AVSC_LOAD_FUNC_OPT(avs_is_422);
+  AVSC_LOAD_FUNC_OPT(avs_is_420);
+  AVSC_LOAD_FUNC_OPT(avs_is_y);
+  AVSC_LOAD_FUNC_OPT(avs_is_yuva);
+  AVSC_LOAD_FUNC_OPT(avs_is_planar_rgb);
+  AVSC_LOAD_FUNC_OPT(avs_is_planar_rgba);
+  AVSC_LOAD_FUNC_OPT(avs_num_components);
+  AVSC_LOAD_FUNC_OPT(avs_component_size);
+  AVSC_LOAD_FUNC_OPT(avs_bits_per_component);
 #endif
   // Avisynth+ interface V8, no backward compatible simulation
-  AVSC_LOAD_FUNC(avs_subframe_planar_a);
+  AVSC_LOAD_FUNC_OPT(avs_subframe_planar_a);
   // frame properties
-  AVSC_LOAD_FUNC(avs_copy_frame_props);
-  AVSC_LOAD_FUNC(avs_get_frame_props_ro);
-  AVSC_LOAD_FUNC(avs_get_frame_props_rw);
-  AVSC_LOAD_FUNC(avs_prop_num_keys);
-  AVSC_LOAD_FUNC(avs_prop_get_key);
-  AVSC_LOAD_FUNC(avs_prop_num_elements);
-  AVSC_LOAD_FUNC(avs_prop_get_type);
-  AVSC_LOAD_FUNC(avs_prop_get_int);
-  AVSC_LOAD_FUNC(avs_prop_get_float);
-  AVSC_LOAD_FUNC(avs_prop_get_data);
-  AVSC_LOAD_FUNC(avs_prop_get_data_size);
-  AVSC_LOAD_FUNC(avs_prop_get_clip);
-  AVSC_LOAD_FUNC(avs_prop_get_frame);
-  AVSC_LOAD_FUNC(avs_prop_delete_key);
-  AVSC_LOAD_FUNC(avs_prop_set_int);
-  AVSC_LOAD_FUNC(avs_prop_set_float);
-  AVSC_LOAD_FUNC(avs_prop_set_data);
-  AVSC_LOAD_FUNC(avs_prop_set_clip);
-  AVSC_LOAD_FUNC(avs_prop_set_frame);
+  AVSC_LOAD_FUNC_OPT(avs_copy_frame_props);
+  AVSC_LOAD_FUNC_OPT(avs_get_frame_props_ro);
+  AVSC_LOAD_FUNC_OPT(avs_get_frame_props_rw);
+  AVSC_LOAD_FUNC_OPT(avs_prop_num_keys);
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_key);
+  AVSC_LOAD_FUNC_OPT(avs_prop_num_elements);
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_type);
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_int);
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_float);
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_data);
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_data_size);
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_clip);
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_frame);
+  AVSC_LOAD_FUNC_OPT(avs_prop_delete_key);
+  AVSC_LOAD_FUNC_OPT(avs_prop_set_int);
+  AVSC_LOAD_FUNC_OPT(avs_prop_set_float);
+  AVSC_LOAD_FUNC_OPT(avs_prop_set_data);
+  AVSC_LOAD_FUNC_OPT(avs_prop_set_clip);
+  AVSC_LOAD_FUNC_OPT(avs_prop_set_frame);
 
-  AVSC_LOAD_FUNC(avs_prop_get_int_array);
-  AVSC_LOAD_FUNC(avs_prop_get_float_array);
-  AVSC_LOAD_FUNC(avs_prop_set_int_array);
-  AVSC_LOAD_FUNC(avs_prop_set_float_array);
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_int_array);
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_float_array);
+  AVSC_LOAD_FUNC_OPT(avs_prop_set_int_array);
+  AVSC_LOAD_FUNC_OPT(avs_prop_set_float_array);
 
-  AVSC_LOAD_FUNC(avs_clear_map);
+  AVSC_LOAD_FUNC_OPT(avs_clear_map);
 
   // NewVideoFrame with frame properties
-  AVSC_LOAD_FUNC(avs_new_video_frame_p);
-  AVSC_LOAD_FUNC(avs_new_video_frame_p_a);
+  AVSC_LOAD_FUNC_OPT(avs_new_video_frame_p);
+  AVSC_LOAD_FUNC_OPT(avs_new_video_frame_p_a);
 
-  AVSC_LOAD_FUNC(avs_get_env_property);
+  AVSC_LOAD_FUNC_OPT(avs_get_env_property);
 
-  AVSC_LOAD_FUNC(avs_get_var_try);
-  AVSC_LOAD_FUNC(avs_get_var_bool);
-  AVSC_LOAD_FUNC(avs_get_var_int);
-  AVSC_LOAD_FUNC(avs_get_var_double);
-  AVSC_LOAD_FUNC(avs_get_var_string);
-  AVSC_LOAD_FUNC(avs_get_var_long);
+  AVSC_LOAD_FUNC_OPT(avs_get_var_try);
+  AVSC_LOAD_FUNC_OPT(avs_get_var_bool);
+  AVSC_LOAD_FUNC_OPT(avs_get_var_int);
+  AVSC_LOAD_FUNC_OPT(avs_get_var_double);
+  AVSC_LOAD_FUNC_OPT(avs_get_var_string);
+  AVSC_LOAD_FUNC_OPT(avs_get_var_long);
 
-  AVSC_LOAD_FUNC(avs_pool_allocate);
-  AVSC_LOAD_FUNC(avs_pool_free);
+  AVSC_LOAD_FUNC_OPT(avs_pool_allocate);
+  AVSC_LOAD_FUNC_OPT(avs_pool_free);
 
   // V9
-  AVSC_LOAD_FUNC(avs_make_property_writable);
-  AVSC_LOAD_FUNC(avs_is_property_writable);
+  AVSC_LOAD_FUNC_OPT(avs_make_property_writable);
+  AVSC_LOAD_FUNC_OPT(avs_is_property_writable);
 
   // V10
-  AVSC_LOAD_FUNC(avs_video_frame_get_pixel_type);
-  AVSC_LOAD_FUNC(avs_video_frame_amend_pixel_type);
+  AVSC_LOAD_FUNC_OPT(avs_video_frame_get_pixel_type);
+  AVSC_LOAD_FUNC_OPT(avs_video_frame_amend_pixel_type);
+  AVSC_LOAD_FUNC_OPT(avs_is_channel_mask_known);
+  AVSC_LOAD_FUNC_OPT(avs_set_channel_mask);
+  AVSC_LOAD_FUNC_OPT(avs_get_channel_mask);
 
-  // V10
-  AVSC_LOAD_FUNC(avs_is_channel_mask_known);
-  AVSC_LOAD_FUNC(avs_set_channel_mask);
-  AVSC_LOAD_FUNC(avs_get_channel_mask);
+  // V11
+  // setters for all types (avs_set_to_clip already existed)
+  AVSC_LOAD_FUNC_OPT(avs_set_to_error);
+  AVSC_LOAD_FUNC_OPT(avs_set_to_bool);
+  AVSC_LOAD_FUNC_OPT(avs_set_to_int);
+  AVSC_LOAD_FUNC_OPT(avs_set_to_string);
+  AVSC_LOAD_FUNC_OPT(avs_set_to_float);
+  AVSC_LOAD_FUNC_OPT(avs_set_to_long);
+  AVSC_LOAD_FUNC_OPT(avs_set_to_double);
+  AVSC_LOAD_FUNC_OPT(avs_set_to_array);
+  AVSC_LOAD_FUNC_OPT(avs_set_to_void);
+  // these have inline equivalents as well
+  AVSC_LOAD_FUNC_OPT(avs_get_as_error);
+  AVSC_LOAD_FUNC_OPT(avs_get_as_array);
+  AVSC_LOAD_FUNC_OPT(avs_get_as_bool);
+  AVSC_LOAD_FUNC_OPT(avs_get_as_clip);
+  AVSC_LOAD_FUNC_OPT(avs_get_as_int);
+  AVSC_LOAD_FUNC_OPT(avs_get_as_string);
+  AVSC_LOAD_FUNC_OPT(avs_get_as_float);
+  AVSC_LOAD_FUNC_OPT(avs_get_as_long);
+  AVSC_LOAD_FUNC_OPT(avs_get_array_size);
+  AVSC_LOAD_FUNC_OPT(avs_get_array_elt);
+  // frame property
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_int_saturated);
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_float_saturated);
+  AVSC_LOAD_FUNC_OPT(avs_prop_get_data_type_hint);
+  AVSC_LOAD_FUNC_OPT(avs_prop_set_data_h);
+  // alternative add_function
+  AVSC_LOAD_FUNC_OPT(avs_add_function_r);
+  // API AVS_Value type checkers
+  AVSC_LOAD_FUNC_OPT(avs_val_defined);
+  AVSC_LOAD_FUNC_OPT(avs_val_is_clip);
+  AVSC_LOAD_FUNC_OPT(avs_val_is_bool);
+  AVSC_LOAD_FUNC_OPT(avs_val_is_int);
+  AVSC_LOAD_FUNC_OPT(avs_val_is_long_strict);
+  AVSC_LOAD_FUNC_OPT(avs_val_is_float);
+  AVSC_LOAD_FUNC_OPT(avs_val_is_floatf_strict);
+  AVSC_LOAD_FUNC_OPT(avs_val_is_string);
+  AVSC_LOAD_FUNC_OPT(avs_val_is_array);
+  AVSC_LOAD_FUNC_OPT(avs_val_is_error);
+  // V12
+  AVSC_LOAD_FUNC_OPT(avs_acquire_global_lock);
+  AVSC_LOAD_FUNC_OPT(avs_release_global_lock);
+  AVSC_LOAD_FUNC_OPT(avs_get_cpu_flags_ex);
 
 #undef __AVSC_STRINGIFY
 #undef AVSC_STRINGIFY
+#undef AVSC_DO_LOAD_FUNC
 #undef AVSC_LOAD_FUNC
+#undef AVSC_LOAD_FUNC_OPT
 #undef AVSC_LOAD_FUNC_FALLBACK
 #undef AVSC_LOAD_FUNC_FALLBACK_SIMULATED
 
@@ -1669,7 +2294,10 @@ AVSC_INLINE void avs_free_library(AVS_Library *library) {
   FreeLibrary(library->handle);
   free(library);
 }
-#endif
+
+#endif // EXTERNAL_AVS_C_API_LOADER
+
+#endif // AVSC_NO_DECLSPEC
 
 #endif // AVS_WINDOWS
 

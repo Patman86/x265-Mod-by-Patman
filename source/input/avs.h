@@ -4,6 +4,10 @@
 #include "input.h"
 #include <string>
 #include <map>
+
+#ifndef AVS_FRAME_ALIGN
+#define AVS_FRAME_ALIGN FRAME_ALIGN
+#endif
 #include <avisynth/avisynth_c.h>
 
 #if _WIN32
