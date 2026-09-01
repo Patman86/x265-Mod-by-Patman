@@ -39,6 +39,7 @@
 namespace X265_NS {
 // private x265 namespace
 
+#if !HIGH_BIT_DEPTH
 template<int size>
 int psyCost_pp_lsx(const pixel *source, intptr_t sstride, const pixel *recon, intptr_t rstride)
 {
@@ -324,6 +325,14 @@ all_angs_pred_lsx(32, 10)
     p.cu[BLOCK_32x32].prim = fncdef PFX(fname ## _32x32_ ## cpu); \
     p.cu[BLOCK_64x64].prim = fncdef PFX(fname ## _64x64_ ## cpu)
 
+#endif /* !HIGH_BIT_DEPTH */
+
+#if HIGH_BIT_DEPTH
+void setupAssemblyPrimitives(EncoderPrimitives& /* p */, int /* cpuMask */)
+{
+    // Empty stub for HIGH_BIT_DEPTH. Fall back to C primitives.
+}
+#else
 void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask)
 {
 #if HAVE_LSX
@@ -1427,5 +1436,5 @@ void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask)
     }
 #endif /* HAVE_LASX */
 }
-
+#endif /* HIGH_BIT_DEPTH */
 }

@@ -48,6 +48,7 @@ protected:
     ALIGN_VAR_64(pixel,    pbuf2[BUFFSIZE]);
     ALIGN_VAR_64(pixel,    pbuf3[BUFFSIZE]);
     ALIGN_VAR_64(pixel,    pbuf4[BUFFSIZE]);
+    ALIGN_VAR_64(pixel,    pbuf5[BUFFSIZE]);
     ALIGN_VAR_64(int,      ibuf1[BUFFSIZE]);
     ALIGN_VAR_64(int8_t,   psbuf1[BUFFSIZE]);
     ALIGN_VAR_64(int8_t,   psbuf2[BUFFSIZE]);

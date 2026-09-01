@@ -594,7 +594,9 @@ static void scale2D_64to32(pixel* dst, const pixel* src, intptr_t stride)
 }
 
 static
-void frame_init_lowres_core(const pixel* src0, pixel* dst0, pixel* dsth, pixel* dstv, pixel* dstc,
+void frame_init_lowres_core(const pixel* X265_ASSUME_NO_ALIAS src0, pixel* X265_ASSUME_NO_ALIAS dst0,
+                            pixel* X265_ASSUME_NO_ALIAS dsth, pixel* X265_ASSUME_NO_ALIAS dstv,
+                            pixel* X265_ASSUME_NO_ALIAS dstc,
                             intptr_t src_stride, intptr_t dst_stride, int width, int height)
 {
     for (int y = 0; y < height; y++)
@@ -1014,7 +1016,9 @@ namespace X265_NS {
 // x265 private namespace
 
 /* Scalar lowres downscale for MCSTF path - HM-equivalent filter, no SIMD override */
-    void frameInitLowresCoreMCSTF(const pixel* src0, pixel* dst0, pixel* dsth, pixel* dstv, pixel* dstc,
+    void frameInitLowresCoreMCSTF(const pixel* X265_ASSUME_NO_ALIAS src0,
+        pixel* X265_ASSUME_NO_ALIAS dst0, pixel* X265_ASSUME_NO_ALIAS dsth,
+        pixel* X265_ASSUME_NO_ALIAS dstv, pixel* X265_ASSUME_NO_ALIAS dstc,
         intptr_t src_stride, intptr_t dst_stride, int width, int height)
     {
         for (int y = 0; y < height; y++)

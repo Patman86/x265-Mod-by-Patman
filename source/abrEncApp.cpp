@@ -883,13 +883,28 @@ ret:
 
                     if (m_foveaGazeFileFP)
                     {
-                        /* Try to read gaze for this frame; reuse previous on failure */
+                        /* Try to read gaze for this frame; reuse previous on failure.
+                         * The frame number lets the gaze track resynchronize with the
+                         * video (e.g. after --seek, or if the track has gaps): entries
+                         * behind the current frame are stale and dropped, and an entry
+                         * for a future frame is pushed back until its frame arrives. */
                         int frameNum;
                         float fx, fy;
-                        if (fscanf(m_foveaGazeFileFP, "%d %f %f", &frameNum, &fx, &fy) == 3)
+                        int curFrame = (int)(m_cliopt.seek + inFrameCount) - 1;
+                        long linePos;
+                        while ((linePos = ftell(m_foveaGazeFileFP)),
+                               fscanf(m_foveaGazeFileFP, "%d %f %f", &frameNum, &fx, &fy) == 3)
                         {
-                            gazeX = fx;
-                            gazeY = fy;
+                            if (frameNum < curFrame)
+                                continue;
+                            if (frameNum > curFrame)
+                                fseek(m_foveaGazeFileFP, linePos, SEEK_SET);
+                            else
+                            {
+                                gazeX = fx;
+                                gazeY = fy;
+                            }
+                            break;
                         }
                     }
                     else

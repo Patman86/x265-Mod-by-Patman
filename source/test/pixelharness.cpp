@@ -77,6 +77,7 @@ PixelHarness::PixelHarness()
         pbuf2[i] = rand() & PIXEL_MAX;
         pbuf3[i] = rand() & PIXEL_MAX;
         pbuf4[i] = rand() & PIXEL_MAX;
+        pbuf5[i] = rand() & PIXEL_MAX;
 
         sbuf1[i] = (rand() % (2 * SMAX + 1)) - SMAX - 1; //max(SHORT_MIN, min(rand(), SMAX));
         sbuf2[i] = (rand() % (2 * SMAX + 1)) - SMAX - 1; //max(SHORT_MIN, min(rand(), SMAX));
@@ -3566,7 +3567,7 @@ void PixelHarness::measureSpeed(const EncoderPrimitives& ref, const EncoderPrimi
     if (opt.frameInitLowres)
     {
         HEADER0("downscale");
-        REPORT_SPEEDUP(opt.frameInitLowres, ref.frameInitLowres, pbuf2, pbuf1, pbuf2, pbuf3, pbuf4, 64, 64, 64, 64);
+        REPORT_SPEEDUP(opt.frameInitLowres, ref.frameInitLowres, pbuf1, pbuf2, pbuf3, pbuf4, pbuf5, 64, 64, 64, 64);
     }
 
     if (opt.scale1D_128to64[NONALIGNED])

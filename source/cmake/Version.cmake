@@ -142,6 +142,30 @@ elseif(GIT_ARCHETYPE)
     message(STATUS "GIT ARCHIVAL INFORMATION PROCESSED")
 else()
     execute_process(
+        COMMAND ${GIT_EXECUTABLE} tag --list
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE X265_LOCAL_TAGS
+        ERROR_QUIET
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+    if(NOT X265_LOCAL_TAGS)
+        message(STATUS "NO GIT TAGS FOUND. ATTEMPTING TO FETCH FROM UPSTREAM")
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} fetch --tags --quiet
+                    https://github.com/Multicorewareinc/x265
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            RESULT_VARIABLE X265_FETCH_TAGS_RESULT
+            ERROR_QUIET
+            TIMEOUT 15
+            )
+        if(X265_FETCH_TAGS_RESULT EQUAL 0)
+            message(STATUS "SUCCESSFULLY FETCHED TAGS FROM UPSTREAM")
+        else()
+            message(STATUS "COULD NOT FETCH TAGS FROM UPSTREAM. VERSION WILL SHOW AS UNKNOWN")
+        endif()
+    endif()
+
+    execute_process(
         COMMAND
         ${GIT_EXECUTABLE} describe --abbrev=0 --tags
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}

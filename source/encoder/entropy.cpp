@@ -2103,8 +2103,14 @@ void Entropy::codeRefFrmIdx(const CUData& cu, uint32_t absPartIdx, int list)
 void Entropy::codeMvd(const CUData& cu, uint32_t absPartIdx, int list)
 {
     const MV& mvd = cu.m_mvd[list][absPartIdx];
-    const int hor = mvd.x;
-    const int ver = mvd.y;
+
+    /* Cast to ensure the mvdLX is in the range of [-2^15, 2^15-1] as specified in
+    H.265 7.4.9.9 Motion vector difference semantics.
+    This casting will cause overflow and underflow, should the mvd exceeds the int16_t range.
+    But because of the decoding process Equation 8-94 to 8-97, and the MV itself having the range of [-2^15, 2^15-1],
+    the decoded MV will still be correct, and mvdLX will be in the legal range. */
+    const int16_t hor = static_cast<int16_t>(mvd.x);
+    const int16_t ver = static_cast<int16_t>(mvd.y);
 
     encodeBin(hor != 0 ? 1 : 0, m_contextState[OFF_MV_RES_CTX]);
     encodeBin(ver != 0 ? 1 : 0, m_contextState[OFF_MV_RES_CTX]);

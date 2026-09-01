@@ -22,6 +22,7 @@
 #include "json11.h"
 #include <cassert>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <cstdint>
 #include <cstdio>

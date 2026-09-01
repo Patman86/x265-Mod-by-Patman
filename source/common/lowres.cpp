@@ -28,7 +28,9 @@
 
 namespace X265_NS {
     // forward declaration - defined in pixel.cpp, no SIMD override for MCSTF path
-    void frameInitLowresCoreMCSTF(const pixel* src0, pixel* dst0, pixel* dsth, pixel* dstv, pixel* dstc,
+    void frameInitLowresCoreMCSTF(const pixel* X265_ASSUME_NO_ALIAS src0,
+        pixel* X265_ASSUME_NO_ALIAS dst0, pixel* X265_ASSUME_NO_ALIAS dsth,
+        pixel* X265_ASSUME_NO_ALIAS dstv, pixel* X265_ASSUME_NO_ALIAS dstc,
         intptr_t src_stride, intptr_t dst_stride, int width, int height);
 }
 
