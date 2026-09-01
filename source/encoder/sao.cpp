@@ -604,14 +604,14 @@ void SAO::generateLumaOffsets(SaoCtuParam* ctuParam, int idxY, int idxX)
                 memset(m_offsetBo[0], 0, sizeof(m_offsetBo[0]));
 
                 for (int i = 0; i < SAO_NUM_OFFSET; i++)
-                    m_offsetBo[0][((ctuParam[addr].bandPos + i) & (MAX_NUM_SAO_CLASS - 1))] = (int8_t)(ctuParam[addr].offset[i] << SAO_BIT_INC);
+                    m_offsetBo[0][((ctuParam[addr].bandPos + i) & (MAX_NUM_SAO_CLASS - 1))] = (int8_t)(ctuParam[addr].offset[i] * (1 << SAO_BIT_INC));
             }
             else // if (typeIdx == SAO_EO_0 || typeIdx == SAO_EO_1 || typeIdx == SAO_EO_2 || typeIdx == SAO_EO_3)
             {
                 int offset[NUM_EDGETYPE];
                 offset[0] = 0;
                 for (int i = 0; i < SAO_NUM_OFFSET; i++)
-                    offset[i + 1] = ctuParam[addr].offset[i] << SAO_BIT_INC;
+                    offset[i + 1] = ctuParam[addr].offset[i] * (1 << SAO_BIT_INC);
 
                 for (int edgeType = 0; edgeType < NUM_EDGETYPE; edgeType++)
                     m_offsetEo[0][edgeType] = (int8_t)offset[s_eoTable[edgeType]];
@@ -679,14 +679,14 @@ void SAO::generateChromaOffsets(SaoCtuParam* ctuParam[3], int idxY, int idxX)
                 memset(m_offsetBo[1], 0, sizeof(m_offsetBo[0]));
 
                 for (int i = 0; i < SAO_NUM_OFFSET; i++)
-                    m_offsetBo[1][((ctuParam[1][addr].bandPos + i) & (MAX_NUM_SAO_CLASS - 1))] = (int8_t)(ctuParam[1][addr].offset[i] << SAO_BIT_INC);
+                    m_offsetBo[1][((ctuParam[1][addr].bandPos + i) & (MAX_NUM_SAO_CLASS - 1))] = (int8_t)(ctuParam[1][addr].offset[i] * (1 << SAO_BIT_INC));
             }
             else // if (typeIdx == SAO_EO_0 || typeIdx == SAO_EO_1 || typeIdx == SAO_EO_2 || typeIdx == SAO_EO_3)
             {
                 int offset[NUM_EDGETYPE];
                 offset[0] = 0;
                 for (int i = 0; i < SAO_NUM_OFFSET; i++)
-                    offset[i + 1] = ctuParam[1][addr].offset[i] << SAO_BIT_INC;
+                    offset[i + 1] = ctuParam[1][addr].offset[i] * (1 << SAO_BIT_INC);
 
                 for (int edgeType = 0; edgeType < NUM_EDGETYPE; edgeType++)
                     m_offsetEo[1][edgeType] = (int8_t)offset[s_eoTable[edgeType]];
@@ -705,14 +705,14 @@ void SAO::generateChromaOffsets(SaoCtuParam* ctuParam[3], int idxY, int idxX)
                 memset(m_offsetBo[2], 0, sizeof(m_offsetBo[0]));
 
                 for (int i = 0; i < SAO_NUM_OFFSET; i++)
-                    m_offsetBo[2][((ctuParam[2][addr].bandPos + i) & (MAX_NUM_SAO_CLASS - 1))] = (int8_t)(ctuParam[2][addr].offset[i] << SAO_BIT_INC);
+                    m_offsetBo[2][((ctuParam[2][addr].bandPos + i) & (MAX_NUM_SAO_CLASS - 1))] = (int8_t)(ctuParam[2][addr].offset[i] * (1 << SAO_BIT_INC));
             }
             else // if (typeIdx == SAO_EO_0 || typeIdx == SAO_EO_1 || typeIdx == SAO_EO_2 || typeIdx == SAO_EO_3)
             {
                 int offset[NUM_EDGETYPE];
                 offset[0] = 0;
                 for (int i = 0; i < SAO_NUM_OFFSET; i++)
-                    offset[i + 1] = ctuParam[2][addr].offset[i] << SAO_BIT_INC;
+                    offset[i + 1] = ctuParam[2][addr].offset[i] * (1 << SAO_BIT_INC);
 
                 for (int edgeType = 0; edgeType < NUM_EDGETYPE; edgeType++)
                     m_offsetEo[2][edgeType] = (int8_t)offset[s_eoTable[edgeType]];
@@ -1474,7 +1474,7 @@ void SAO::estIterOffset(int typeIdx, int64_t lambda, int32_t count, int32_t offs
             rate--;
 
         // Do the dequntization before distorion calculation
-        int64_t dist = estSaoDist(count, offset << SAO_BIT_INC, offsetOrg);
+        int64_t dist = estSaoDist(count, offset * (1 << SAO_BIT_INC), offsetOrg);
         int64_t cost  = calcSaoRdoCost(dist, rate, lambda);
         if (cost < bestCost)
         {
