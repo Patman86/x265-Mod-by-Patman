@@ -435,6 +435,12 @@ protected:
         Cost() { rdcost = 0; bits = 0; distortion = 0; energy = 0; }
     };
 
+    struct IntraLumaQTCache
+    {
+        Cost cost;
+        uint32_t cbf;
+    };
+
     struct TUInfoCache
     {
         Cost cost[NUM_SUBPART];
@@ -447,9 +453,9 @@ protected:
     bool     splitTU(Mode& mode, const CUGeom& cuGeom, uint32_t absPartIdx, uint32_t tuDepth, ShortYuv& resiYuv, Cost& splitCost, const uint32_t depthRange[2], int32_t splitMore);
     void     estimateResidualQT(Mode& mode, const CUGeom& cuGeom, uint32_t absPartIdx, uint32_t depth, ShortYuv& resiYuv, Cost& costs, const uint32_t depthRange[2], int32_t splitMore = -1);
 
-    // generate prediction, generate residual and recon. if bAllowSplit, find optimal RQT splits
-    void     codeIntraLumaQT(Mode& mode, const CUGeom& cuGeom, uint32_t tuDepth, uint32_t absPartIdx, bool bAllowSplit, Cost& costs, const uint32_t depthRange[2]);
-    void     codeIntraLumaTSkip(Mode& mode, const CUGeom& cuGeom, uint32_t tuDepth, uint32_t absPartIdx, Cost& costs);
+    // generate prediction, residual, and reconstruction; reuse per-PU data when the caller has prepared it
+    void     codeIntraLumaQT(Mode& mode, const CUGeom& cuGeom, uint32_t tuDepth, uint32_t absPartIdx, bool bAllowSplit, bool bUseCachedIntraData, const IntraLumaQTCache* fullResult, Cost& costs, const uint32_t depthRange[2]);
+    void     codeIntraLumaTSkip(Mode& mode, const CUGeom& cuGeom, uint32_t tuDepth, uint32_t absPartIdx, bool bUseCachedIntraData, Cost& costs);
     void     extractIntraResultQT(CUData& cu, Yuv& reconYuv, uint32_t tuDepth, uint32_t absPartIdx);
 
     // generate chroma prediction, generate residual and recon

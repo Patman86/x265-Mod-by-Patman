@@ -39,6 +39,9 @@ FUNCDEF_TU_S2(void, psyRdoQuant, avx512, int16_t* m_resiDctCoeff, int16_t* m_fen
 FUNCDEF_TU_S2(void, nonPsyRdoQuant, avx2, int16_t *m_resiDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, uint32_t blkPos);
 FUNCDEF_TU_S2(void, psyRdoQuant_1p, avx2, int16_t* m_resiDctCoeff,  int64_t* costUncoded, int64_t* totalUncodedCost, int64_t* totalRdCost,  uint32_t blkPos);
 FUNCDEF_TU_S2(void, psyRdoQuant_2p, avx2, int16_t* m_resiDctCoeff, int16_t* m_fencDctCoeff, int64_t* costUncoded, int64_t* totalUncodedCost, int64_t* totalRdCost, int64_t *psyScale, uint32_t blkPos);
+FUNCDEF_TU_S2(void, nonPsyRdoQuantAll, avx512, const int16_t *m_resiDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost);
+FUNCDEF_TU_S2(void, psyRdoQuantAll, avx2, const int16_t *m_resiDctCoeff, const int16_t *m_fencDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, const int64_t *psyScale);
+FUNCDEF_TU_S2(void, psyRdoQuantAll, avx512, const int16_t *m_resiDctCoeff, const int16_t *m_fencDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, const int64_t *psyScale);
 
 void PFX(dst4_ssse3)(const int16_t* src, int16_t* dst, intptr_t srcStride);
 void PFX(dst4_sse2)(const int16_t* src, int16_t* dst, intptr_t srcStride);

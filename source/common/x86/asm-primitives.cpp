@@ -1477,6 +1477,12 @@ void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask) // Main10
     }
     if (cpuMask & X265_CPU_AVX2)
     {
+#if X86_64
+        p.cu[BLOCK_4x4].psyRdoQuantAll = PFX(psyRdoQuantAll4_avx2);
+        p.cu[BLOCK_8x8].psyRdoQuantAll = PFX(psyRdoQuantAll8_avx2);
+        p.cu[BLOCK_16x16].psyRdoQuantAll = PFX(psyRdoQuantAll16_avx2);
+        p.cu[BLOCK_32x32].psyRdoQuantAll = PFX(psyRdoQuantAll32_avx2);
+#endif
 #if X265_DEPTH == 12
         ASSIGN_SA8D(avx2);
 #endif
@@ -1651,6 +1657,8 @@ void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask) // Main10
         p.cu[BLOCK_32x32].intra_pred[DC_IDX] = PFX(intra_pred_dc32_avx2);
 
         p.pu[LUMA_48x64].satd = PFX(pixel_satd_48x64_avx2);
+        p.pu[LUMA_8x8].sad = PFX(pixel_sad_8x8_avx2);
+        p.pu[LUMA_8x8].sad_x4 = PFX(pixel_sad_x4_8x8_avx2);
 
         p.pu[LUMA_64x16].satd = PFX(pixel_satd_64x16_avx2);
         p.pu[LUMA_64x32].satd = PFX(pixel_satd_64x32_avx2);
@@ -2359,6 +2367,7 @@ void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask) // Main10
     }
     if (cpuMask & X265_CPU_AVX512)
     {
+        p.pu[LUMA_8x8].sad_x4 = PFX(pixel_sad_x4_8x8_avx512);
         p.cu[BLOCK_16x16].var = PFX(pixel_var_16x16_avx512);
         p.cu[BLOCK_32x32].calcresidual[NONALIGNED] = PFX(getResidual32_avx512);
         p.cu[BLOCK_32x32].calcresidual[ALIGNED] = PFX(getResidual_aligned32_avx512);
@@ -3184,6 +3193,14 @@ void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask) // Main10
         p.cu[BLOCK_8x8].psyRdoQuant = PFX(psyRdoQuant8_avx512);
         p.cu[BLOCK_16x16].psyRdoQuant = PFX(psyRdoQuant16_avx512);
         p.cu[BLOCK_32x32].psyRdoQuant = PFX(psyRdoQuant32_avx512);
+        p.cu[BLOCK_4x4].nonPsyRdoQuantAll = PFX(nonPsyRdoQuantAll4_avx512);
+        p.cu[BLOCK_8x8].nonPsyRdoQuantAll = PFX(nonPsyRdoQuantAll8_avx512);
+        p.cu[BLOCK_16x16].nonPsyRdoQuantAll = PFX(nonPsyRdoQuantAll16_avx512);
+        p.cu[BLOCK_32x32].nonPsyRdoQuantAll = PFX(nonPsyRdoQuantAll32_avx512);
+        p.cu[BLOCK_4x4].psyRdoQuantAll = PFX(psyRdoQuantAll4_avx512);
+        p.cu[BLOCK_8x8].psyRdoQuantAll = PFX(psyRdoQuantAll8_avx512);
+        p.cu[BLOCK_16x16].psyRdoQuantAll = PFX(psyRdoQuantAll16_avx512);
+        p.cu[BLOCK_32x32].psyRdoQuantAll = PFX(psyRdoQuantAll32_avx512);
 
         p.cu[BLOCK_32x32].sse_ss = (pixel_sse_ss_t)PFX(pixel_ssd_32x32_avx512);
         p.cu[BLOCK_64x64].sse_ss = (pixel_sse_ss_t)PFX(pixel_ssd_64x64_avx512);
@@ -3709,6 +3726,12 @@ void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask) // Main
 #if X86_64
     if (cpuMask & X265_CPU_AVX2)
     {
+#if X86_64
+        p.cu[BLOCK_4x4].psyRdoQuantAll = PFX(psyRdoQuantAll4_avx2);
+        p.cu[BLOCK_8x8].psyRdoQuantAll = PFX(psyRdoQuantAll8_avx2);
+        p.cu[BLOCK_16x16].psyRdoQuantAll = PFX(psyRdoQuantAll16_avx2);
+        p.cu[BLOCK_32x32].psyRdoQuantAll = PFX(psyRdoQuantAll32_avx2);
+#endif
         p.cu[BLOCK_16x16].sse_ss = (pixel_sse_ss_t)PFX(pixel_ssd_ss_16x16_avx2);
         p.cu[BLOCK_32x32].sse_ss = (pixel_sse_ss_t)PFX(pixel_ssd_ss_32x32_avx2);
         p.cu[BLOCK_64x64].sse_ss = (pixel_sse_ss_t)PFX(pixel_ssd_ss_64x64_avx2);
@@ -5413,6 +5436,14 @@ void setupAssemblyPrimitives(EncoderPrimitives &p, int cpuMask) // Main
         p.cu[BLOCK_8x8].psyRdoQuant = PFX(psyRdoQuant8_avx512);
         p.cu[BLOCK_16x16].psyRdoQuant = PFX(psyRdoQuant16_avx512);
         p.cu[BLOCK_32x32].psyRdoQuant = PFX(psyRdoQuant32_avx512);
+        p.cu[BLOCK_4x4].nonPsyRdoQuantAll = PFX(nonPsyRdoQuantAll4_avx512);
+        p.cu[BLOCK_8x8].nonPsyRdoQuantAll = PFX(nonPsyRdoQuantAll8_avx512);
+        p.cu[BLOCK_16x16].nonPsyRdoQuantAll = PFX(nonPsyRdoQuantAll16_avx512);
+        p.cu[BLOCK_32x32].nonPsyRdoQuantAll = PFX(nonPsyRdoQuantAll32_avx512);
+        p.cu[BLOCK_4x4].psyRdoQuantAll = PFX(psyRdoQuantAll4_avx512);
+        p.cu[BLOCK_8x8].psyRdoQuantAll = PFX(psyRdoQuantAll8_avx512);
+        p.cu[BLOCK_16x16].psyRdoQuantAll = PFX(psyRdoQuantAll16_avx512);
+        p.cu[BLOCK_32x32].psyRdoQuantAll = PFX(psyRdoQuantAll32_avx512);
         p.pu[LUMA_32x8].satd = PFX(pixel_satd_32x8_avx512);
         p.pu[LUMA_32x16].satd = PFX(pixel_satd_32x16_avx512);
         p.pu[LUMA_32x24].satd = PFX(pixel_satd_32x24_avx512);

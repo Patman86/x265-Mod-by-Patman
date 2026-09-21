@@ -376,6 +376,66 @@ bool MBDstHarness::check_psyRdoQuant_primitive(psyRdoQuant_t ref, psyRdoQuant_t 
 
     return true;
 }
+
+bool MBDstHarness::check_nonPsyRdoQuantAll_primitive(nonPsyRdoQuantAll_t ref, nonPsyRdoQuantAll_t opt, int numCoeff)
+{
+    ALIGN_VAR_64(int64_t, refDest[MAX_TU_SIZE]);
+    ALIGN_VAR_64(int64_t, optDest[MAX_TU_SIZE]);
+
+    for (int i = 0, j = 0; i < ITERS; i++, j += INCR)
+    {
+        int64_t totalRdCostRef = rand();
+        int64_t totalUncodedCostRef = rand();
+        int64_t totalRdCostOpt = totalRdCostRef;
+        int64_t totalUncodedCostOpt = totalUncodedCostRef;
+        int index = rand() % TEST_CASES;
+
+        memset(refDest, 0, sizeof(refDest));
+        memset(optDest, 0, sizeof(optDest));
+        ref(short_test_buff[index] + j, refDest, &totalUncodedCostRef, &totalRdCostRef);
+        checked(opt, short_test_buff[index] + j, optDest, &totalUncodedCostOpt, &totalRdCostOpt);
+
+        if (memcmp(refDest, optDest, numCoeff * sizeof(*refDest)) ||
+            totalUncodedCostRef != totalUncodedCostOpt || totalRdCostRef != totalRdCostOpt)
+            return false;
+
+        reportfail();
+    }
+
+    return true;
+}
+
+bool MBDstHarness::check_psyRdoQuantAll_primitive(psyRdoQuantAll_t ref, psyRdoQuantAll_t opt, int numCoeff)
+{
+    ALIGN_VAR_64(int64_t, refDest[MAX_TU_SIZE]);
+    ALIGN_VAR_64(int64_t, optDest[MAX_TU_SIZE]);
+
+    const int64_t scales[] = { 0, INT32_MAX, 1LL << 31, (1LL << 32) + 1, (1LL << 36) - 1 };
+    const int numScales = sizeof(scales) / sizeof(scales[0]);
+    for (int i = 0, j = 0; i < ITERS; i++, j += INCR)
+    {
+        int64_t totalRdCostRef = rand();
+        int64_t totalUncodedCostRef = rand();
+        int64_t totalRdCostOpt = totalRdCostRef;
+        int64_t totalUncodedCostOpt = totalUncodedCostRef;
+        int64_t psyScale = i % 2 ? scales[(i / 2) % numScales] : rand();
+        int index = rand() % TEST_CASES;
+
+        memset(refDest, 0, sizeof(refDest));
+        memset(optDest, 0, sizeof(optDest));
+        ref(short_test_buff[index] + j, short_test_buff1[index] + j, refDest, &totalUncodedCostRef, &totalRdCostRef, &psyScale);
+        checked(opt, short_test_buff[index] + j, short_test_buff1[index] + j, optDest, &totalUncodedCostOpt, &totalRdCostOpt, &psyScale);
+
+        if (memcmp(refDest, optDest, numCoeff * sizeof(*refDest)) ||
+            totalUncodedCostRef != totalUncodedCostOpt || totalRdCostRef != totalRdCostOpt)
+            return false;
+
+        reportfail();
+    }
+
+    return true;
+}
+
 bool MBDstHarness::check_psyRdoQuant_primitive_avx2(psyRdoQuant_t1 ref, psyRdoQuant_t1 opt)
 {
     int j = 0;
@@ -576,6 +636,22 @@ bool MBDstHarness::testCorrectness(const EncoderPrimitives& ref, const EncoderPr
                 printf("psyRdoQuant[%dx%d]: Failed!\n", 4 << i, 4 << i);
                 return false;
             }
+        }
+    }
+    for (int i = 0; i < NUM_TR_SIZE; i++)
+    {
+        int numCoeff = 1 << (2 * (i + 2));
+        if (opt.cu[i].nonPsyRdoQuantAll &&
+            !check_nonPsyRdoQuantAll_primitive(ref.cu[i].nonPsyRdoQuantAll, opt.cu[i].nonPsyRdoQuantAll, numCoeff))
+        {
+            printf("nonPsyRdoQuantAll[%dx%d]: Failed!\n", 4 << i, 4 << i);
+            return false;
+        }
+        if (opt.cu[i].psyRdoQuantAll &&
+            !check_psyRdoQuantAll_primitive(ref.cu[i].psyRdoQuantAll, opt.cu[i].psyRdoQuantAll, numCoeff))
+        {
+            printf("psyRdoQuantAll[%dx%d]: Failed!\n", 4 << i, 4 << i);
+            return false;
         }
     }
     for (int i = 0; i < NUM_TR_SIZE; i++)

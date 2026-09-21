@@ -761,7 +761,6 @@ int Encoder::setAnalysisDataAfterZScan(x265_analysis_data *analysis_data, Frame*
                 memcpy(&(intraData)->depth[cuPos], &(srcIntraData)->depth[mbIndex * 16], 16);
                 memcpy(&(intraData)->chromaModes[cuPos], &(srcIntraData)->chromaModes[mbIndex * 16], 16);
                 memcpy(&(intraData)->partSizes[cuPos], &(srcIntraData)->partSizes[mbIndex * 16], 16);
-                memcpy(&(intraData)->partSizes[cuPos], &(srcIntraData)->partSizes[mbIndex * 16], 16);
             }
         }
         memcpy(&(intraData)->modes, (srcIntraData)->modes, curFrame->m_analysisData.numPartitions * analysis_data->numCUsInFrame);
@@ -857,7 +856,6 @@ int Encoder::setAnalysisData(x265_analysis_data *analysis_data, int poc, uint32_
                     int bytes = curFrame->m_analysisData.numPartitions >> ((intraData)->depth[d] * 2);
                     memset(&(currIntraData)->depth[count], (intraData)->depth[d], bytes);
                     memset(&(currIntraData)->chromaModes[count], (intraData)->chromaModes[d], bytes);
-                    memset(&(currIntraData)->partSizes[count], (intraData)->partSizes[d], bytes);
                     memset(&(currIntraData)->partSizes[count], (intraData)->partSizes[d], bytes);
                     count += bytes;
                 }

@@ -231,7 +231,7 @@ typedef int16_t  coeff_t;      // transform coefficient
 #define X265_LOWRES_CU_SIZE   8
 #define X265_LOWRES_CU_BITS   3
 
-#define X265_MALLOC(type, count)    (type*)x265_malloc(sizeof(type) * (count))
+#define X265_MALLOC(type, count)    static_cast<type*>(x265_malloc(sizeof(type) * (count)))
 #define X265_FREE(ptr)              x265_free(ptr)
 #define X265_FREE_ZERO(ptr)         { x265_free(ptr); (ptr) = NULL; }
 #define CHECKED_MALLOC(var, type, count) \

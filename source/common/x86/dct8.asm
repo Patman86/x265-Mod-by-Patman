@@ -547,6 +547,10 @@ cextern trans8_shuf
     %define     RDO_MAX_8           1
     %define     RDO_MAX_16          0
     %define     RDO_MAX_32          0
+    %define     RDO_SCALE_4         13
+    %define     RDO_SCALE_8         15
+    %define     RDO_SCALE_16        17
+    %define     RDO_SCALE_32        19
 %elif BIT_DEPTH == 10
     %define     DCT4_SHIFT          3
     %define     DCT4_ROUND          4
@@ -560,6 +564,10 @@ cextern trans8_shuf
     %define     RDO_MAX_8           5
     %define     RDO_MAX_16          3
     %define     RDO_MAX_32          1
+    %define     RDO_SCALE_4         9
+    %define     RDO_SCALE_8         11
+    %define     RDO_SCALE_16        13
+    %define     RDO_SCALE_32        15
 %elif BIT_DEPTH == 8
     %define     DCT4_SHIFT          1
     %define     DCT4_ROUND          1
@@ -573,6 +581,10 @@ cextern trans8_shuf
     %define     RDO_MAX_8           9
     %define     RDO_MAX_16          7
     %define     RDO_MAX_32          5
+    %define     RDO_SCALE_4         5
+    %define     RDO_SCALE_8         7
+    %define     RDO_SCALE_16        9
+    %define     RDO_SCALE_32        11
 %else
     %error Unsupported BIT_DEPTH!
 %endif
@@ -6415,6 +6427,185 @@ cglobal idct4, 3, 4, 6
     movhps          [r1 + 2 * r2], xm0
     movhps          [r1 + r3], xm1
     RET
+
+%if ARCH_X86_64
+%macro PSY_RDO_QUANT_ALL_AVX2 3
+%if WIN64
+    mov             r5,         r5m
+%endif
+    ; Split the scale into a signed 32-bit low part and its high correction.
+    mov             r6,         [r5]
+    movsxd          r5,         r6d
+    sub             r6,         r5
+    sar             r6,         32
+    movd            xm6,        r5d
+    movd            xm7,        r6d
+    vpbroadcastd    m6,         xm6
+    vpbroadcastd    m7,         xm7
+    mov             r6d,        %1
+    pxor            m4,         m4
+    pxor            m8,         m8
+.loop:
+    pmovsxwq        m0,         [r0]
+    pmovsxwq        m1,         [r1]
+    psubq           m1,         m0
+    pmuldq          m2,         m0, m0
+    psllq           m2,         %2
+
+    ; Multiply four signed prediction coefficients by the full 64-bit scale.
+    pmuldq          m3,         m1, m6
+    pmuldq          m5,         m1, m7
+    psllq           m5,         32
+    paddq           m3,         m5
+%if %3 > 0
+    pcmpgtq         m5,         m8, m3
+    psrlq           m3,         %3
+    psllq           m5,         64 - %3
+    por             m3,         m5
+%endif
+    psubq           m2,         m3
+    paddq           m4,         m2
+    movu            [r2],       m2
+    add             r0,         8
+    add             r1,         8
+    add             r2,         32
+    dec             r6d
+    jnz             .loop
+
+    vextracti128    xm2,        m4, 1
+    paddq           xm4,        xm2
+    punpckhqdq      xm2,        xm4, xm4
+    paddq           xm4,        xm2
+    movq            xm0,        [r3]
+    movq            xm1,        [r4]
+    paddq           xm0,        xm4
+    paddq           xm1,        xm4
+    movq            [r3],       xm0
+    movq            [r4],       xm1
+    RET
+%endmacro
+
+INIT_YMM avx2
+cglobal psyRdoQuantAll4, 6, 7, 9
+    PSY_RDO_QUANT_ALL_AVX2 4, RDO_SCALE_4, RDO_MAX_4
+
+INIT_YMM avx2
+cglobal psyRdoQuantAll8, 6, 7, 9
+    PSY_RDO_QUANT_ALL_AVX2 16, RDO_SCALE_8, RDO_MAX_8
+
+INIT_YMM avx2
+cglobal psyRdoQuantAll16, 6, 7, 9
+    PSY_RDO_QUANT_ALL_AVX2 64, RDO_SCALE_16, RDO_MAX_16
+
+INIT_YMM avx2
+cglobal psyRdoQuantAll32, 6, 7, 9
+    PSY_RDO_QUANT_ALL_AVX2 256, RDO_SCALE_32, RDO_MAX_32
+%endif
+
+%macro NONPSY_RDO_QUANT_ALL 2
+    mov             r4d,        %1
+    vpxor           m3,         m3
+    vpxor           m4,         m4
+.loop:
+    vpmovsxwq       m1,         [r0]
+    vpmullq         m1,         m1
+    vpsllq          m1,         %2
+    paddq           m4,         m1
+    movu            [r1],       m1
+    add             r0,         16
+    add             r1,         64
+    dec             r4d
+    jnz             .loop
+
+    vextracti32x8  ym2,         m4, 1
+    paddq          ym4,         ym2
+    vextracti32x4  xm2,         m4, 1
+    paddq          xm4,         xm2
+    punpckhqdq     xm2,         xm4, xm3
+    paddq          xm4,         xm2
+    movq           xm6,         [r2]
+    movq           xm7,         [r3]
+    paddq          xm6,         xm4
+    paddq          xm7,         xm4
+    movq           [r2],        xm6
+    movq           [r3],        xm7
+    RET
+%endmacro
+
+INIT_ZMM avx512
+cglobal nonPsyRdoQuantAll4, 4, 5, 8
+    NONPSY_RDO_QUANT_ALL 2, RDO_SCALE_4
+
+INIT_ZMM avx512
+cglobal nonPsyRdoQuantAll8, 4, 5, 8
+    NONPSY_RDO_QUANT_ALL 8, RDO_SCALE_8
+
+INIT_ZMM avx512
+cglobal nonPsyRdoQuantAll16, 4, 5, 8
+    NONPSY_RDO_QUANT_ALL 32, RDO_SCALE_16
+
+INIT_ZMM avx512
+cglobal nonPsyRdoQuantAll32, 4, 5, 8
+    NONPSY_RDO_QUANT_ALL 128, RDO_SCALE_32
+
+%macro PSY_RDO_QUANT_ALL 3
+%if WIN64
+    mov             r5,         r5m
+%endif
+    mov             r6d,        %1
+    vpbroadcastq    m12,        [r5]
+    vpxor           m3,         m3
+    vpxor           m4,         m4
+.loop:
+    vpmovsxwq       m6,         [r0]
+    vpmovsxwq       m7,         [r1]
+    psubq           m7,         m6
+
+    vpmullq         m8,         m6, m6
+    vpsllq          m8,         %2
+
+    vpmullq         m9,         m7, m12
+    vpsraq          m9,         %3
+
+    psubq           m8,         m9
+    paddq           m4,         m8
+    movu            [r2],       m8
+    add             r0,         16
+    add             r1,         16
+    add             r2,         64
+    dec             r6d
+    jnz             .loop
+
+    vextracti32x8  ym2,         m4, 1
+    paddq          ym4,         ym2
+    vextracti32x4  xm2,         m4, 1
+    paddq          xm4,         xm2
+    punpckhqdq     xm2,         xm4, xm3
+    paddq          xm4,         xm2
+    movq           xm0,         [r3]
+    movq           xm1,         [r4]
+    paddq          xm0,         xm4
+    paddq          xm1,         xm4
+    movq           [r3],        xm0
+    movq           [r4],        xm1
+    RET
+%endmacro
+
+INIT_ZMM avx512
+cglobal psyRdoQuantAll4, 6, 7, 13
+    PSY_RDO_QUANT_ALL 2, RDO_SCALE_4, RDO_MAX_4
+
+INIT_ZMM avx512
+cglobal psyRdoQuantAll8, 6, 7, 13
+    PSY_RDO_QUANT_ALL 8, RDO_SCALE_8, RDO_MAX_8
+
+INIT_ZMM avx512
+cglobal psyRdoQuantAll16, 6, 7, 13
+    PSY_RDO_QUANT_ALL 32, RDO_SCALE_16, RDO_MAX_16
+
+INIT_ZMM avx512
+cglobal psyRdoQuantAll32, 6, 7, 13
+    PSY_RDO_QUANT_ALL 128, RDO_SCALE_32, RDO_MAX_32
 
 ;static void nonPsyRdoQuant_c(int16_t *m_resiDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, uint32_t blkPos)
 ;{

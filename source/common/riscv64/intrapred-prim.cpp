@@ -44,7 +44,30 @@ void intraFilter_rvv(const pixel* samples, pixel* filtered) /* 1:2:1 filtering o
     {
         size_t vl = __riscv_vsetvl_e16m2(len);
         vuint16m2_t two_vec = __riscv_vmv_v_x_u16m2(2, vl);
-        for(int i = 0; i < len; i+=vl) {
+
+        size_t vl0 = __riscv_vsetvl_e8m1(len);
+        {
+            vuint8m1_t sample1_u8 = __riscv_vle8_v_u8m1(&samples[0], vl0);
+            vuint8m1_t sample2_u8 = __riscv_vslide1up_vx_u8m1(sample1_u8, samples[0], vl0);
+            vuint8m1_t sample3_u8 = __riscv_vle8_v_u8m1(&samples[1], vl0);
+
+            vuint16m2_t sample1 = __riscv_vzext_vf2_u16m2(sample1_u8, vl0);
+            vuint16m2_t sample2 = __riscv_vzext_vf2_u16m2(sample2_u8, vl0);
+            vuint16m2_t sample3 = __riscv_vzext_vf2_u16m2(sample3_u8, vl0);
+
+            vuint16m2_t result1 = __riscv_vsll_vx_u16m2(sample1, 1, vl0);
+            result1 = __riscv_vadd_vv_u16m2(result1, sample2, vl0);
+            vuint16m2_t result2 = __riscv_vadd_vv_u16m2(sample3, two_vec, vl0);
+            vuint16m2_t result3 = __riscv_vadd_vv_u16m2(result1, result2, vl0);
+            result3 = __riscv_vsrl_vx_u16m2(result3, 2, vl0);
+
+            vuint8m1_t result_u8 = __riscv_vnsrl_wx_u8m1(result3, 0, vl0);
+            __riscv_vse8_v_u8m1(&filtered[0], result_u8, vl0);
+        }
+
+        // Original loop, unchanged, just starting after the block we
+        // already handled above instead of from i=0.
+        for (int i = (int)vl0; i < len; i += vl) {
             vl = __riscv_vsetvl_e8m1(len - i);
             vuint8m1_t sample1_u8 = __riscv_vle8_v_u8m1(&samples[i], vl);
             vuint8m1_t sample2_u8 = __riscv_vle8_v_u8m1(&samples[i-1], vl);
@@ -68,7 +91,22 @@ void intraFilter_rvv(const pixel* samples, pixel* filtered) /* 1:2:1 filtering o
     {
         size_t vl = __riscv_vsetvl_e16m1(len);
         vuint16m1_t two_vec = __riscv_vmv_v_x_u16m1(2, vl);
-        for(int i = 0; i < len; i += vl) {
+
+        size_t vl0 = __riscv_vsetvl_e16m1(len);
+        {
+            vuint16m1_t sample1 = __riscv_vle16_v_u16m1(&samples[0], vl0);
+            vuint16m1_t sample2 = __riscv_vslide1up_vx_u16m1(sample1, samples[0], vl0);
+            vuint16m1_t sample3 = __riscv_vle16_v_u16m1(&samples[1], vl0);
+
+            vuint16m1_t result1 = __riscv_vsll_vx_u16m1(sample1, 1, vl0);
+            result1 = __riscv_vadd_vv_u16m1(result1, sample2, vl0);
+            vuint16m1_t result2 = __riscv_vadd_vv_u16m1(sample3, two_vec, vl0);
+            vuint16m1_t result3 = __riscv_vadd_vv_u16m1(result1, result2, vl0);
+            result3 = __riscv_vsrl_vx_u16m1(result3, 2, vl0);
+            __riscv_vse16_v_u16m1(&filtered[0], result3, vl0);
+        }
+
+        for (int i = (int)vl0; i < len; i += vl) {
             vl = __riscv_vsetvl_e16m1(len - i);
             vuint16m1_t sample1 = __riscv_vle16_v_u16m1(&samples[i], vl);
             vuint16m1_t sample2 = __riscv_vle16_v_u16m1(&samples[i-1], vl);

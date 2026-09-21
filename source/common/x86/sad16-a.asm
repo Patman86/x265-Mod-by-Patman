@@ -2120,6 +2120,117 @@ SAD_X 4, 64, 32
 SAD_X 4, 64, 48
 SAD_X 4, 64, 64
 
+INIT_YMM avx2
+cglobal pixel_sad_8x8, 4, 4, 5
+    FIX_STRIDES r1, r3
+    pxor            m0, m0
+    mova            m4, [pw_1]
+
+%rep 4
+    movu           xm1, [r0]
+    vinserti128     m1, m1, [r0 + r1], 1
+    movu           xm2, [r2]
+    vinserti128     m2, m2, [r2 + r3], 1
+    psubw           m1, m2
+    pabsw           m1, m1
+    pmaddwd         m1, m4
+    paddd           m0, m1
+
+    lea             r0, [r0 + 2 * r1]
+    lea             r2, [r2 + 2 * r3]
+%endrep
+
+    vextracti128   xm1, m0, 1
+    paddd          xm0, xm1
+    phaddd         xm0, xm0
+    phaddd         xm0, xm0
+    movd            eax, xm0
+    RET
+
+INIT_YMM avx2
+cglobal pixel_sad_x4_8x8, 7, 7, 8
+    FIX_STRIDES r5
+    pxor            m0, m0
+    pxor            m1, m1
+    mova            m7, [pw_1]
+
+%rep 8
+    vbroadcasti128  m2, [r0]
+
+    movu           xm3, [r1]
+    vinserti128     m3, m3, [r2], 1
+    movu           xm4, [r3]
+    vinserti128     m4, m4, [r4], 1
+
+    psubw           m3, m2
+    psubw           m4, m2
+    pabsw           m3, m3
+    pabsw           m4, m4
+    pmaddwd         m3, m7
+    pmaddwd         m4, m7
+    paddd           m0, m3
+    paddd           m1, m4
+
+    add             r0, FENC_STRIDEB
+    add             r1, r5
+    add             r2, r5
+    add             r3, r5
+    add             r4, r5
+%endrep
+
+    vextracti128   xm2, m0, 1
+    vextracti128   xm3, m1, 1
+    phaddd         xm0, xm0
+    phaddd         xm1, xm1
+    phaddd         xm2, xm2
+    phaddd         xm3, xm3
+    phaddd         xm0, xm0
+    phaddd         xm1, xm1
+    phaddd         xm2, xm2
+    phaddd         xm3, xm3
+    movd       [r6 + 0], xm0
+    movd       [r6 + 4], xm2
+    movd       [r6 + 8], xm1
+    movd      [r6 + 12], xm3
+    RET
+
+INIT_ZMM avx512
+cglobal pixel_sad_x4_8x8, 7, 7, 5
+    FIX_STRIDES r5
+    pxor            m0, m0
+    vbroadcasti32x8 m4, [pw_1]
+
+%rep 8
+    vbroadcasti32x4 m1, [r0]
+    movu           xm2, [r1]
+    vinserti32x4    m2, m2, [r2], 1
+    vinserti32x4    m2, m2, [r3], 2
+    vinserti32x4    m2, m2, [r4], 3
+    psubw           m2, m1
+    pabsw           m2, m2
+    pmaddwd         m2, m4
+    paddd           m0, m2
+
+    add             r0, FENC_STRIDEB
+    add             r1, r5
+    add             r2, r5
+    add             r3, r5
+    add             r4, r5
+%endrep
+
+    pshufd          m1, m0, q1032
+    paddd           m0, m1
+    pshufd          m1, m0, q2301
+    paddd           m0, m1
+    movd       [r6 + 0], xm0
+    vextracti32x4  xm1, m0, 1
+    movd       [r6 + 4], xm1
+    vextracti32x4  xm1, m0, 2
+    movd       [r6 + 8], xm1
+    vextracti32x4  xm1, m0, 3
+    movd      [r6 + 12], xm1
+    RET
+
 ;============================
 ; SAD x3/x4 avx512 code start
 ;============================

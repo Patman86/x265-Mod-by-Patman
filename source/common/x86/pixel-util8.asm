@@ -1280,97 +1280,35 @@ cglobal nquant, 3,5,7
     RET
 %if ARCH_X86_64 == 1
 INIT_ZMM avx512
-cglobal nquant, 3,5,22
-%if UNIX64 == 0
-    vpbroadcastd m4, r4m
-%else ; Mac
-    movd         xm4, r4m
-    vpbroadcastd  m4, xm4
-%endif
-
-    vbroadcasti32x8  m6, [pw_1]
-    mov         r4d, r5m
-    pxor         m5, m5
-    movd        xm3, r3m
-    sub         r4d, 16
-    je          .coeff16
-    add         r4d, 16
-    shr         r4d, 5
-    jmp         .loop
-
-.coeff16:
-    pmovsxwd         m16, [r0]
-    pabsd            m17, m16
-    pmulld           m17, [r1]
-    paddd            m17, m4
-    psrad            m17, xm3
-
-    vextracti64x4   ym19,  m17, 1
-    vextracti64x4   ym20,  m16, 1
-    psignd          ym17, ym16
-    psignd          ym19, ym20
-    packssdw        ym17, ym19
-    vpermq          ym17, ym17, q3120
-    pabsw           ym17, ym17
-    movu            [r2], ym17
-    pminuw          ym17, ym6
-    paddw           ym5,  ym17
-    pxor            m0,    m0
-    psadbw          ym5,  ym0
-    vextracti128    xm0,  ym5, 1
-    paddd           xm5,  xm0
-    pshufd          xm0,  xm5, 2
-    paddd           xm5,  xm0
-    movd            eax,  xm5
-    RET
+cglobal nquant, 3,6,5
+    movd             xm3, r3m
+    vpbroadcastd      m4, r4m
+    mov              r4d, r5m
+    xor              r3d, r3d
 
 .loop:
-    pmovsxwd         m16,  [r0]
-    pabsd            m17,  m16
-    pmulld           m17,  [r1]
-    paddd            m17,  m4
-    psrad            m17,  xm3
-    vextracti64x4   ym19,  m17, 1
-    vextracti64x4   ym20,  m16, 1
-    psignd          ym17, ym16
-    psignd          ym19, ym20
-    packssdw        ym17, ym19
+    pmovsxwd          m0, [r0]
+    pabsd             m1, m0
+    pmulld            m1, [r1]
+    paddd             m1, m4
+    psrad             m1, xm3
+    psrad             m0, 31
+    pxor              m1, m0
+    psubd             m1, m0
+    vpmovsdw         ym1, m1
+    pabsw            ym1, ym1
+    movu            [r2], ym1
+    vptestmw          k1, ym1, ym1
+    kmovw            r5d, k1
+    popcnt           r5d, r5d
+    add              r3d, r5d
 
-    pmovsxwd         m16, [r0 + mmsize/2]
-    pabsd            m18, m16
-    pmulld           m18, [r1 + mmsize]
-    paddd            m18,  m4
-    psrad            m18, xm3
-    vextracti64x4   ym21,  m18, 1
-    vextracti64x4   ym20,  m16, 1
-    psignd          ym18, ym16
-    psignd          ym21, ym20
-    packssdw        ym18, ym21
-    vinserti64x4     m17,  m17, ym18, 1
-    vpermq           m17,  m17, q3120
-
-    pabsw            m17, m17
-    movu            [r2], m17
-
-    add               r0, mmsize
-    add               r1, mmsize * 2
-    add               r2, mmsize
-
-    pminuw           m17,  m6
-    paddw             m5, m17
-
-    dec         r4d
-    jnz         .loop
-
-    pxor             m0,  m0
-    psadbw           m5,  m0
-    vextracti32x8   ym1,  m5, 1
-    paddd           ym5, ym1
-    vextracti64x2   xm1,  m5, 1
-    paddd           xm5, xm1
-    pshufd          xm1, xm5, 2
-    paddd           xm5, xm1
-    movd            eax, xm5
+    add               r0, 32
+    add               r1, 64
+    add               r2, 32
+    sub              r4d, 16
+    jnz            .loop
+    mov              eax, r3d
     RET
 %endif ; ARCH_X86_64 == 1
 
@@ -8251,12 +8189,8 @@ cglobal scanPosLast, 7,11,6
     pmovmskb    r6d, m2
     mov         [r3 + r9 * 2], r6w
 
-    ; get non-zero number, POPCNT is faster
-    pabsb       m2, m2
-    psadbw      m2, m4
-    movhlps     m3, m2
-    paddd       m2, m3
-    movd        r6d, m2
+    ; Count the nonzero flags already extracted above.
+    popcnt      r6d, r6d
     mov         [r4 + r9], r6b
 
     inc         r9d

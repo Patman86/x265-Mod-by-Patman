@@ -230,6 +230,8 @@ typedef void(*nonPsyRdoQuant_t)(int16_t *m_resiDctCoeff, int64_t *costUncoded, i
 typedef void(*psyRdoQuant_t)(int16_t *m_resiDctCoeff, int16_t *m_fencDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, int64_t *psyScale, uint32_t blkPos);
 typedef void(*psyRdoQuant_t1)(int16_t *m_resiDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost,uint32_t blkPos);
 typedef void(*psyRdoQuant_t2)(int16_t *m_resiDctCoeff, int16_t *m_fencDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, int64_t *psyScale, uint32_t blkPos);
+typedef void(*nonPsyRdoQuantAll_t)(const int16_t *m_resiDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost);
+typedef void(*psyRdoQuantAll_t)(const int16_t *m_resiDctCoeff, const int16_t *m_fencDctCoeff, int64_t *costUncoded, int64_t *totalUncodedCost, int64_t *totalRdCost, const int64_t *psyScale);
 typedef void(*ssimDistortion_t)(const pixel *fenc, uint32_t fStride, const pixel *recon,  intptr_t rstride, uint64_t *ssBlock, int shift, uint64_t *ac_k);
 typedef void(*normFactor_t)(const pixel *src, uint32_t blockSize, int shift, uint64_t *z_k);
 /* SubSampling Luma */
@@ -308,8 +310,10 @@ struct EncoderPrimitives
         intra_pred_t    intra_pred[NUM_INTRA_MODE];
         nonPsyRdoQuant_t nonPsyRdoQuant;
         psyRdoQuant_t    psyRdoQuant;
-		psyRdoQuant_t1   psyRdoQuant_1p;
-		psyRdoQuant_t2   psyRdoQuant_2p;
+        psyRdoQuant_t1   psyRdoQuant_1p;
+        psyRdoQuant_t2   psyRdoQuant_2p;
+        nonPsyRdoQuantAll_t nonPsyRdoQuantAll;
+        psyRdoQuantAll_t psyRdoQuantAll;
         ssimDistortion_t ssimDist;
         normFactor_t     normFact;
     }

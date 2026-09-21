@@ -65,6 +65,8 @@ protected:
     bool check_dequant_primitive(dequant_normal_t ref, dequant_normal_t opt);
     bool check_nonPsyRdoQuant_primitive(nonPsyRdoQuant_t ref, nonPsyRdoQuant_t opt);
     bool check_psyRdoQuant_primitive(psyRdoQuant_t ref, psyRdoQuant_t opt);
+    bool check_nonPsyRdoQuantAll_primitive(nonPsyRdoQuantAll_t ref, nonPsyRdoQuantAll_t opt, int numCoeff);
+    bool check_psyRdoQuantAll_primitive(psyRdoQuantAll_t ref, psyRdoQuantAll_t opt, int numCoeff);
     bool check_quant_primitive(quant_t ref, quant_t opt);
     bool check_nquant_primitive(nquant_t ref, nquant_t opt);
     bool check_dct_primitive(dct_t ref, dct_t opt, intptr_t width);
