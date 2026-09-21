@@ -2899,12 +2899,18 @@ void Encoder::printSummary()
         if (m_analyzeAll[layer].m_numPics)
         {
             int p = 0;
-            double elapsedEncodeTime = (double)(x265_mdate() - m_encodeStartTime) / 1000000;
+            int64_t elapsedEncodeUsec = x265_mdate() - m_encodeStartTime;
+            double elapsedEncodeTime = (double)elapsedEncodeUsec / 1000000;
             double elapsedVideoTime = (double)m_analyzeAll[layer].m_numPics * m_param->fpsDenom / m_param->fpsNum;
             double bitrate = (0.001f * m_analyzeAll[layer].m_accBits) / elapsedVideoTime;
+            int64_t elapsedEncodeMsec = elapsedEncodeUsec / 1000;
+            int elapsedHours = (int)(elapsedEncodeMsec / 3600000);
+            int elapsedMinutes = (int)((elapsedEncodeMsec / 60000) % 60);
+            int elapsedSeconds = (int)((elapsedEncodeMsec / 1000) % 60);
+            int elapsedMilliseconds = (int)(elapsedEncodeMsec % 1000);
 
-            p += snprintf(buffer + p, sizeof(buffer) - p,"\nencoded %d frames in %.2fs (%.2f fps), %.2f kb/s, Avg QP:%2.2lf", m_analyzeAll[layer].m_numPics,
-                elapsedEncodeTime, m_analyzeAll[layer].m_numPics / elapsedEncodeTime, bitrate, m_analyzeAll[layer].m_totalQp / (double)m_analyzeAll[layer].m_numPics);
+            p += snprintf(buffer + p, sizeof(buffer) - p, "\nencoded %d frames in %02d:%02d:%02d.%03d (%.2f fps), %.2f kb/s, Avg QP:%2.2lf", m_analyzeAll[layer].m_numPics,
+                elapsedHours, elapsedMinutes, elapsedSeconds, elapsedMilliseconds, m_analyzeAll[layer].m_numPics / elapsedEncodeTime, bitrate, m_analyzeAll[layer].m_totalQp / (double)m_analyzeAll[layer].m_numPics);
 
             if (m_param->bEnablePsnr)
             {
